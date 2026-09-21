@@ -48,7 +48,9 @@ export function verifyClient(info) {
 	try {
 		const isProd = process.env.NODE_ENV === 'production';
 		if (isProd) {
-			const allowedOrigins = ['https://app.example.com']; // Update this to gcp domain used
+			const allowedOrigins = process.env.ALLOWED_ORIGIN
+				? [process.env.ALLOWED_ORIGIN]
+				: [];
 			if (!allowedOrigins.includes(info.origin)) {
 				console.log(`Rejected unauthorized origin: ${info.origin}`);
 				return false;
@@ -94,8 +96,8 @@ export async function sendMessageToAllParticipants(message, callID) {
 		// Get correct wss server to send messages to joined participants on
 		const activeWSS = await getRelevantWSS(callID);
 
-		if (activeWSS.clients) {
-			for (const client of activeWSS.clients) {
+		if (activeWSS.server.clients) {
+			for (const client of activeWSS.server.clients) {
 				// Check if the connection is fully open
 				// eslint-disable-next-line no-await-in-loop -- must send to each client in turn
 				if (client.readyState === 1) await client.send(JSON.stringify(message));
@@ -117,8 +119,8 @@ export async function sendMessageToParticipant(
 		// Get correct wss server to send messages to joined participants on
 		const activeWSS = await getRelevantWSS(callID);
 
-		if (activeWSS.clients) {
-			const participant = [...activeWSS.clients].find(
+		if (activeWSS.server.clients) {
+			const participant = [...activeWSS.server.clients].find(
 				(client) => client.email === targetParticipant,
 			);
 
