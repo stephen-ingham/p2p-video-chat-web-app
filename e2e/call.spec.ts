@@ -44,7 +44,7 @@ test('create call, join call, and see each other as participants', async ({
 			(element) => element.textContent ?? '',
 		);
 		const callId = callIdText.replace('Call ID: ', '').trim();
-		expect(callId).toMatch(/^[\w-]+$/v);
+		expect(callId).toMatch(/^[\w\-]+$/v);
 
 		await bobPage.getByPlaceholder('Enter call ID').fill(callId);
 		await bobPage.getByRole('button', {name: 'Join Call'}).click();
