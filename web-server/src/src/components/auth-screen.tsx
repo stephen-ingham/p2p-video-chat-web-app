@@ -67,6 +67,17 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 				return;
 			}
 
+			// Signup doesn't return an access token, so log in immediately after
+			// to actually authenticate the session the UI is about to show.
+			const loginResult = await login(
+				registerForm.email,
+				registerForm.password,
+			);
+			if (loginResult === 'Login failed') {
+				setError('Account created, but sign-in failed. Please sign in.');
+				return;
+			}
+
 			onAuthenticated(registerForm.email, registerForm.username);
 		} catch {
 			setError('Something went wrong. Please try again.');
