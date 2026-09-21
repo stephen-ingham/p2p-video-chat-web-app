@@ -22,8 +22,15 @@ if ($upExitCode -ne 0) {
 	exit $upExitCode
 }
 
+$ErrorActionPreference = "Continue"
 npx playwright test
 $exitCode = $LASTEXITCODE
+$ErrorActionPreference = "Stop"
+
+if ($exitCode -ne 0) {
+	Write-Output "--- e2e tests failed, dumping stack logs ---"
+	docker compose @composeArgs logs
+}
 
 docker compose @composeArgs down -v
 

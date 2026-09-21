@@ -22,6 +22,11 @@ npx playwright test
 EXIT_CODE=$?
 set -e
 
+if [ $EXIT_CODE -ne 0 ]; then
+	echo "--- e2e tests failed, dumping stack logs ---"
+	docker compose "${COMPOSE_ARGS[@]}" logs
+fi
+
 docker compose "${COMPOSE_ARGS[@]}" down -v
 
 exit $EXIT_CODE

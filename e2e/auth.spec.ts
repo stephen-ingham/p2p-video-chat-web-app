@@ -37,7 +37,11 @@ test('login with valid credentials reaches the call screen', async ({page}) => {
 	await page.getByPlaceholder('Password').fill(user.password);
 	await page.getByRole('button', {name: 'Sign in'}).click();
 
-	await expect(page.getByText(user.username)).toBeVisible();
+	// Login (unlike signup) derives the displayed name from the email
+	// prefix rather than the registered username — see AuthScreen's
+	// handleLogin, which calls onAuthenticated(email, email.split('@')[0]).
+	const [emailPrefix] = user.email.split('@');
+	await expect(page.getByText(emailPrefix)).toBeVisible();
 });
 
 test('login with invalid credentials shows an error', async ({page}) => {
