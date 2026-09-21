@@ -43,6 +43,7 @@ Voneo is a peer-to-peer video chat application built with an Astro/React fronten
   - [Environment Variables](#environment-variables)
 - [Database Structure & Data Models](#database-structure--data-models)
 - [Frontend (Astro + React)](#frontend-astro--react)
+- [End-to-end tests (Playwright)](#end-to-end-tests-playwright)
 - [Gotchas & Experimentation](#gotchas--experimentation)
 
 ## Overview
@@ -500,6 +501,26 @@ Created for local development and syncs local file changes into the container au
 Produces a production-optimised image (`europe-west2-docker.pkg.dev/signalling-api/voneo/voneo-frontend:1.0.0`).
 
 This image is used in GCP deployments - it is pushed to Artifact Registry and referenced by the Cloud Run service provisioned via the Pulumi stack in `infra/`.
+
+---
+
+## End-to-end tests (Playwright)
+
+E2e tests (`e2e/*.spec.ts`) run against a **prod-mode simulation** of the app rather than the local dev containers or a real deployed environment: the existing `signalling-server-prod`/`web-server-prod`/`mysql-db` compose services, run with `NODE_ENV=production` and an isolated `test-db`, behind a local [Caddy](https://caddyserver.com/) reverse proxy that terminates TLS at `https://voneo.test`. This lets the suite exercise real production-only behavior (`Secure` cookies, the `ALLOWED_ORIGIN` CORS/WS-origin allowlist) without needing a deployed GCP environment or incurring any cloud cost — see `e2e/compose.e2e.yaml` and `e2e/Caddyfile`.
+
+**One-time local setup:** add a hosts file entry pointing `voneo.test` at `127.0.0.1`:
+- macOS/Linux: add `127.0.0.1 voneo.test` to `/etc/hosts`
+- Windows: add `127.0.0.1 voneo.test` to `C:\Windows\System32\drivers\etc\hosts` (as Administrator)
+
+**Running the suite:**
+
+```bash
+npm run test:e2e
+```
+
+This brings up the e2e compose stack (building fresh images), runs Playwright, and tears the stack down afterwards regardless of outcome. Stop `npm run dev` first — the e2e stack publishes the same fixed host ports (`3000`, `8080`, `3306`, plus `443` for the Caddy proxy) and the two will collide.
+
+Camera/microphone are faked via Chromium's `--use-fake-device-for-media-stream` flag (see `playwright.config.ts`), so no real hardware or OS permission prompts are needed. Test data is isolated per run: `e2e/global-setup.ts` truncates the `test-db` tables before the suite starts, and specs create their own users with unique emails rather than relying on any pre-seeded data.
 
 ---
 

@@ -18,7 +18,7 @@ All commands below are run from the repo root unless noted.
 - `npm run tunnel` — start the ngrok tunnel (requires `ngrok.yml` with an authtoken, copied from `ngrok.example.yml`).
 - `npm run nuke` — full teardown: removes containers/images/volumes/deps, then rebuilds/reinstalls. Destructive — only run when setup is broken.
 - `npm test` (root) — runs `xo` (lint) across the repo; this is the only root-level test/lint command.
-- `npx playwright test` — run e2e tests in `e2e/` (Playwright config at `playwright.config.ts`).
+- `npm run test:e2e` — run e2e tests in `e2e/` against a prod-mode simulation stack (own compose project, isolated `test-db`, Caddy TLS proxy at `https://voneo.test`; see `e2e/compose.e2e.yaml`). Brings the stack up, runs Playwright, tears down. Requires `voneo.test` to resolve to `127.0.0.1` in your hosts file, and stopping `npm run dev` first (fixed host ports collide). Don't run `npx playwright test` directly — it expects the stack already running at that URL.
 - `npm run lint` —  Runs XO linting with prettier config passed in
 - `npm run lint:fix` — Applies XO linting and prettier formatting fixes where possible, identifies any errors/warnings that couldn't be implemented
 - `npm run test:it` — alias to run the integration tests for the API (and eventually the websocket infra)
