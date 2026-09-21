@@ -4,6 +4,7 @@ Set-Location (Join-Path $PSScriptRoot "..")
 
 $composeArgs = @(
 	"-p", "voneo-e2e",
+	"--project-directory", ".",
 	"-f", "web-socket-api/src/compose.yaml",
 	"-f", "web-server/src/compose.yaml",
 	"-f", "e2e/compose.e2e.yaml"

@@ -30,7 +30,7 @@ services:
   proxy:
     image: caddy:2
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./e2e/Caddyfile:/etc/caddy/Caddyfile:ro
     ports:
       - '443:443'
     depends_on:
