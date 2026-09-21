@@ -1,0 +1,8 @@
+voneo.test {
+	tls internal
+
+	@api path /auth* /call* /wss*
+	reverse_proxy @api signalling-server-prod:3000
+
+	reverse_proxy web-server-prod:8080
+}

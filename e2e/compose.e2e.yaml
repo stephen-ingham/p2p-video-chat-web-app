@@ -1,0 +1,38 @@
+services:
+  signalling-server-prod:
+    environment:
+      - NODE_ENV=production
+      - DB_NAME=test-db
+      - DB_PASSWORD=e2e-test-password
+      - DB_HOST=mysql-db
+      - DB_PORT=3306
+      - JWT_SECRET=e2e-test-secret
+      - REFRESH_TOKEN_SECRET=e2e-test-refresh-secret
+      - ALLOWED_ORIGIN=https://voneo.test
+    depends_on:
+      mysql-db:
+        condition: service_healthy
+
+  web-server-prod:
+    environment:
+      - NODE_ENV=production
+
+  mysql-db:
+    environment:
+      MYSQL_ROOT_PASSWORD: e2e-test-password
+      MYSQL_DATABASE: test-db
+    healthcheck:
+      test: ['CMD-SHELL', 'mysqladmin ping -h localhost -pe2e-test-password']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  proxy:
+    image: caddy:2
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    ports:
+      - '443:443'
+    depends_on:
+      - signalling-server-prod
+      - web-server-prod
