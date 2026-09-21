@@ -1,5 +1,5 @@
 import process from 'node:process';
-import {CallParticipants, Call, Op} from '../../common/models/index.js';
+import {CallParticipants, Op} from '../../common/models/index.js';
 import {wss} from './session-store.js';
 
 export async function getRelevantWSS(callID) {
@@ -68,18 +68,17 @@ export function verifyClient(info) {
 	}
 }
 
-export async function constructURI(callID) {
+export function constructURI(callID) {
 	const isProd = process.env.NODE_ENV === 'production';
 	const host = process.env.NGROK_HOST;
 	const isLocal = process.env.LOCAL === 'true';
 
 	if (isProd) {
-		const relevantWSS = await getRelevantWSS(callID);
-
-		const addressInfo = relevantWSS.address();
-		const {port} = addressInfo;
-
-		return `wss://${host}:${port}`;
+		// Call WebSocket servers share the app's single listening port (3000) via
+		// noServer + the HTTP server's 'upgrade' event, so the URL is path-based
+		// rather than per-call-port, same shape as the dev/ngrok URL below.
+		const allowedOrigin = process.env.ALLOWED_ORIGIN;
+		return `${allowedOrigin.replace('https://', 'wss://')}/wss/${callID}`;
 	}
 
 	if (!host && isLocal) {
@@ -387,43 +386,4 @@ export async function handleParticipantLeftCall(data) {
 	} catch (error) {
 		console.error('Error occured handling forwarding of answer:', error);
 	}
-}
-
-export async function setRandomPort() {
-	function generateRandomPort() {
-		const WS_PORT_MIN = Number(process.env.WS_PORT_MIN) || 4000;
-		const WS_PORT_MAX = Number(process.env.WS_PORT_MAX) || 4099;
-		return Math.floor(
-			WS_PORT_MIN + Math.random() * (WS_PORT_MAX - WS_PORT_MIN + 1),
-		);
-	}
-
-	const isProd = process.env.NODE_ENV === 'production';
-
-	let randomPort;
-	try {
-		// Checking new port does not conflict with existing WS server
-		const generatedPort = generateRandomPort();
-		const targetWSUrl = `wss://localhost:${generatedPort}`;
-
-		const isURLTaken = await Call.findOne({
-			where: {
-				callURL: targetWSUrl,
-			},
-		});
-
-		if (isURLTaken || (!isProd && generatedPort === 4321)) {
-			throw new Error('Generated port number already in use');
-		}
-
-		randomPort = generatedPort;
-	} catch (error) {
-		if (error.message !== 'Generated port number already in use') {
-			throw error;
-		}
-
-		randomPort = await setRandomPort();
-	}
-
-	return randomPort;
 }

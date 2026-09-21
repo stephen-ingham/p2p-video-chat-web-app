@@ -88,7 +88,7 @@ This indicates that a developer should expect errors if they try to use the syst
   - `controller.js` / `routes.js` — `POST /call/create`, `PUT /call/:callID/join`, `DELETE /call/:callID/leave`, `POST /call/:callID/messages`.
   - `utils/session-store.js` — in-memory `Map` of `callId → { wsURL, participants, pendingParticipants }`. **No persistence** — restarting the API drops all active calls.
   - `utils/ws-server.js` — creates a WebSocket server per call for signalling.
-  - `utils/misc.js` — helpers including `constructURI`/`setRandomPort`, which behave differently in dev vs. production (see below).
+  - `utils/misc.js` — helpers including `constructURI`, which behaves differently in dev vs. production (see below).
 - `common/` — `database.js` (MySQL via Sequelize, `sync()` on first run; dev seeder adds test users only when `NODE_ENV=dev`), `middlewares/` (auth/permission/token handling), `models/` (`User`, `Call`, `CallParticipants`, `RefreshToken`).
 - `openapi.yaml` — Located at @web-socket-api/src/openapi.yaml - the API schema reference, kept in sync with the controllers/routes as of this writing; re-verify against the controller if it's been a while since it was last updated.
 
@@ -99,10 +99,9 @@ WebSocket message protocol (client ↔ per-call WS server):
 ### Dev vs. production divergence (signalling API)
 
 Several behaviors branch on `NODE_ENV`/`LOCAL` — check these before assuming behavior is environment-independent:
-- WS server port: hardcoded dev port `3000` vs. `setRandomPort()` in production.
-- WS URL construction (`constructURI` in `call/utils/misc.js`): dev path is `/wss/:callID` (or `/ws/:callID` when `LOCAL=true`); production builds `wss://<NGROK_HOST>:<port>` from the assigned port.
-- WS origin verification (`verifyClient` in `call/utils/ws-server.js`): allowlist is currently a placeholder (`https://app.example.com`) — needs updating for real deployed domains.
-- CORS: dev restricts `Origin` based on `LOCAL`/`NGROK_HOST`; production currently allows any origin via a placeholder `ALLOWED_PROD_ORIGINS` list still to be filled in.
+- WS server port: every call's WebSocket server shares the app's single listening port (`3000`) in both dev and production, via `noServer: true` and the shared HTTP server's `upgrade` event (`handleUpgrade` in `call/utils/ws-server.js`), routed by `callID` path.
+- WS URL construction (`constructURI` in `call/utils/misc.js`): dev path is `/wss/:callID` (or `/ws/:callID` when `LOCAL=true`); production builds `wss://<ALLOWED_ORIGIN>/wss/:callID` — same path shape, different scheme/host.
+- WS origin verification (`verifyClient` in `call/utils/misc.js`) and CORS (`app.js`) both check the `Origin` header against `ALLOWED_ORIGIN` (env var) in production, and against `LOCAL`/`NGROK_HOST`-derived origins in dev.
 - Refresh token cookie: `Secure` only set in production.
 
 ### Frontend (`web-server/src`)
@@ -126,4 +125,5 @@ Pulumi (TypeScript) provisions GCP resources for production: Cloud Run service, 
 ## Known incomplete areas
 
 - Calls and their WebSocket servers are in-memory only; nothing survives an API restart.
-- Production CORS/WS-origin allowlists contain placeholder values that need to be filled in with real deployed domains before prod use.
+- Production CORS/WS-origin allowlist is a single `ALLOWED_ORIGIN` value, filled in via env var per deployment — not yet set for any real deployed domain.
+- TODO: all calls currently share a single WS port (`3000`) via path-based routing (`/wss/:callID`), dropped in favour of Cloud Run compatibility (Cloud Run only exposes one port per service). The original per-call random-port design (`setRandomPort`, `WS_PORT_MIN`/`WS_PORT_MAX`) is removed; if a future deployment target supports multiple exposed ports, consider re-adding per-call ports for connection isolation/scaling.

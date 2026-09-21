@@ -9,7 +9,6 @@ services:
     image: signalling-server-dev:1.0.0
     ports:
       - 3000:3000
-      - "4000-4099:4000-4099"
     develop:
       watch:
         - action: sync
@@ -25,8 +24,6 @@ services:
       - DB_HOST=${DB_HOST}
       - DB_PORT=${DB_PORT}
       - NGROK_HOST=${NGROK_HOST}
-      - WS_PORT_MIN=4000
-      - WS_PORT_MAX=4099
     depends_on:
       mysql-db:
         condition: service_healthy
@@ -46,6 +43,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_HOST=${DB_HOST}
       - DB_PORT=${DB_PORT}
+      - ALLOWED_ORIGIN=${ALLOWED_ORIGIN}
 
   mysql-db:
       image: mysql:8.4

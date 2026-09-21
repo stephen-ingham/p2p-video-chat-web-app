@@ -11,7 +11,6 @@ import {
 	getRelevantWSS,
 	verifyClient,
 	handleParticipantLeftCall,
-	setRandomPort,
 } from './misc.js';
 import {wss} from './session-store.js';
 
@@ -109,27 +108,18 @@ export async function createWebSocketsServer() {
 		}
 	};
 
-	const isProd = process.env.NODE_ENV === 'production';
-
 	const callID = uuidv4();
 
-	// Hardcoded port if in dev mode (NODE_ENV = 'dev'); random port in production
-	const portNumber = isProd ? await setRandomPort() : 3000;
-
 	try {
-		const wsServerOptions = isProd
-			? {
-					port: portNumber,
-					perMessageDeflate: false,
-					verifyClient: (info) => verifyClient(info),
-					maxPayload: 64 * 1024,
-				}
-			: {
-					noServer: true,
-					perMessageDeflate: false,
-					verifyClient: (info) => verifyClient(info),
-					maxPayload: 64 * 1024,
-				};
+		// Every call's WS server shares the app's single listening port via
+		// noServer + the HTTP server's 'upgrade' event (see handleUpgrade above),
+		// routed by callID path rather than a dedicated port per call.
+		const wsServerOptions = {
+			noServer: true,
+			perMessageDeflate: false,
+			verifyClient: (info) => verifyClient(info),
+			maxPayload: 64 * 1024,
+		};
 
 		wss.set(callID, {
 			server: new WebSocketServer(wsServerOptions),
@@ -139,7 +129,7 @@ export async function createWebSocketsServer() {
 
 		await handleServerMessages(activeWSS.server, callID);
 
-		const uri = await constructURI(callID);
+		const uri = constructURI(callID);
 		return {callID, uri};
 	} catch (error) {
 		console.error('This is the error:', error);
@@ -153,13 +143,13 @@ export async function shutDownServer(callID) {
 	try {
 		const activeWSS = await getRelevantWSS(callID);
 
-		for (const client of activeWSS.clients) {
+		for (const client of activeWSS.server.clients) {
 			if (client.readyState === WebSocket.OPEN) {
 				client.close(1001, 'Server is shutting down');
 			}
 		}
 
-		activeWSS.close(() => {
+		activeWSS.server.close(() => {
 			console.log('WebSocket server is completely stopped.');
 		});
 

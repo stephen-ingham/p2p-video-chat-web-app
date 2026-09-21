@@ -278,7 +278,7 @@ Instead of tunnelling through Ngrok (steps 2 and 5 above), you can run the app d
 - `404` — unknown call: `{ "success": false, "error": "Call ID not present" }`
 - `500` — server error: `{ "success": false, "error": "<message>" }`
 
-Creating a call also starts a **WebSocket server** on a random port and stores session state in an in-memory `Map` (`callId` → `{ wsURL, participants, pendingParticipants }`).
+Creating a call also starts a **WebSocket server** (sharing the app's single port, routed by call ID) and stores session state in an in-memory `Map` (`callId` → `{ wsURL, participants, pendingParticipants }`).
 
 ### Authentication
 
@@ -405,10 +405,10 @@ Bear in mind that running this way restricts your ability to test with anything 
 #### Runtime changes when `NODE_ENV=production`
 
 - **Refresh Token CookieL:** Setting `production` ensures the refresh token cookie can only be sent over secure `HTTPS` connections (sets `Secure` property to `true`).
-- **CORS:** instead of restricting `Origin` to the `LOCAL`/`NGROK_HOST`-derived dev origins, the API allows any origin (`origin: '*'`) via a placeholder `ALLOWED_PROD_ORIGINS` list that still needs to be filled in with the deployed domain (`web-socket-api/src/app.js`).
-- **WebSocket server port:** each call's WebSocket server is bound to a randomly assigned port (via `setRandomPort()`) instead of the hardcoded dev port `3000` when `NODE_ENV` is `dev`
-- **WebSocket URL construction:** `constructURI` returns `wss://<NGROK_HOST>:<port>` using the server's actual assigned port, instead of the dev-mode `/wss/:callID` (or `/ws/:callID` when `LOCAL=true`) path (`web-socket-api/src/call/utils/misc.js`).
-- **WebSocket origin verification:** `verifyClient` rejects any WebSocket upgrade whose `Origin` header isn't in a hardcoded allowlist (currently a placeholder `https://app.example.com` that still needs updating for the real deployed domain) (`web-socket-api/src/call/utils/ws-server.js`).
+- **CORS:** the API checks `Origin` against a single `ALLOWED_ORIGIN` env var in both dev and production (dev also accepts `LOCAL`/`NGROK_HOST`-derived origins) — `ALLOWED_ORIGIN` must be set to the deployed frontend domain before a production deployment will accept any cross-origin request (`web-socket-api/src/app.js`).
+- **WebSocket server port:** every call's WebSocket server shares the app's single listening port (`3000`) in both dev and production — there is no per-call port. This is a deliberate constraint so the API stays deployable on Cloud Run, which only exposes one port per service; see the TODO in [Gotchas & Experimentation](#gotchas--experimentation) below.
+- **WebSocket URL construction:** `constructURI` returns `wss://<ALLOWED_ORIGIN>/wss/:callID` in production — same path shape as the dev-mode `/wss/:callID` (or `/ws/:callID` when `LOCAL=true`) path, just a different scheme/host (`web-socket-api/src/call/utils/misc.js`).
+- **WebSocket origin verification:** `verifyClient` rejects any WebSocket upgrade whose `Origin` header doesn't match `ALLOWED_ORIGIN` (`web-socket-api/src/call/utils/misc.js`).
 
 ---
 
@@ -507,4 +507,5 @@ This image is used in GCP deployments - it is pushed to Artifact Registry and re
 
 1. **Incomplete endpoints** — `DELETE /call/:callID/leave` is partially implemented but stil needs some work doing.
 2. **In-memory calls** — Restarting the API clears all active calls and WebSocket servers. No persistence of web socket calls to persistent storage at current.
+3. **TODO: per-call WebSocket ports** — call WebSocket servers used to each get a randomly assigned port (`setRandomPort()`) in production, for connection isolation. This was dropped in favour of a single shared port (`3000`, path-routed by call ID) so the API stays deployable on Cloud Run, which only exposes one port per service. If a future deployment target supports multiple exposed ports, consider re-adding per-call ports.
 
