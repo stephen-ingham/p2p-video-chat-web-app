@@ -12,11 +12,11 @@ function uniqueUser(label: string) {
 async function signUp(page: Page, user: ReturnType<typeof uniqueUser>) {
 	await page.goto('/');
 	await page.getByRole('tab', {name: 'Register'}).click();
-	await page.getByPlaceholder('Username').fill(user.username);
-	await page.getByPlaceholder('Email').fill(user.email);
-	await page.getByPlaceholder('Password').fill(user.password);
-	await page.getByRole('button', {name: 'Create account'}).click();
-	await expect(page.getByText(user.username)).toBeVisible();
+	await page.getByTestId('register-username').fill(user.username);
+	await page.getByTestId('register-email').fill(user.email);
+	await page.getByTestId('register-password').fill(user.password);
+	await page.getByTestId('register-submit').click();
+	await expect(page.getByTestId('username')).toHaveText(user.username);
 }
 
 test('a chat message sent by one participant appears for the other', async ({
@@ -32,24 +32,18 @@ test('a chat message sent by one participant appears for the other', async ({
 		await signUp(alicePage, uniqueUser('alice'));
 		await signUp(bobPage, uniqueUser('bob'));
 
-		await alicePage.getByRole('button', {name: 'Create Call'}).click();
-		await expect(
-			alicePage.getByRole('button', {name: 'Hang Up'}),
-		).toBeVisible();
+		await alicePage.getByTestId('create-call-button').click();
+		await expect(alicePage.getByTestId('hang-up-button')).toBeVisible();
 
-		const callIdLocator = alicePage.getByText(/^Call ID: /v).first();
-		const callIdText = await callIdLocator.evaluate(
-			(element) => element.textContent ?? '',
-		);
-		const callId = callIdText.replace('Call ID: ', '').trim();
+		const callId = (await alicePage.getByTestId('call-id').textContent()) ?? '';
 
-		await bobPage.getByPlaceholder('Enter call ID').fill(callId);
-		await bobPage.getByRole('button', {name: 'Join Call'}).click();
-		await expect(bobPage.getByRole('button', {name: 'Hang Up'})).toBeVisible();
+		await bobPage.getByTestId('join-call-input').fill(callId);
+		await bobPage.getByTestId('join-call-button').click();
+		await expect(bobPage.getByTestId('hang-up-button')).toBeVisible();
 
 		const message = `hello from bob ${Date.now()}`;
-		await bobPage.getByPlaceholder('Type a message…').fill(message);
-		await bobPage.getByPlaceholder('Type a message…').press('Enter');
+		await bobPage.getByTestId('chat-message-input').fill(message);
+		await bobPage.getByTestId('chat-message-input').press('Enter');
 
 		await expect(alicePage.getByText(message)).toBeVisible();
 	} finally {

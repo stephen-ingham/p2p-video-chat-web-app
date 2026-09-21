@@ -30,7 +30,10 @@ export default function ChatPanel({
 			<div className="px-4 py-3 border-b border-zinc-800">
 				<p className="text-sm font-semibold text-zinc-100">Chat</p>
 				{participants.length > 0 && (
-					<p className="text-xs text-zinc-400 mt-0.5">
+					<p
+						className="text-xs text-zinc-400 mt-0.5"
+						data-testid="participants"
+					>
 						{participants.join(', ')}
 					</p>
 				)}
@@ -47,7 +50,11 @@ export default function ChatPanel({
 						const [sender, ...rest] = message.split(': ');
 						const text = rest.join(': ');
 						return (
-							<div key={i} className="flex items-start gap-2">
+							<div
+								key={i}
+								className="flex items-start gap-2"
+								data-testid="chat-message"
+							>
 								<Avatar className="h-6 w-6 shrink-0 mt-0.5">
 									<AvatarFallback className="text-[10px] bg-zinc-700 text-zinc-200">
 										{sender?.[0]?.toUpperCase() ?? '?'}
@@ -77,11 +84,13 @@ export default function ChatPanel({
 					placeholder="Type a message…"
 					className="bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-zinc-600"
 					suppressHydrationWarning={true}
+					data-testid="chat-message-input"
 				/>
 				<Button
 					onClick={handleSend}
 					size="icon"
 					className="bg-zinc-700 hover:bg-zinc-600 shrink-0"
+					data-testid="chat-send-button"
 				>
 					<Send className="h-4 w-4" />
 				</Button>

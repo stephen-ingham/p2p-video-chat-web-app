@@ -12,11 +12,11 @@ function uniqueUser(label: string) {
 async function signUp(page: Page, user: ReturnType<typeof uniqueUser>) {
 	await page.goto('/');
 	await page.getByRole('tab', {name: 'Register'}).click();
-	await page.getByPlaceholder('Username').fill(user.username);
-	await page.getByPlaceholder('Email').fill(user.email);
-	await page.getByPlaceholder('Password').fill(user.password);
-	await page.getByRole('button', {name: 'Create account'}).click();
-	await expect(page.getByText(user.username)).toBeVisible();
+	await page.getByTestId('register-username').fill(user.username);
+	await page.getByTestId('register-email').fill(user.email);
+	await page.getByTestId('register-password').fill(user.password);
+	await page.getByTestId('register-submit').click();
+	await expect(page.getByTestId('username')).toHaveText(user.username);
 }
 
 test('create call, join call, and see each other as participants', async ({
@@ -34,27 +34,22 @@ test('create call, join call, and see each other as participants', async ({
 		await signUp(alicePage, aliceUser);
 		await signUp(bobPage, bobUser);
 
-		await alicePage.getByRole('button', {name: 'Create Call'}).click();
-		await expect(
-			alicePage.getByRole('button', {name: 'Hang Up'}),
-		).toBeVisible();
+		await alicePage.getByTestId('create-call-button').click();
+		await expect(alicePage.getByTestId('hang-up-button')).toBeVisible();
 
-		const callIdLocator = alicePage.getByText(/^Call ID: /v).first();
-		const callIdText = await callIdLocator.evaluate(
-			(element) => element.textContent ?? '',
-		);
-		const callId = callIdText.replace('Call ID: ', '').trim();
+		const callId = (await alicePage.getByTestId('call-id').textContent()) ?? '';
 		expect(callId).toMatch(/^[\w\-]+$/v);
 
-		await bobPage.getByPlaceholder('Enter call ID').fill(callId);
-		await bobPage.getByRole('button', {name: 'Join Call'}).click();
-		await expect(bobPage.getByRole('button', {name: 'Hang Up'})).toBeVisible();
+		await bobPage.getByTestId('join-call-input').fill(callId);
+		await bobPage.getByTestId('join-call-button').click();
+		await expect(bobPage.getByTestId('hang-up-button')).toBeVisible();
 
 		// Bob receives Alice in `responseCurrentCallParticipants` (participant
 		// list); Alice receives Bob via a `receivedNewParticipantNotif` chat
-		// line. Either way, each side's email shows up on the other's screen.
-		await expect(alicePage.getByText(bobUser.email)).toBeVisible();
-		await expect(bobPage.getByText(aliceUser.email)).toBeVisible();
+		// line, which also shows up as a chat-log line containing the same
+		// email, hence .first() rather than a single unique match.
+		await expect(alicePage.getByText(bobUser.email).first()).toBeVisible();
+		await expect(bobPage.getByText(aliceUser.email).first()).toBeVisible();
 	} finally {
 		await alice.close();
 		await bob.close();

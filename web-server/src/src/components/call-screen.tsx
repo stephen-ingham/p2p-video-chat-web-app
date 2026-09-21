@@ -93,9 +93,6 @@ export default function CallScreen({
 			if (typeof result === 'string') throw new Error(result);
 			const {callID: newCallId, callURL: newCallUrl} = result;
 			setCallId(newCallId);
-			function getCurrentUser() {
-				return username;
-			}
 
 			await connectToCall(
 				newCallUrl,
@@ -203,7 +200,9 @@ export default function CallScreen({
 							{callId}
 						</Badge>
 					)}
-					<span className="text-sm text-zinc-400">{username}</span>
+					<span className="text-sm text-zinc-400" data-testid="username">
+						{username}
+					</span>
 					<Button
 						variant="ghost"
 						size="sm"
@@ -211,6 +210,7 @@ export default function CallScreen({
 							void handleLogout();
 						}}
 						className="text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"
+						data-testid="logout-button"
 					>
 						<LogOut className="h-4 w-4 mr-1.5" />
 						Logout
@@ -227,6 +227,7 @@ export default function CallScreen({
 						}}
 						disabled={loading !== undefined}
 						className="bg-zinc-100 text-zinc-900 hover:bg-zinc-200"
+						data-testid="create-call-button"
 					>
 						{loading === 'create' ? 'Creating…' : 'Create Call'}
 					</Button>
@@ -242,6 +243,7 @@ export default function CallScreen({
 							placeholder="Enter call ID"
 							className="w-64 bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-zinc-600"
 							suppressHydrationWarning={true}
+							data-testid="join-call-input"
 						/>
 						<Button
 							onClick={() => {
@@ -250,6 +252,7 @@ export default function CallScreen({
 							disabled={loading !== undefined || !joinInput.trim()}
 							variant="outline"
 							className="border-zinc-700 text-zinc-900 hover:bg-zinc-800"
+							data-testid="join-call-button"
 						>
 							{loading === 'join' ? 'Joining…' : 'Join Call'}
 						</Button>
@@ -268,7 +271,7 @@ export default function CallScreen({
 								variant="outline"
 								className="border-zinc-600 text-zinc-300 font-mono text-xs"
 							>
-								Call ID: {callId}
+								Call ID: <span data-testid="call-id">{callId}</span>
 							</Badge>
 							<Button
 								variant="destructive"
@@ -276,6 +279,7 @@ export default function CallScreen({
 								onClick={() => {
 									void handleLeave();
 								}}
+								data-testid="hang-up-button"
 							>
 								<PhoneOff className="h-4 w-4 mr-1.5" />
 								Hang Up
