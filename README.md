@@ -15,6 +15,8 @@
 [![HTML5](https://img.shields.io/badge/HTML5-E34F26?logo=html5&logoColor=white)](https://developer.mozilla.org/en-US/docs/Web/HTML)
 [![Astro](https://img.shields.io/badge/Astro-FF5D01?logo=astro&logoColor=white)](https://astro.build/)
 [![React](https://img.shields.io/badge/React-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![React Native](https://img.shields.io/badge/React_Native-20232A?logo=react&logoColor=61DAFB)](https://reactnative.dev/)
+[![Expo](https://img.shields.io/badge/Expo-000020?logo=expo&logoColor=white)](https://expo.dev/)
 [![shadcn/ui](https://img.shields.io/badge/shadcn/ui-000000?logo=shadcnui&logoColor=white)](https://ui.shadcn.com/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![Google Cloud](https://img.shields.io/badge/Google_Cloud-4285F4?logo=googlecloud&logoColor=white)](https://cloud.google.com/)
@@ -114,6 +116,7 @@ video-chat-application/
 │           ├── styles/
 │           │   └── global.css   # Tailwind v4 + shadcn CSS variable theme
 │           └── middleware.ts    # CSP header (nonce-based, skipped in dev mode)
+├── mobile-app/                  # Expo (React Native) Android app — react-native-webrtc for calling, talks to web-socket-api directly (no shared code with web-server)
 ├── infra/                       # Pulumi (TypeScript) IaC — provisions GCP resources (Cloud Run service, Cloud SQL instance, Secret Manager secrets) for production deployments
 ├── scripts/                     # OS-specific scripts backing root npm run commands (setup, nuke, dev, halt-dev)
 │   ├── dispatch.mjs             # Detects the host OS and runs the matching .ps1/.sh script
@@ -138,14 +141,13 @@ video-chat-application/
 | **Express.js API** (`web-socket-api`) | REST signalling: auth, users, call lifecycle; creates in-memory WebSocket servers per call |
 | **Astro frontend** (`web-server`)     | SSR Astro app with React components, Tailwind CSS, and shadcn/ui; port **4321** in dev     |
 
-
 ## Local Setup
 
 ### Prerequisites
 
 - [Docker](https://docs.docker.com/desktop/setup/install/) (v28+)
 - [Node.js](https://nodejs.org/) (LTS recommended)
-- [Ngrok](https://ngrok.com/download/) 
+- [Ngrok](https://ngrok.com/download/)
 - [Git](https://git-scm.com/install/)
 - A machine with camera/microphone access for testing WebRTC
 
@@ -168,7 +170,7 @@ Note: the `npm run setup` command above isn't technically necessary for developi
 - Copy `ngrok.example.yml` to `ngrok.yml`
 - [Create an Ngrok account](https://dashboard.ngrok.com/login)
 - Grab your account Auth Token and put it in the `authtoken` field in your new `ngrok.yml`.
-Alternatively you can add your authtoken to the default `ngrok.yml` configuration file at your system root using the following command:
+  Alternatively you can add your authtoken to the default `ngrok.yml` configuration file at your system root using the following command:
 
 ```bash
 ngrok config add-authtoken $YOUR_AUTHTOKEN
@@ -181,7 +183,6 @@ For further details, [refer to the Ngrok setup instructions here](https://dashbo
 Copy `.env.example` to new `.env`:
 
 Note: you will need to replace the `WS_HOST` in `.env` with the ngrok tunnel URL prefixed explicitly by `wss://`. Otherwise the current defaults should be sufficient for local dev.
-
 
 ### 4. Run the docker dev containers
 
@@ -204,7 +205,6 @@ If the docker container setup went well then the frontend should be accessible a
 For example:
 
 App URL: **https://horizon-velvet-symphony.ngrok-free.dev/**
-
 
 To spin down the dev containers smoothly use the following command:
 
@@ -233,20 +233,19 @@ Instead of tunnelling through Ngrok (steps 2 and 5 above), you can run the app d
 **Database:** MySQL at `http://localhost:3306` (created on first run via Sequelize `sync()`, with sequelize seeder function adding data for test users described below)
 <br><br>
 <i>Note:</i> 'Sequelize' seeder function only runs when `NODE_ENV`=`dev`, for development convenience
+
 ### API Routes
 
 #### Auth (`/auth`)
 
+| Method | Path            | Auth | Request body                                                                          | Success response                                                            |
+| ------ | --------------- | ---- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `POST` | `/auth/signup`  | No   | `{ "username": string (min 3), "email": string (email), "password": string (min 6) }` | `201` — `{ "success": true, "data": {"message": "Succesful sign up"}}`      |
+| `POST` | `/auth/login`   | No   | `{ "email": string (email), "password": string (min 6) }`                             | `200` — `{ "success": true, "data": { "accessToken": "<jwt>"}}`             |
+| `POST` | `/auth/logout`  | Yes  | —                                                                                     | `200` — `{ "success": true, "data": {"message": "Logged out succesfully"}}` |
+| `POST` | `/auth/refresh` | Yes  | —                                                                                     | `200` — `{ "success": true}`                                                |
 
-| Method | Path      | Auth | Request body                                                                          | Success response                                                                       |
-| ------ | --------- | ---- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `POST` | `/auth/signup` | No   | `{ "username": string (min 3), "email": string (email), "password": string (min 6) }` | `201` — `{ "success": true, "data": {"message": "Succesful sign up"}}` |
-| `POST` | `/auth/login`  | No   | `{ "email": string (email), "password": string (min 6) }`                             | `200` — `{ "success": true, "data": { "accessToken": "<jwt>"}}`                        |
-| `POST` | `/auth/logout` | Yes  | —                                                                                     | `200` — `{ "success": true, "data": {"message": "Logged out succesfully"}}`           |
-| `POST` | `/auth/refresh` | Yes | —                                                                                     | `200` — `{ "success": true}`                                                           |
-
-
-**Signup errors:** 
+**Signup errors:**
 
 - `400` — invalid body: `{ "success": "false", "data": { "message": "Invalid credentials"}}`
 - `500` — server error: `{ "success": false, "data": { "message": "Server error" } }`
@@ -257,22 +256,22 @@ Instead of tunnelling through Ngrok (steps 2 and 5 above), you can run the app d
 - `500` — server error: `{ "success": false, "data": { "message": "Server error" } }`
 
 **Logout errors:**
+
 - `500` — server error: `{ "success": "false", "data": { "message": "Server error" } }`
 
 **Refresh errors:**
+
 - `401` — invalid/expired refresh token: `{ "success": "false", "data": { "message": "Invalid or expired refresh token" }}`
 - `500` — server error: `{ "success": "false", "data": { "message": "Server error" } }`
 
 #### Calls (`/call`)
 
-
-| Method | Path                  | Auth | Request                                                 | Success response                                                                     |
-| ------ | --------------------- | ---- | ------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `POST` | `/call/create`        | Yes  | —                         | `201` — `{ "success": true, "data": { "callID": "<uuid>", "callURL": "wss://..." } }` |
-| `PUT`  | `/call/:callID/join`  | Yes  | Params: `callID` (UUID) | `200` — `{ "success": true, "data": { "callURL": "wss://..." }}`                     |
-| `DELETE`  | `/call/:callID/leave` | Yes  | Params: `callID` (UUID)                                               | `200` — `{ "success": true, "data": { "message": "Succesfully left call" }}`                                                                     |
-| `POST`  | `/call/:callID/messages` | Yes  | Params: `callID` (UUID)                                               | `201` — `{ "success": true, "data": { "message": "Message sent to all call participants succesfully" }}`   
-
+| Method   | Path                     | Auth | Request                 | Success response                                                                                         |
+| -------- | ------------------------ | ---- | ----------------------- | -------------------------------------------------------------------------------------------------------- |
+| `POST`   | `/call/create`           | Yes  | —                       | `201` — `{ "success": true, "data": { "callID": "<uuid>", "callURL": "wss://..." } }`                    |
+| `PUT`    | `/call/:callID/join`     | Yes  | Params: `callID` (UUID) | `200` — `{ "success": true, "data": { "callURL": "wss://..." }}`                                         |
+| `DELETE` | `/call/:callID/leave`    | Yes  | Params: `callID` (UUID) | `200` — `{ "success": true, "data": { "message": "Succesfully left call" }}`                             |
+| `POST`   | `/call/:callID/messages` | Yes  | Params: `callID` (UUID) | `201` — `{ "success": true, "data": { "message": "Message sent to all call participants succesfully" }}` |
 
 **Call errors (examples):**
 
@@ -296,14 +295,11 @@ Tokens are issued on successful **login** (`POST /auth/login`). Secrets for crea
 
 After `create` or `join`, clients connect to `callURL` and send JSON messages, for example:
 
-
 | Client → server `type` | Purpose                                                         |
 | ---------------------- | --------------------------------------------------------------- |
 | `newParticipantOnCall` | Announce join; server replies with participants / notifications |
 | `chatMessage`          | Broadcast chat                                                  |
 | `offer`                | Relay WebRTC offer to a named recipient                         |
-
-
 
 | Server → client `type`                   | Purpose                     |
 | ---------------------------------------- | --------------------------- |
@@ -312,22 +308,22 @@ After `create` or `join`, clients connect to `callURL` and send JSON messages, f
 | `offer`                                  | Forwarded SDP offer         |
 | `chatMessage` / `receivedNewChatMessage` | Chat payloads               |
 
-
 ### API examples
 
 For development (when `NODE_ENV` is `dev`in `.env`) the following test users are seeded via sequelize for testing when the `signalling_server_prod` service container starts:
 
-```json                                    
+```json
 {
   username: john2739
-  email: john.smith@gmail.com 
+  email: john.smith@gmail.com
   password: ExamplePassword123
 }
 ```
+
 ```json
 {
   username: sam8282
-  email: sam.clarence@gmail.com 
+  email: sam.clarence@gmail.com
   password: ExamplePassword456
 }
 ```
@@ -373,7 +369,6 @@ curl -X POST http://localhost:3000/call/a1b2c3d4-e5f6-7890-abcd-ef1234567890/lea
 ```
 
 For a machine-readable spec, see `web-socket-api/src/openapi.yaml` (some paths/responses may not match runtime behavior yet).
-
 
 ### Environment Variables
 
@@ -510,6 +505,7 @@ This image is used in GCP deployments - it is pushed to Artifact Registry and re
 E2e tests (`e2e/*.spec.ts`) run against a **prod-mode simulation** of the app rather than the local dev containers or a real deployed environment: the existing `signalling-server-prod`/`web-server-prod`/`mysql-db` compose services, run with `NODE_ENV=production` and an isolated `test-db`, behind a local [Caddy](https://caddyserver.com/) reverse proxy that terminates TLS at `https://voneo.test`. This lets the suite exercise real production-only behavior (`Secure` cookies, the `ALLOWED_ORIGIN` CORS/WS-origin allowlist) without needing a deployed GCP environment or incurring any cloud cost — see `e2e/compose.e2e.yaml` and `e2e/Caddyfile`.
 
 **One-time local setup:** add a hosts file entry pointing `voneo.test` at `127.0.0.1`:
+
 - macOS/Linux: add `127.0.0.1 voneo.test` to `/etc/hosts`
 - Windows: add `127.0.0.1 voneo.test` to `C:\Windows\System32\drivers\etc\hosts` (as Administrator)
 
@@ -532,4 +528,3 @@ Camera/microphone are faked via Chromium's `--use-fake-device-for-media-stream` 
 1. **Leaving a call requires an active WebSocket connection first** — `DELETE /call/:callID/leave` returns `400 "Call is not active"` until a participant has actually connected to the call's WebSocket server at least once (that's what flips `Call.activeCall` to `true` — see `call/utils/misc.js`). Joining via `PUT /call/:callID/join` alone isn't enough; the [Leave a call](#api-examples) curl example below will 400 unless you connect a WebSocket client to the call first.
 2. **In-memory calls** — Restarting the API clears all active calls and WebSocket servers. No persistence of web socket calls to persistent storage at current.
 3. **TODO: per-call WebSocket ports** — call WebSocket servers used to each get a randomly assigned port (`setRandomPort()`) in production. This was dropped in favour of a single shared port (`3000`, path-routed by call ID) so the API stays deployable on Cloud Run, which only exposes one port per service; multiple simultaneous calls are already supported under this shared-port design, each isolated by its own `callID`-routed `WebSocketServer` instance. If a future deployment target supports multiple exposed ports and there's a need to isolate or independently scale calls at the process/connection level, consider re-adding per-call ports.
-
