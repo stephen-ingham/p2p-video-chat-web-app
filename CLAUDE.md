@@ -80,8 +80,13 @@ e.g. `chore(WIP):`
 
 This indicates that a developer should expect errors if they try to use the system at this commit hash.
 
+### - Add a README badge for any new technology
+
+If a commit introduces a new technology to the stack (a new library, framework, service, or tool — not just a version bump of something already listed), add a badge for it to the badge row at the top of README.md, hyperlinked to that technology's main docs page (follow the existing badges' format/style, e.g. via https://shields.io).
+
 ### Check README.md && CLAUDE.md for any discrepancies
-Before you stage and push a commit, ALWAYS double check that the change hasn't implemented new differences between the reality of the implementation versus the project documentation itself, i.e. the README.md and CLAUDE.md. 
+
+Before you stage and push a commit, ALWAYS double check that the change hasn't implemented new differences between the reality of the implementation versus the project documentation itself, i.e. the README.md and CLAUDE.md.
 If anything is noticed, whether due to the change itself or due to the change being identifed by chance: raise the issue and clarify how it should be handled.
 
 ## Architecture
