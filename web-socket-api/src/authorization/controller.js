@@ -12,7 +12,13 @@ import {
 	setRefreshCookie,
 	rotateRefreshToken,
 } from '../common/middlewares/tokens.js';
-import {User, RefreshToken} from '../common/models/index.js';
+import {
+	User,
+	Call,
+	CallParticipants,
+	RefreshToken,
+} from '../common/models/index.js';
+import {removeUserFromCall} from '../call/utils/leave-call.js';
 
 const ajv = new Ajv();
 addFormats(ajv);
@@ -30,6 +36,24 @@ const schema = {
 const validate = ajv.compile(schema);
 
 const hashPassword = (password) => bcrypt.hash(password, 10);
+
+async function removeUserFromActiveCalls(email) {
+	if (!email) return;
+
+	const user = await User.findByPk(email);
+	if (!user) return;
+
+	const activeParticipations = await CallParticipants.findAll({
+		where: {userEmail: email, status: 'active'},
+	});
+
+	for (const participation of activeParticipations) {
+		// eslint-disable-next-line no-await-in-loop -- each call's shutdown must complete before the next
+		const call = await Call.findByPk(participation.callCallID);
+		// eslint-disable-next-line no-await-in-loop -- sequential per active call
+		if (call) await removeUserFromCall(call, user);
+	}
+}
 
 export async function register(request, response) {
 	try {
@@ -116,6 +140,8 @@ export async function logout(request, response) {
 				await doc.save();
 			}
 		}
+
+		await removeUserFromActiveCalls(request.user?.email);
 
 		response.clearCookie('refresh_token', {path: '/auth'});
 		response.json({
