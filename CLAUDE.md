@@ -77,6 +77,10 @@ e.g. `chore(WIP):`
 
 This indicates that a developer should expect errors if they try to use the system at this commit hash.
 
+### Check README.md && CLAUDE.md for any discrepancies
+Before you stage and push a commit, ALWAYS double check that there are no differences between the reality of the implementation versus the project documentation itself, i.e. the README.md and CLAUDE.md. 
+If anything is noticed, raise the issue and clarify how it should be handled.
+
 ## Architecture
 
 ### Signalling API (`web-socket-api/src`)
