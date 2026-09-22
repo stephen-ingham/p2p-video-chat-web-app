@@ -8,7 +8,7 @@
     "dev": "node --env-file=.env app.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:it": "node scripts/run-integration-tests.js",
-    "test:it:no-db": "node --env-file=../../.env --import ../tests/it/api/setup.js --test --test-concurrency=1 \"../tests/it/api/*.test.js\"",
+    "test:it:no-db": "node --env-file=../../.env --import ../tests/it/api/setup.js --test --test-concurrency=1 \"../tests/it/**/*.test.js\"",
     "build-image": "docker build -t web-socket-api:latest ."
   },
   "keywords": [],

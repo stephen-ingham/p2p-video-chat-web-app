@@ -57,7 +57,7 @@ function runTests() {
 			'../tests/it/api/setup.js',
 			'--test',
 			'--test-concurrency=1',
-			'../tests/it/api/*.test.js',
+			'../tests/it/**/*.test.js',
 		],
 		{stdio: 'inherit'},
 	);
