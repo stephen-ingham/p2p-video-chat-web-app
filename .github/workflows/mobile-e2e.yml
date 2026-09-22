@@ -1,0 +1,57 @@
+name: Mobile E2E (Maestro)
+
+# Heavier e2e check for mobile-app/, deliberately kept out of the fast PR
+# path (same split as this repo's Playwright e2e vs. lint/unit tests):
+# runs on a schedule and on manual dispatch rather than on every push,
+# since it needs an EAS development build + Android emulator.
+#
+# Requires (not yet configured):
+#   - EXPO_TOKEN secret (EAS CLI auth, from expo.dev account settings)
+#   - An EAS "development" build profile in mobile-app/eas.json
+#   - Maestro flow files under mobile-app/.maestro/
+
+on:
+  schedule:
+    - cron: "0 6 * * 1-5" # weekdays, 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    timeout-minutes: 45
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Install dependencies
+        run: npm ci --prefix mobile-app
+
+      - name: Setup Expo/EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # TODO: once mobile-app/eas.json has a "development" profile, build
+      # a debug APK here (`eas build --platform android --profile development
+      # --local` or a cached cloud build) and install it to the emulator
+      # started below before running Maestro flows against it.
+      - name: Build development client (placeholder)
+        run: echo "TODO — build the Android dev client APK"
+        working-directory: mobile-app
+
+      - name: Enable KVM for Android emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run Maestro flows on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          script: |
+            curl -Ls "https://get.maestro.mobile.dev" | bash
+            export PATH="$PATH:$HOME/.maestro/bin"
+            maestro test mobile-app/.maestro/

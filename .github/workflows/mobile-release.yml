@@ -1,0 +1,46 @@
+name: Mobile Release (EAS Build + Submit)
+
+# Builds and submits the Android app to the Play Console internal testing
+# track. Mirrors the web app's deploy-on-merge pattern, but for mobile-app/
+# and gated on main (not dev) since store submissions aren't cheap to undo.
+#
+# Requires (not yet configured):
+#   - EXPO_TOKEN secret (EAS CLI auth)
+#   - A "production" build profile in mobile-app/eas.json
+#   - Play Console service account JSON configured for `eas submit`
+#     (see mobile-app/eas.json submit.production.android.serviceAccountKeyPath
+#     once scaffolded, or an EAS-managed credential)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "mobile-app/**"
+  workflow_dispatch:
+
+jobs:
+  build-and-submit:
+    timeout-minutes: 45
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Install dependencies
+        run: npm ci --prefix mobile-app
+
+      - name: Setup Expo/EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: EAS Build (Android, production profile)
+        run: eas build --platform android --profile production --non-interactive --no-wait
+        working-directory: mobile-app
+
+      - name: EAS Submit to Play Console (internal track)
+        run: eas submit --platform android --latest --non-interactive
+        working-directory: mobile-app
