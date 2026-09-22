@@ -1,0 +1,54 @@
+name: Deploy (prod)
+
+# Runs after a PR merges into main (i.e. a push to main). Requires:
+#   - Workload Identity Federation set up in GCP, with the pool/provider
+#     and service account below configured as repo secrets/vars (ideally a
+#     separate, more locked-down service account than the dev one).
+#   - A Pulumi state backend + PULUMI_ACCESS_TOKEN (or self-managed backend
+#     login) — not yet configured, see infra/Pulumi.prod.yaml TODOs.
+# Until those exist this workflow will fail at the auth/login step by
+# design, rather than silently no-op.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # required for GCP Workload Identity Federation
+
+jobs:
+  deploy:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      # TODO: create the WIF pool/provider + service account in GCP, then
+      # set these as repo/environment secrets or vars. Consider requiring
+      # manual approval on the "prod" GitHub Environment before this runs.
+      - name: Authenticate to GCP (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: Install infra dependencies
+        run: npm ci
+        working-directory: infra
+
+      # TODO: set PULUMI_ACCESS_TOKEN as a repo secret once a Pulumi Cloud
+      # (or self-managed) backend is chosen.
+      - name: Pulumi up (prod stack)
+        uses: pulumi/actions@v6
+        with:
+          command: up
+          stack-name: prod
+          work-dir: infra
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}

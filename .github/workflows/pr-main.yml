@@ -1,0 +1,76 @@
+name: PR checks (main)
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  lint:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint (xo + prettier)
+        run: npm run lint
+
+  api-tests:
+    needs: lint
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Install dependencies
+        run: npm ci
+      - name: Create .env from example
+        run: cp .env.example .env
+      - name: web-socket-api integration + unit tests
+        run: npm run test:it
+
+  component-tests:
+    needs: lint
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Install dependencies
+        run: npm ci
+      - name: web-server component tests
+        run: npm run test:component
+
+  e2e-full-suite:
+    needs: [api-tests, component-tests]
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Install dependencies
+        run: npm ci
+      - name: Create .env from example
+        run: cp .env.example .env
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+      - name: Point voneo.test at localhost
+        run: echo "127.0.0.1 voneo.test" | sudo tee -a /etc/hosts
+      - name: Run full e2e suite
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 30
