@@ -25,6 +25,12 @@ type CallScreenProps = {
 	onLogout: () => void;
 };
 
+function isValidCallId(value: string) {
+	return /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/iv.test(
+		value,
+	);
+}
+
 export default function CallScreen({
 	email,
 	username,
@@ -44,6 +50,13 @@ export default function CallScreen({
 		undefined,
 	);
 	const [error, setError] = useState('');
+
+	const trimmedJoinInput = joinInput.trim();
+	const joinInputError =
+		trimmedJoinInput.length > 0 && !isValidCallId(trimmedJoinInput)
+			? 'Enter a valid call ID (UUID format).'
+			: '';
+	const isJoinInputValid = isValidCallId(trimmedJoinInput);
 
 	function addChatMessage(message: string) {
 		setMessages((previous) => [...previous, message]);
@@ -116,17 +129,17 @@ export default function CallScreen({
 	}
 
 	async function handleJoin() {
-		if (!joinInput.trim()) return;
+		if (!isJoinInputValid) return;
 		setError('');
 		setLoading('join');
 		try {
-			const callUrl = await joinCall(joinInput.trim());
+			const callUrl = await joinCall(trimmedJoinInput);
 			if (callUrl === 'Join new call failed')
 				throw new Error('Join new call failed');
-			setCallId(joinInput.trim());
+			setCallId(trimmedJoinInput);
 			await connectToCall(
 				callUrl,
-				joinInput.trim(),
+				trimmedJoinInput,
 				email,
 				username,
 				localVideoRef,
@@ -249,7 +262,7 @@ export default function CallScreen({
 							onClick={() => {
 								void handleJoin();
 							}}
-							disabled={loading !== undefined || !joinInput.trim()}
+							disabled={loading !== undefined || !isJoinInputValid}
 							variant="outline"
 							className="border-zinc-700 text-zinc-900 hover:bg-zinc-800"
 							data-testid="join-call-button"
@@ -258,6 +271,14 @@ export default function CallScreen({
 						</Button>
 					</div>
 
+					{joinInputError && (
+						<p
+							className="text-xs text-red-400 w-full"
+							data-testid="join-call-input-error"
+						>
+							{joinInputError}
+						</p>
+					)}
 					{error && <p className="text-sm text-red-400 w-full">{error}</p>}
 				</div>
 			)}

@@ -17,12 +17,14 @@ function VideoTile({
 	label,
 	videoRef,
 	muted = false,
+	testId,
 }: {
 	label: string;
 	// eslint-disable-next-line @typescript-eslint/no-restricted-types -- React DOM refs are null-based, not undefined-based
 	videoRef?: React.RefObject<HTMLVideoElement | null>;
 	muted?: boolean;
 	stream?: MediaStream;
+	testId: string;
 }) {
 	return (
 		<Card className="relative overflow-hidden bg-zinc-900 aspect-video flex items-center justify-center min-w-[280px]">
@@ -32,6 +34,7 @@ function VideoTile({
 				muted={muted}
 				playsInline
 				className="w-full h-full object-cover"
+				data-testid={testId}
 			/>
 			<Badge className="absolute bottom-2 left-2 bg-black/60 text-white border-0">
 				{label}
@@ -48,7 +51,13 @@ function RemoteTile({peerUser, stream}: RemoteStream) {
 		if (ref.current) ref.current.srcObject = stream;
 	}, [stream]);
 
-	return <VideoTile label={peerUser} videoRef={ref} />;
+	return (
+		<VideoTile
+			label={peerUser}
+			videoRef={ref}
+			testId={`remote-video-${peerUser}`}
+		/>
+	);
 }
 
 export default function VideoGrid({
@@ -57,7 +66,12 @@ export default function VideoGrid({
 }: VideoGridProps) {
 	return (
 		<div className="flex flex-wrap gap-3 w-full">
-			<VideoTile label="You" videoRef={localVideoRef} muted />
+			<VideoTile
+				label="You"
+				videoRef={localVideoRef}
+				muted
+				testId="local-video"
+			/>
 			{remoteStreams.map((rs) => (
 				<RemoteTile key={rs.peerUser} {...rs} />
 			))}
