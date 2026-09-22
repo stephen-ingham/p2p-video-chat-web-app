@@ -49,6 +49,22 @@ jobs:
       - name: web-server component tests
         run: npm run test:component
 
+  infra-tests:
+    needs: lint
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Install infra dependencies
+        run: npm ci
+        working-directory: infra
+      - name: Pulumi resource snapshot tests
+        run: npm test
+        working-directory: infra
+
   e2e-full-suite:
     needs: [api-tests, component-tests]
     timeout-minutes: 30
