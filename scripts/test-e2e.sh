@@ -18,7 +18,7 @@ if [ $UP_EXIT_CODE -ne 0 ]; then
 fi
 
 set +e
-npx playwright test
+npx playwright test "$@"
 EXIT_CODE=$?
 set -e
 

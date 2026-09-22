@@ -19,7 +19,7 @@ async function signUp(page: Page, user: ReturnType<typeof uniqueUser>) {
 	await expect(page.getByTestId('username')).toHaveText(user.username);
 }
 
-test('create call, join call, and see each other as participants', async ({
+test('create call, join call, and see each other as participants @happy-path', async ({
 	browser,
 }) => {
 	const alice = await browser.newContext();

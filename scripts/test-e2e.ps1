@@ -23,7 +23,7 @@ if ($upExitCode -ne 0) {
 }
 
 $ErrorActionPreference = "Continue"
-npx playwright test
+npx playwright test @args
 $exitCode = $LASTEXITCODE
 $ErrorActionPreference = "Stop"
 
