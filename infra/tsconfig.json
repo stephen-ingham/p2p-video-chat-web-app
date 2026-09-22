@@ -2,7 +2,7 @@
     "compilerOptions": {
         "strict": true,
         "outDir": "bin",
-        "target": "es2020",
+        "target": "es2023",
         "module": "nodenext",
         "moduleResolution": "nodenext",
         "sourceMap": true,
@@ -13,6 +13,7 @@
         "forceConsistentCasingInFileNames": true
     },
     "files": [
-        "index.ts"
+        "index.ts",
+        "tests/pulumi-snapshot.test.ts"
     ]
 }

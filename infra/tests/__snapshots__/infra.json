@@ -1,0 +1,360 @@
+{
+  "resources": [
+    {
+      "type": "gcp:certificatemanager/certificate:Certificate",
+      "name": "lb-cert",
+      "inputs": {
+        "location": "europe-west2",
+        "managed": {
+          "domains": [
+            "snapshot.example.com"
+          ]
+        }
+      }
+    },
+    {
+      "type": "gcp:cloudrunv2/service:Service",
+      "name": "default",
+      "inputs": {
+        "deletionProtection": false,
+        "ingress": "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER",
+        "location": "europe-west2",
+        "name": "voneo-frontend-snapshot-test",
+        "scaling": {
+          "maxInstanceCount": 1,
+          "minInstanceCount": 0
+        },
+        "template": {
+          "containers": [
+            {
+              "image": "europe-west2-docker.pkg.dev/signalling-api/voneo/voneo-frontend:snapshot-test-tag"
+            }
+          ]
+        },
+        "traffics": [
+          {
+            "percent": 100,
+            "type": "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
+          }
+        ]
+      }
+    },
+    {
+      "type": "gcp:cloudrunv2/service:Service",
+      "name": "default",
+      "inputs": {
+        "deletionProtection": false,
+        "ingress": "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER",
+        "location": "europe-west2",
+        "name": "voneo-backend-snapshot-test",
+        "scaling": {
+          "maxInstanceCount": 1,
+          "minInstanceCount": 0
+        },
+        "template": {
+          "containers": [
+            {
+              "envs": [
+                {
+                  "name": "NODE_ENV",
+                  "value": "production"
+                },
+                {
+                  "name": "DB_NAME",
+                  "value": "voneo-db-snapshot-test"
+                },
+                {
+                  "name": "DB_HOST",
+                  "value": "/cloudsql/undefined"
+                },
+                {
+                  "name": "DB_PORT",
+                  "value": "3306"
+                },
+                {
+                  "name": "DB_PASSWORD",
+                  "valueSource": {
+                    "secretKeyRef": {
+                      "secret": "db-password-snapshot-test",
+                      "version": "latest"
+                    }
+                  }
+                },
+                {
+                  "name": "JWT_SECRET",
+                  "valueSource": {
+                    "secretKeyRef": {
+                      "secret": "jwt-secret-snapshot-test",
+                      "version": "latest"
+                    }
+                  }
+                },
+                {
+                  "name": "REFRESH_TOKEN_SECRET",
+                  "valueSource": {
+                    "secretKeyRef": {
+                      "secret": "refresh-token-secret-snapshot-test",
+                      "version": "latest"
+                    }
+                  }
+                }
+              ],
+              "image": "europe-west2-docker.pkg.dev/signalling-api/voneo/voneo-backend:snapshot-test-tag",
+              "volumeMounts": [
+                {
+                  "mountPath": "/cloudsql",
+                  "name": "cloudsql"
+                }
+              ]
+            }
+          ],
+          "volumes": [
+            {
+              "cloudSqlInstance": {
+                "instances": [
+                  null
+                ]
+              },
+              "name": "cloudsql"
+            }
+          ]
+        },
+        "traffics": [
+          {
+            "percent": 100,
+            "type": "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
+          }
+        ]
+      }
+    },
+    {
+      "type": "gcp:compute/address:Address",
+      "name": "lb-ip",
+      "inputs": {
+        "networkTier": "STANDARD",
+        "region": "europe-west2"
+      }
+    },
+    {
+      "type": "gcp:compute/forwardingRule:ForwardingRule",
+      "name": "lb-forwarding-rule",
+      "inputs": {
+        "loadBalancingScheme": "EXTERNAL_MANAGED",
+        "networkTier": "STANDARD",
+        "portRange": "443",
+        "region": "europe-west2",
+        "target": "lb-https-proxy_id"
+      }
+    },
+    {
+      "type": "gcp:compute/regionBackendService:RegionBackendService",
+      "name": "lb-backend",
+      "inputs": {
+        "backends": [
+          {
+            "group": "backend-neg_id"
+          }
+        ],
+        "loadBalancingScheme": "EXTERNAL_MANAGED",
+        "protocol": "HTTP",
+        "region": "europe-west2",
+        "timeoutSec": 3600
+      }
+    },
+    {
+      "type": "gcp:compute/regionBackendService:RegionBackendService",
+      "name": "lb-frontend",
+      "inputs": {
+        "backends": [
+          {
+            "group": "frontend-neg_id"
+          }
+        ],
+        "loadBalancingScheme": "EXTERNAL_MANAGED",
+        "protocol": "HTTP",
+        "region": "europe-west2",
+        "timeoutSec": 30
+      }
+    },
+    {
+      "type": "gcp:compute/regionNetworkEndpointGroup:RegionNetworkEndpointGroup",
+      "name": "backend-neg",
+      "inputs": {
+        "cloudRun": {
+          "service": "voneo-backend-snapshot-test"
+        },
+        "networkEndpointType": "SERVERLESS",
+        "region": "europe-west2"
+      }
+    },
+    {
+      "type": "gcp:compute/regionNetworkEndpointGroup:RegionNetworkEndpointGroup",
+      "name": "frontend-neg",
+      "inputs": {
+        "cloudRun": {
+          "service": "voneo-frontend-snapshot-test"
+        },
+        "networkEndpointType": "SERVERLESS",
+        "region": "europe-west2"
+      }
+    },
+    {
+      "type": "gcp:compute/regionTargetHttpsProxy:RegionTargetHttpsProxy",
+      "name": "lb-https-proxy",
+      "inputs": {
+        "certificateManagerCertificates": [
+          "//certificatemanager.googleapis.com/lb-cert_id"
+        ],
+        "region": "europe-west2",
+        "urlMap": "lb-url-map_id"
+      }
+    },
+    {
+      "type": "gcp:compute/regionUrlMap:RegionUrlMap",
+      "name": "lb-url-map",
+      "inputs": {
+        "defaultService": "lb-frontend_id",
+        "hostRules": [
+          {
+            "hosts": [
+              "snapshot.example.com"
+            ],
+            "pathMatcher": "voneo-paths"
+          }
+        ],
+        "pathMatchers": [
+          {
+            "defaultService": "lb-frontend_id",
+            "name": "voneo-paths",
+            "pathRules": [
+              {
+                "paths": [
+                  "/auth/*",
+                  "/call/*"
+                ],
+                "service": "lb-backend_id"
+              }
+            ]
+          }
+        ],
+        "region": "europe-west2"
+      }
+    },
+    {
+      "type": "gcp:secretmanager/secret:Secret",
+      "name": "db-password-secret",
+      "inputs": {
+        "replication": {
+          "auto": {}
+        },
+        "secretId": "db-password-snapshot-test"
+      }
+    },
+    {
+      "type": "gcp:secretmanager/secret:Secret",
+      "name": "jwt-secret",
+      "inputs": {
+        "replication": {
+          "auto": {}
+        },
+        "secretId": "jwt-secret-snapshot-test"
+      }
+    },
+    {
+      "type": "gcp:secretmanager/secret:Secret",
+      "name": "refresh-token-secret",
+      "inputs": {
+        "replication": {
+          "auto": {}
+        },
+        "secretId": "refresh-token-secret-snapshot-test"
+      }
+    },
+    {
+      "type": "gcp:secretmanager/secretIamMember:SecretIamMember",
+      "name": "db-password-secret-access",
+      "inputs": {
+        "member": "serviceAccount:undefined-compute@developer.gserviceaccount.com",
+        "role": "roles/secretmanager.secretAccessor",
+        "secretId": "db-password-secret_id"
+      }
+    },
+    {
+      "type": "gcp:secretmanager/secretIamMember:SecretIamMember",
+      "name": "jwt-secret-access",
+      "inputs": {
+        "member": "serviceAccount:undefined-compute@developer.gserviceaccount.com",
+        "role": "roles/secretmanager.secretAccessor",
+        "secretId": "jwt-secret_id"
+      }
+    },
+    {
+      "type": "gcp:secretmanager/secretIamMember:SecretIamMember",
+      "name": "refresh-token-secret-access",
+      "inputs": {
+        "member": "serviceAccount:undefined-compute@developer.gserviceaccount.com",
+        "role": "roles/secretmanager.secretAccessor",
+        "secretId": "refresh-token-secret_id"
+      }
+    },
+    {
+      "type": "gcp:secretmanager/secretVersion:SecretVersion",
+      "name": "db-password-version",
+      "inputs": {
+        "secretData": {
+          "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+          "value": "snapshot-test-password"
+        }
+      }
+    },
+    {
+      "type": "gcp:secretmanager/secretVersion:SecretVersion",
+      "name": "jwt-secret-version",
+      "inputs": {
+        "secretData": {
+          "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+          "value": "snapshot-test-jwt-secret"
+        }
+      }
+    },
+    {
+      "type": "gcp:secretmanager/secretVersion:SecretVersion",
+      "name": "refresh-token-secret-version",
+      "inputs": {
+        "secretData": {
+          "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+          "value": "snapshot-test-refresh-secret"
+        }
+      }
+    },
+    {
+      "type": "gcp:sql/databaseInstance:DatabaseInstance",
+      "name": "instance",
+      "inputs": {
+        "databaseVersion": "MYSQL_8_4",
+        "deletionProtection": true,
+        "name": "voneo-db-snapshot-test",
+        "region": "europe-west2",
+        "settings": {
+          "availabilityType": "ZONAL",
+          "ipConfiguration": {
+            "ipv4Enabled": false
+          },
+          "tier": "db-f1-micro"
+        }
+      }
+    },
+    {
+      "type": "gcp:sql/user:User",
+      "name": "db-user",
+      "inputs": {
+        "instance": "voneo-db-snapshot-test",
+        "name": "voneo",
+        "password": {
+          "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+          "value": "snapshot-test-password"
+        }
+      }
+    }
+  ]
+}
