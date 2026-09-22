@@ -21,6 +21,45 @@ type AuthScreenProps = {
 	onAuthenticated: (email: string, username: string) => void;
 };
 
+function isValidEmail(email: string) {
+	return /^[^\s@]+@[^\s@]+\.[^\s@]+$/v.test(email);
+}
+
+function validateLoginForm(form: {email: string; password: string}) {
+	return {
+		emailError:
+			form.email.length > 0 && !isValidEmail(form.email)
+				? 'Enter a valid email address.'
+				: '',
+		isValid: isValidEmail(form.email) && form.password.length > 0,
+	};
+}
+
+function validateRegisterForm(form: {
+	username: string;
+	email: string;
+	password: string;
+}) {
+	return {
+		usernameError:
+			form.username.length > 0 && form.username.length < 3
+				? 'Username must be at least 3 characters.'
+				: '',
+		emailError:
+			form.email.length > 0 && !isValidEmail(form.email)
+				? 'Enter a valid email address.'
+				: '',
+		passwordError:
+			form.password.length > 0 && form.password.length < 6
+				? 'Password must be at least 6 characters.'
+				: '',
+		isValid:
+			form.username.length >= 3 &&
+			isValidEmail(form.email) &&
+			form.password.length >= 6,
+	};
+}
+
 export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 	const {login, register} = useTokenWorker();
 
@@ -33,8 +72,18 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 	const [error, setError] = useState('');
 	const [loading, setLoading] = useState(false);
 
+	const {emailError: loginEmailError, isValid: isLoginValid} =
+		validateLoginForm(loginForm);
+	const {
+		usernameError: registerUsernameError,
+		emailError: registerEmailError,
+		passwordError: registerPasswordError,
+		isValid: isRegisterValid,
+	} = validateRegisterForm(registerForm);
+
 	async function handleLogin(event: React.SubmitEvent<HTMLFormElement>) {
 		event.preventDefault();
+		if (!isLoginValid) return;
 		setError('');
 		setLoading(true);
 		try {
@@ -54,6 +103,7 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 
 	async function handleRegister(event: React.SubmitEvent<HTMLFormElement>) {
 		event.preventDefault();
+		if (!isRegisterValid) return;
 		setError('');
 		setLoading(true);
 		try {
@@ -143,6 +193,14 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 										suppressHydrationWarning={true}
 										data-testid="login-email"
 									/>
+									{loginEmailError && (
+										<p
+											className="text-xs text-red-400"
+											data-testid="login-email-error"
+										>
+											{loginEmailError}
+										</p>
+									)}
 									<Input
 										type="password"
 										placeholder="Password"
@@ -161,7 +219,7 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 									{error && <p className="text-sm text-red-400">{error}</p>}
 									<Button
 										type="submit"
-										disabled={loading}
+										disabled={loading || !isLoginValid}
 										className="w-full bg-zinc-100 text-zinc-900 hover:bg-zinc-200"
 										data-testid="login-submit"
 									>
@@ -194,6 +252,14 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 										suppressHydrationWarning={true}
 										data-testid="register-username"
 									/>
+									{registerUsernameError && (
+										<p
+											className="text-xs text-red-400"
+											data-testid="register-username-error"
+										>
+											{registerUsernameError}
+										</p>
+									)}
 									<Input
 										type="email"
 										placeholder="Email"
@@ -209,6 +275,14 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 										suppressHydrationWarning={true}
 										data-testid="register-email"
 									/>
+									{registerEmailError && (
+										<p
+											className="text-xs text-red-400"
+											data-testid="register-email-error"
+										>
+											{registerEmailError}
+										</p>
+									)}
 									<Input
 										type="password"
 										placeholder="Password"
@@ -225,10 +299,18 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 										suppressHydrationWarning={true}
 										data-testid="register-password"
 									/>
+									{registerPasswordError && (
+										<p
+											className="text-xs text-red-400"
+											data-testid="register-password-error"
+										>
+											{registerPasswordError}
+										</p>
+									)}
 									{error && <p className="text-sm text-red-400">{error}</p>}
 									<Button
 										type="submit"
-										disabled={loading}
+										disabled={loading || !isRegisterValid}
 										className="w-full bg-zinc-100 text-zinc-900 hover:bg-zinc-200"
 										data-testid="register-submit"
 									>
