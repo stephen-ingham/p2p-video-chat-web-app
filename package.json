@@ -15,8 +15,10 @@
     "lint": "xo --prettier",
     "lint:fix": "xo --prettier --fix",
     "prepare": "husky install",
-    "gcp-deploy-dev": "cd infra && pulumi up",
-    "gcp-destroy-dev": "cd infra && pulumi destroy",
+    "gcp-deploy-dev": "cd infra && pulumi up --stack dev",
+    "gcp-destroy-dev": "cd infra && pulumi destroy --stack dev",
+    "gcp-deploy-prod": "cd infra && pulumi up --stack prod",
+    "gcp-destroy-prod": "cd infra && pulumi destroy --stack prod",
     "nuke": "node scripts/dispatch.mjs nuke",
     "tunnel": "ngrok start --all --config ngrok.yml"
   },

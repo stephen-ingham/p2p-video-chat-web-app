@@ -3,14 +3,19 @@ import * as gcp from '@pulumi/gcp';
 
 const config = new pulumi.Config();
 
-// Sensitive values — store with: pulumi config set --secret <key> <value>
+// Stack name (e.g. "dev"/"prod") suffixes resource/secret ids so the dev
+// and prod stacks can coexist in the same GCP project without colliding —
+// see infra/Pulumi.dev.yaml and infra/Pulumi.prod.yaml.
+const stack = pulumi.getStack();
+
+// Sensitive values — store with: pulumi config set --secret <key> <value> --stack <dev|prod>
 const dbPassword = config.requireSecret('dbPassword');
 const jwtSecret = config.requireSecret('jwtSecret');
 const refreshTokenSecret = config.requireSecret('refreshTokenSecret');
 
 // Secret Manager secrets
 const dbPasswordSecret = new gcp.secretmanager.Secret('db-password-secret', {
-	secretId: 'db-password',
+	secretId: `db-password-${stack}`,
 	replication: {auto: {}},
 });
 const dbPasswordSecretVersion = new gcp.secretmanager.SecretVersion(
@@ -22,7 +27,7 @@ const dbPasswordSecretVersion = new gcp.secretmanager.SecretVersion(
 );
 
 const jwtSecret_ = new gcp.secretmanager.Secret('jwt-secret', {
-	secretId: 'jwt-secret',
+	secretId: `jwt-secret-${stack}`,
 	replication: {auto: {}},
 });
 const jwtSecretVersion = new gcp.secretmanager.SecretVersion(
@@ -36,7 +41,7 @@ const jwtSecretVersion = new gcp.secretmanager.SecretVersion(
 const refreshTokenSecret_ = new gcp.secretmanager.Secret(
 	'refresh-token-secret',
 	{
-		secretId: 'refresh-token-secret',
+		secretId: `refresh-token-secret-${stack}`,
 		replication: {auto: {}},
 	},
 );
@@ -53,7 +58,7 @@ const refreshTokenSecretVersion = new gcp.secretmanager.SecretVersion(
 const frontendImageTag = config.get('frontendImageTag') ?? 'latest';
 
 const voneoFrontend = new gcp.cloudrunv2.Service('default', {
-	name: 'voneo-frontend',
+	name: `voneo-frontend-${stack}`,
 	location: 'europe-west2',
 	deletionProtection: false,
 	ingress: 'INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER',
@@ -79,7 +84,7 @@ const voneoFrontend = new gcp.cloudrunv2.Service('default', {
 // Voneo Backend - Google Cloud V2 Run Service
 
 const dbInstance = new gcp.sql.DatabaseInstance('instance', {
-	name: 'voneo-db',
+	name: `voneo-db-${stack}`,
 	region: 'europe-west2',
 	databaseVersion: 'MYSQL_8_4',
 	settings: {
@@ -128,7 +133,7 @@ const backendImageTag = config.get('backendImageTag') ?? 'latest';
 const voneoBackend = new gcp.cloudrunv2.Service(
 	'default',
 	{
-		name: 'voneo-backend',
+		name: `voneo-backend-${stack}`,
 		location: 'europe-west2',
 		deletionProtection: false,
 		ingress: 'INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER',
@@ -150,7 +155,7 @@ const voneoBackend = new gcp.cloudrunv2.Service(
 					image: `europe-west2-docker.pkg.dev/signalling-api/voneo/voneo-backend:${backendImageTag}`,
 					envs: [
 						{name: 'NODE_ENV', value: 'production'},
-						{name: 'DB_NAME', value: 'voneo-db'},
+						{name: 'DB_NAME', value: `voneo-db-${stack}`},
 						{
 							name: 'DB_HOST',
 							value: pulumi.interpolate`/cloudsql/${dbInstance.connectionName}`,
@@ -209,6 +214,9 @@ const voneoBackend = new gcp.cloudrunv2.Service(
 // Regional External ALB //
 
 const region = 'europe-west2';
+// TODO: set per-stack via `pulumi config set domain <host> --stack <dev|prod>`
+// once real dev/prod domains exist (see CLAUDE.md "Known incomplete areas").
+const domain = config.get('domain') ?? 'yourdomain.com';
 
 // Regional IP
 const ip = new gcp.compute.Address('lb-ip', {
@@ -252,7 +260,7 @@ const urlMap = new gcp.compute.RegionUrlMap('lb-url-map', {
 	defaultService: frontendService.id,
 	hostRules: [
 		{
-			hosts: ['yourdomain.com'],
+			hosts: [domain],
 			pathMatcher: 'voneo-paths',
 		},
 	],
@@ -268,7 +276,7 @@ const urlMap = new gcp.compute.RegionUrlMap('lb-url-map', {
 // Regional Google-managed SSL certificate via Certificate Manager
 const cert = new gcp.certificatemanager.Certificate('lb-cert', {
 	location: region,
-	managed: {domains: ['yourdomain.com']},
+	managed: {domains: [domain]},
 });
 
 const httpsProxy = new gcp.compute.RegionTargetHttpsProxy('lb-https-proxy', {
