@@ -1,7 +1,8 @@
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
 import {Call, User, CallParticipants} from '../common/models/index.js';
-import {createWebSocketsServer, shutDownServer} from './utils/ws-server.js';
+import {createWebSocketsServer} from './utils/ws-server.js';
+import {removeUserFromCall} from './utils/leave-call.js';
 
 const ajv = new Ajv();
 addFormats(ajv);
@@ -179,31 +180,7 @@ export async function leaveCall(request, response) {
 			});
 		}
 
-		const activeUserCount = await requestedCall.countUsers({
-			where: {status: 'active'},
-		});
-
-		// Handle if more than one user on call remaining
-		if (activeUserCount > 1) {
-			await requestedCall.removeUser(retrievedUser);
-		} else {
-			// Handle if user is last person to leave
-
-			const callFinishTime = Date.now();
-			const callStartTime = requestedCall.startedAt;
-			const callDurationSecs = (callFinishTime - callStartTime) / 1000;
-
-			await requestedCall.update({
-				activeCall: false,
-				totalDurationSecs: callDurationSecs,
-				finishedAt: callFinishTime,
-			});
-
-			const isShutDownSuccess = await shutDownServer(callID);
-			if (!isShutDownSuccess) {
-				console.error('Error shutting down requested ws server');
-			}
-		}
+		await removeUserFromCall(requestedCall, retrievedUser);
 
 		return response
 			.status(200)

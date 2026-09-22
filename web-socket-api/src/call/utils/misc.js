@@ -1,5 +1,5 @@
 import process from 'node:process';
-import {CallParticipants, Op} from '../../common/models/index.js';
+import {Call, CallParticipants, Op} from '../../common/models/index.js';
 import {wss} from './session-store.js';
 
 export async function getRelevantWSS(callID) {
@@ -162,6 +162,13 @@ export async function handleNewCallParticipantMessage(data) {
 		await currentCallParticipant.update({
 			status: 'active',
 		});
+
+		// First participant to actually connect marks the call itself active —
+		// leaveCall and logout's active-call cleanup are gated on this.
+		const call = await Call.findByPk(callID);
+		if (call && !call.activeCall) {
+			await call.update({activeCall: true, startedAt: new Date()});
+		}
 
 		// Returning names of current call participants to new participant to establish connections
 		const activeUsers = await CallParticipants.findAll({
