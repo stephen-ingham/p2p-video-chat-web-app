@@ -1,0 +1,13 @@
+{
+  "name": "video-chat-web-server-tests",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
+    "astro": "^7.3.4",
+    "vitest": "^5.0.1"
+  }
+}

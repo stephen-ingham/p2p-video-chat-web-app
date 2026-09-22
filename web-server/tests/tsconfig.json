@@ -1,0 +1,22 @@
+{
+	"compilerOptions": {
+		"target": "es2024",
+		"module": "esnext",
+		"moduleResolution": "bundler",
+		"lib": ["es2024", "dom", "dom.iterable"],
+		"strict": true,
+		"skipLibCheck": true,
+		"esModuleInterop": true,
+		"noEmit": true,
+		"allowJs": true,
+		"allowImportingTsExtensions": true,
+		"types": ["astro/client"],
+		"jsx": "react-jsx",
+		"jsxImportSource": "react",
+		"baseUrl": "..",
+		"paths": {
+			"@/*": ["./src/src/*"]
+		}
+	},
+	"include": ["**/*", "../src/src/env.d.ts"]
+}
