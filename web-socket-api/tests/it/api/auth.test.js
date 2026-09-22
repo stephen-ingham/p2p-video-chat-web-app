@@ -3,12 +3,15 @@ import {before, beforeEach, describe, it} from 'node:test';
 import supertest from 'supertest';
 import {
 	app,
+	User,
 	RefreshToken,
+	CallParticipants,
 	resetDatabase,
 	signup,
 	login,
 	signupAndLogin,
 	uniqueUser,
+	activateCallParticipant,
 } from './helpers.js';
 
 before(async () => {
@@ -29,6 +32,16 @@ describe('POST /auth/signup', () => {
 			success: true,
 			data: {message: 'Succesful sign up'},
 		});
+	});
+
+	it('stores the password bcrypt-hashed, not in plaintext', async () => {
+		const user = uniqueUser();
+		await signup(user);
+
+		const row = await User.findByPk(user.email);
+		assert.ok(row, 'expected the User row to be persisted');
+		assert.notEqual(row.password, user.password);
+		assert.match(row.password, /^\$2[aby]\$\d{2}\$.{53}$/v);
 	});
 
 	it('returns 400 for a username that is too short', async () => {
@@ -133,6 +146,28 @@ describe('POST /auth/logout', () => {
 
 		const after = await RefreshToken.findByPk(before_.id);
 		assert.ok(after.revokedAt, 'expected the logged-out token to be revoked');
+	});
+
+	it('removes the user from any calls they are actively on', async () => {
+		const {agent, accessToken, email} = await signupAndLogin();
+		const createResponse = await supertest(app)
+			.post('/call/create')
+			.set('Authorization', `Bearer ${accessToken}`);
+		const {callID} = createResponse.body.data;
+		await activateCallParticipant(callID, email);
+
+		await agent
+			.post('/auth/logout')
+			.set('Authorization', `Bearer ${accessToken}`);
+
+		const participantRow = await CallParticipants.findOne({
+			where: {callCallID: callID, userEmail: email},
+		});
+		assert.equal(
+			participantRow,
+			null,
+			'expected the CallParticipants row to be removed',
+		);
 	});
 
 	it('returns 401 without an access token', async () => {

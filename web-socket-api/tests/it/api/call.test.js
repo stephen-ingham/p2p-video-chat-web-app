@@ -7,6 +7,7 @@ import {
 	CallParticipants,
 	resetDatabase,
 	signupAndLogin,
+	activateCallParticipant,
 } from './helpers.js';
 
 beforeEach(async () => {
@@ -113,10 +114,68 @@ describe('PUT /call/:callID/join', () => {
 });
 
 describe('DELETE /call/:callID/leave', () => {
-	// ActiveCall defaults to false at creation and is never set true anywhere
-	// in the codebase (see CLAUDE.md "Incomplete endpoints"), so the 200
-	// happy path is currently unreachable via the HTTP API. These tests
-	// assert that documented, current behaviour rather than "fix" it.
+	// ActiveCall only becomes true once a participant actually connects to
+	// the call's WebSocket server (see call/utils/misc.js —
+	// handleNewCallParticipantMessage); activateCallParticipant simulates
+	// that without a real WS client, matching how call.test.js already
+	// simulates a finished call by writing finishedAt directly.
+	it('removes a non-last participant without shutting the call down', async () => {
+		const creator = await signupAndLogin();
+		const createResponse = await supertest(app)
+			.post('/call/create')
+			.set('Authorization', `Bearer ${creator.accessToken}`);
+		const {callID} = createResponse.body.data;
+		await activateCallParticipant(callID, creator.email);
+
+		const joiner = await signupAndLogin();
+		await supertest(app)
+			.put(`/call/${callID}/join`)
+			.set('Authorization', `Bearer ${joiner.accessToken}`);
+		await activateCallParticipant(callID, joiner.email);
+
+		const response = await supertest(app)
+			.delete(`/call/${callID}/leave`)
+			.set('Authorization', `Bearer ${creator.accessToken}`);
+
+		assert.equal(response.status, 200);
+
+		const creatorRow = await CallParticipants.findOne({
+			where: {callCallID: callID, userEmail: creator.email},
+		});
+		assert.equal(creatorRow, null, 'expected the leaver to be removed');
+
+		const callRow = await Call.findByPk(callID);
+		assert.equal(
+			callRow.activeCall,
+			true,
+			'expected the call to stay active for the remaining participant',
+		);
+	});
+
+	it('finalises and shuts down the call when the last participant leaves', async () => {
+		const creator = await signupAndLogin();
+		const createResponse = await supertest(app)
+			.post('/call/create')
+			.set('Authorization', `Bearer ${creator.accessToken}`);
+		const {callID} = createResponse.body.data;
+		await activateCallParticipant(callID, creator.email);
+
+		const response = await supertest(app)
+			.delete(`/call/${callID}/leave`)
+			.set('Authorization', `Bearer ${creator.accessToken}`);
+
+		assert.equal(response.status, 200);
+
+		const participantRow = await CallParticipants.findOne({
+			where: {callCallID: callID, userEmail: creator.email},
+		});
+		assert.equal(participantRow, null, 'expected the leaver to be removed');
+
+		const callRow = await Call.findByPk(callID);
+		assert.equal(callRow.activeCall, false);
+		assert.ok(callRow.finishedAt, 'expected finishedAt to be set');
+	});
+
 	it('returns 400 "Call is not active" for a freshly created call', async () => {
 		const {accessToken} = await signupAndLogin();
 		const createResponse = await supertest(app)

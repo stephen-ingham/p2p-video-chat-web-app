@@ -57,6 +57,21 @@ export function decodeJwtPayload(token) {
 	return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
 }
 
+// Simulates a participant having actually connected to the call's WebSocket
+// server (which normally flips these fields — see
+// call/utils/misc.js:handleNewCallParticipantMessage) without needing a real
+// WS client in HTTP-only integration tests.
+export async function activateCallParticipant(callID, email) {
+	await CallParticipants.update(
+		{status: 'active'},
+		{where: {callCallID: callID, userEmail: email}},
+	);
+	await Call.update(
+		{activeCall: true, startedAt: new Date()},
+		{where: {callID}},
+	);
+}
+
 export {app} from '../../../src/app.js';
 export {
 	Call,
