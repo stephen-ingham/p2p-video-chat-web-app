@@ -80,7 +80,7 @@ onmessage = async function (event) {
 		}
 
 		case 'ReqLeaveCall': {
-			const leaveCallResult = await handleLeaveCall();
+			const leaveCallResult = await handleLeaveCall(requestBody);
 			postMessage(leaveCallResult);
 			break;
 		}
