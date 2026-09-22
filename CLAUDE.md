@@ -19,10 +19,10 @@ All commands below are run from the repo root unless noted.
 - `npm run nuke` — full teardown: removes containers/images/volumes/deps, then rebuilds/reinstalls. Destructive — only run when setup is broken.
 - `npm test` (root) — runs `xo` (lint) across the repo; this is the only root-level test/lint command.
 - `npm run test:e2e` — run e2e tests in `e2e/` against a prod-mode simulation stack (own compose project, isolated `test-db`, Caddy TLS proxy at `https://voneo.test`; see `e2e/compose.e2e.yaml`). Brings the stack up, runs Playwright, tears down. Requires `voneo.test` to resolve to `127.0.0.1` in your hosts file, and stopping `npm run dev` first (fixed host ports collide). Don't run `npx playwright test` directly — it expects the stack already running at that URL.
-- `npm run lint` —  Runs XO linting with prettier config passed in
+- `npm run lint` — Runs XO linting with prettier config passed in
 - `npm run lint:fix` — Applies XO linting and prettier formatting fixes where possible, identifies any errors/warnings that couldn't be implemented
 - `npm run test:it` — alias to run the integration tests for the API (and eventually the websocket infra)
-Per-workspace:
+  Per-workspace:
 - `web-socket-api/src`: `npm run dev` runs the API directly with `node --env-file=.env app.js` (outside Docker). No test runner is currently wired up (`npm test` is a placeholder); `tests/it` and `tests/unit` exist but are empty scaffolding.
 - `web-server/src`: `npm run dev` runs Astro directly (`astro dev`); `npm run build` / `npm run preview` for production builds. `web-server/tests/components` exists but is empty scaffolding. Vitest is a devDependency but no tests are written yet.
 
@@ -39,7 +39,7 @@ Before a git commit is created, staged and pushed to the remote branch, it is es
 The change should be small and focused, scoped to one specific type of change (refer to [Types of Git Commit](#types-of-git-commit) below to classify the change).
 The commit message should clearly identify what the changes were in a good level of technical detail, covering what changed and where.
 
-The commit message itself should generally be at most 30 characters in total, however if this length restricts a clear explanation of the changes these should be covered in the extended commit message. 
+The commit message itself should generally be at most 30 characters in total, however if this length restricts a clear explanation of the changes these should be covered in the extended commit message.
 
 Commit messages should always start with one prefix from the [Types of Git Commit](#types-of-git-commit) section.
 However, in the case the change doesn't neatly fall into any of these categories opt to classify it as a `chore` type.
@@ -64,7 +64,6 @@ For any project documentation changes, i.e. any `CLAUDE.md` or `README.md` files
 
 Any changes to or newly created test files or related config, i.e. relating to `vitest`, `playwright` or `supertest` testing frameworks
 
-
 ### - Do not make too many changes
 
 Does not modify more than 5 files and make more than 200 lines of code changes at once.
@@ -72,7 +71,7 @@ If the changeset exceeds this, separate out the changes into numerous commits to
 
 ### - Pass the required git hooks
 
-Ensures the git hooks in the `pre-commit` and `pre-push` husky scripts succesfully pass before a git commit is pushed.
+Ensures the git hooks in the `pre-commit` husky script succesfully pass before a git commit is pushed (there is currently no `pre-push` hook — only `.husky/pre-commit` exists).
 However, on `feat/` branches in the case that the needed changes to make this hook scripts pass would exceed the change size requirement, add `WIP:` after the [git commit type prefix]().
 e.g. `chore(WIP):`
 
@@ -93,12 +92,14 @@ This indicates that a developer should expect errors if they try to use the syst
 - `openapi.yaml` — Located at @web-socket-api/src/openapi.yaml - the API schema reference, kept in sync with the controllers/routes as of this writing; re-verify against the controller if it's been a while since it was last updated.
 
 WebSocket message protocol (client ↔ per-call WS server):
+
 - Client → server: `newParticipantOnCall`, `chatMessage`, `offer` (relayed to a named recipient).
 - Server → client: `receivedNewParticipantNotif`, `responseCurrentCallParticipants`, `offer`, `chatMessage` / `receivedNewChatMessage`.
 
 ### Dev vs. production divergence (signalling API)
 
 Several behaviors branch on `NODE_ENV`/`LOCAL` — check these before assuming behavior is environment-independent:
+
 - WS server port: every call's WebSocket server shares the app's single listening port (`3000`) in both dev and production, via `noServer: true` and the shared HTTP server's `upgrade` event (`handleUpgrade` in `call/utils/ws-server.js`), routed by `callID` path.
 - WS URL construction (`constructURI` in `call/utils/misc.js`): dev path is `/wss/:callID` (or `/ws/:callID` when `LOCAL=true`); production builds `wss://<ALLOWED_ORIGIN>/wss/:callID` — same path shape, different scheme/host.
 - WS origin verification (`verifyClient` in `call/utils/misc.js`) and CORS (`app.js`) both check the `Origin` header against `ALLOWED_ORIGIN` (env var) in production, and against `LOCAL`/`NGROK_HOST`-derived origins in dev.
