@@ -10,12 +10,13 @@
 		"noEmit": true,
 		"allowJs": true,
 		"allowImportingTsExtensions": true,
-		"types": ["astro/client"],
+		"types": ["astro/client", "@testing-library/jest-dom/vitest"],
 		"jsx": "react-jsx",
 		"jsxImportSource": "react",
 		"baseUrl": "..",
 		"paths": {
-			"@/*": ["./src/src/*"]
+			"@/*": ["./src/src/*"],
+			"@testing-library/react": ["./src/node_modules/@testing-library/react"]
 		}
 	},
 	"include": ["**/*", "../src/src/env.d.ts"]

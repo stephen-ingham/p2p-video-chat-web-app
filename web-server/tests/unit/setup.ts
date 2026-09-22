@@ -8,7 +8,16 @@
 // matchers avoid that by not importing vitest themselves; we extend the
 // running vitest's own `expect` (which resolves fine here, same as it does
 // in every test file) instead.
+import {cleanup} from '@testing-library/react';
 import * as matchers from '@testing-library/jest-dom/matchers';
-import {expect} from 'vitest';
+import {afterEach, expect} from 'vitest';
 
 expect.extend(matchers);
+
+// @testing-library/react's own auto-cleanup relies on detecting a global
+// `afterEach` — this config doesn't set test.globals, so register it
+// explicitly instead, or every component test after the first in a file
+// renders on top of the previous one's leftover DOM.
+afterEach(() => {
+	cleanup();
+});
