@@ -24,7 +24,7 @@ All commands below are run from the repo root unless noted.
 - `npm run lint:fix` — Applies XO linting and prettier formatting fixes where possible, identifies any errors/warnings that couldn't be implemented
 - `npm run test:it` — alias to run the integration tests for the API (and eventually the websocket infra)
   Per-workspace:
-- `web-socket-api/src`: `npm run dev` runs the API directly with `node --env-file=.env app.js` (outside Docker). No test runner is currently wired up (`npm test` is a placeholder); `tests/it` and `tests/unit` exist but are empty scaffolding.
+- `web-socket-api/src`: `npm run dev` runs the API directly with `node --env-file=.env app.js` (outside Docker). No test runner is currently wired up (`npm test` is a placeholder); `tests/it/api` and `tests/it/websocket` have substantial integration test coverage (auth, call lifecycle, DB persistence, WebSocket signalling — run via `npm run test:it`), but `tests/unit` is still empty scaffolding.
 - `web-server/src`: `npm run dev` runs Astro directly (`astro dev`); `npm run build` / `npm run preview` for production builds. `web-server/tests/components` exists but is empty scaffolding. Vitest is a devDependency but no tests are written yet.
 
 A root `.env` (copied from `.env.example`) is required and is shared by both the frontend and backend containers — see the @README.md Environment Variables section for the full variable list (`JWT_SECRET`, `REFRESH_TOKEN_SECRET`, `DB_*`, `NGROK_HOST`, `LOCAL`, `NODE_ENV`).
@@ -69,6 +69,8 @@ Any changes to or newly created test files or related config, i.e. relating to `
 
 Does not modify more than 5 files and make more than 200 lines of code changes at once.
 If the changeset exceeds this, separate out the changes into numerous commits to be sequentially pushed to the remote branch per the [guidance in the previous requirement](#--keep-the-change-small-and-focused)
+
+The 200-line figure counts hand-written code only. Lockfiles (`package-lock.json`), generated fixtures/snapshots, and other machine-generated files that can't reasonably be split or trimmed are excluded from that count — don't split a commit purely to dodge their line count, and don't hand-edit them to stay under the limit.
 
 ### - Pass the required git hooks
 
@@ -133,3 +135,4 @@ Pulumi (TypeScript) provisions GCP resources: Cloud Run service, Cloud SQL insta
 - Calls and their WebSocket servers are in-memory only; nothing survives an API restart.
 - Production CORS/WS-origin allowlist is a single `ALLOWED_ORIGIN` value, filled in via env var per deployment — not yet set for any real deployed domain.
 - TODO: all calls currently share a single WS port (`3000`) via path-based routing (`/wss/:callID`), dropped in favour of Cloud Run compatibility (Cloud Run only exposes one port per service). The original per-call random-port design (`setRandomPort`, `WS_PORT_MIN`/`WS_PORT_MAX`) is removed; multiple simultaneous calls are already supported under the shared-port design (each isolated by its own `callID`-routed `WebSocketServer`), so this is only relevant if a future deployment target supports multiple exposed ports and process/connection-level isolation or scaling per call becomes worth the cost.
+- TODO: no rate limiting exists anywhere on the WebSocket signalling path (`call/utils/ws-server.js`/`misc.js`). Once implemented, add an integration test alongside the existing ones in `web-socket-api/tests/it/websocket/limits.test.js` asserting the restriction actually kicks in under high enough traffic.
