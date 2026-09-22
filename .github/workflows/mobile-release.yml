@@ -1,15 +1,18 @@
-name: Mobile Release (EAS Build + Submit)
+name: Mobile Release (Fastlane → Play Console)
 
-# Builds and submits the Android app to the Play Console internal testing
-# track. Mirrors the web app's deploy-on-merge pattern, but for mobile-app/
-# and gated on main (not dev) since store submissions aren't cheap to undo.
+# Builds a signed release build and uploads it to the Play Console internal
+# testing track via Fastlane. Mirrors the web app's deploy-on-merge
+# pattern, but for mobile-app/ and gated on main (not dev) since store
+# submissions aren't cheap to undo.
 #
 # Requires (not yet configured):
-#   - EXPO_TOKEN secret (EAS CLI auth)
-#   - A "production" build profile in mobile-app/eas.json
-#   - Play Console service account JSON configured for `eas submit`
-#     (see mobile-app/eas.json submit.production.android.serviceAccountKeyPath
-#     once scaffolded, or an EAS-managed credential)
+#   - Android release signing keystore as repo secrets:
+#     ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS,
+#     ANDROID_KEY_PASSWORD
+#   - A Play Console service account JSON as a repo secret
+#     (PLAY_CONSOLE_SERVICE_ACCOUNT_JSON) for Fastlane's `supply` action
+#   - mobile-app/android/fastlane/Fastfile with an `internal` lane that
+#     builds the release AAB and calls `supply` against that track
 
 on:
   push:
@@ -19,7 +22,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-submit:
+  build-and-release:
     timeout-minutes: 45
     runs-on: ubuntu-latest
     environment: prod
@@ -31,16 +34,32 @@ jobs:
       - name: Install dependencies
         run: npm ci --prefix mobile-app
 
-      - name: Setup Expo/EAS CLI
-        uses: expo/expo-github-action@v8
+      - name: Sync Capacitor native project
+        run: npx cap sync android
+        working-directory: mobile-app
+
+      - uses: actions/setup-java@v4
         with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
+          distribution: temurin
+          java-version: "17"
 
-      - name: EAS Build (Android, production profile)
-        run: eas build --platform android --profile production --non-interactive --no-wait
-        working-directory: mobile-app
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+          working-directory: mobile-app/android
 
-      - name: EAS Submit to Play Console (internal track)
-        run: eas submit --platform android --latest --non-interactive
-        working-directory: mobile-app
+      - name: Decode release keystore
+        run: echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > app/release.keystore
+        working-directory: mobile-app/android
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+
+      - name: Fastlane — build + upload to Play Console internal track
+        run: bundle exec fastlane internal
+        working-directory: mobile-app/android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          PLAY_CONSOLE_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_CONSOLE_SERVICE_ACCOUNT_JSON }}

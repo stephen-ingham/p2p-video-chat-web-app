@@ -1,9 +1,11 @@
 name: Mobile CI
 
-# Fast checks for the mobile-app/ Expo/React Native project. Path-filtered
-# so it doesn't run until mobile-app/ exists — see the "Voneo Android App"
-# tracking artifact for the scaffolding plan this assumes (Jest,
-# @testing-library/react-native, XO/Prettier reused from the repo root).
+# Fast checks for mobile-app/ — a Capacitor native Android shell around the
+# existing web frontend, not a separate app implementation (see the "Voneo
+# Android App" tracking artifact). No RN component tests here: the app's
+# own logic is the same Astro/React code already covered by
+# web-server/tests/. Path-filtered so this doesn't run until mobile-app/
+# exists.
 
 on:
   pull_request:
@@ -29,7 +31,7 @@ jobs:
       - name: Lint (xo + prettier)
         run: npm run lint --prefix mobile-app
 
-  unit-and-component-tests:
+  android-build:
     needs: lint
     timeout-minutes: 15
     runs-on: ubuntu-latest
@@ -40,5 +42,20 @@ jobs:
           node-version: lts/*
       - name: Install dependencies
         run: npm ci --prefix mobile-app
-      - name: Jest unit + @testing-library/react-native component tests
-        run: npm test --prefix mobile-app
+
+      - name: Sync Capacitor native project
+        run: npx cap sync android
+        working-directory: mobile-app
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # Compiles the native wrapper (including the WebChromeClient
+      # permission-bridge glue) without needing an emulator — the fast
+      # signal that the Android side isn't broken. Real behaviour (does the
+      # permission prompt actually work) is only checked by mobile-e2e.yml.
+      - name: Build debug APK
+        run: ./gradlew assembleDebug
+        working-directory: mobile-app/android
