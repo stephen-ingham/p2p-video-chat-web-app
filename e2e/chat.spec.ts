@@ -1,7 +1,8 @@
+import {randomUUID} from 'node:crypto';
 import {test, expect, type Page} from '@playwright/test';
 
 function uniqueUser(label: string) {
-	const suffix = Date.now();
+	const suffix = randomUUID();
 	return {
 		username: `e2e${label}${suffix}`,
 		email: `e2e-${label}-${suffix}@example.com`,
