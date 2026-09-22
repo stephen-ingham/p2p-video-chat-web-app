@@ -19,6 +19,7 @@ All commands below are run from the repo root unless noted.
 - `npm run nuke` — full teardown: removes containers/images/volumes/deps, then rebuilds/reinstalls. Destructive — only run when setup is broken.
 - `npm test` (root) — runs `xo` (lint) across the repo; this is the only root-level test/lint command.
 - `npm run test:e2e` — run e2e tests in `e2e/` against a prod-mode simulation stack (own compose project, isolated `test-db`, Caddy TLS proxy at `https://voneo.test`; see `e2e/compose.e2e.yaml`). Brings the stack up, runs Playwright, tears down. Requires `voneo.test` to resolve to `127.0.0.1` in your hosts file, and stopping `npm run dev` first (fixed host ports collide). Don't run `npx playwright test` directly — it expects the stack already running at that URL.
+- `npm run test:e2e:happy-path` — same as `test:e2e` but filtered to specs tagged `@happy-path` (currently just call creation/join); used by the `pr-dev.yml` CI workflow for a faster PR check into `dev`.
 - `npm run lint` — Runs XO linting with prettier config passed in
 - `npm run lint:fix` — Applies XO linting and prettier formatting fixes where possible, identifies any errors/warnings that couldn't be implemented
 - `npm run test:it` — alias to run the integration tests for the API (and eventually the websocket infra)
@@ -125,7 +126,7 @@ See `web-server/src/CLAUDE.md` for Astro-specific dev-server guidance (backgroun
 
 ### Infra (`infra/`)
 
-Pulumi (TypeScript) provisions GCP resources for production: Cloud Run service, Cloud SQL instance, Secret Manager secrets. Deploy/destroy via `npm run gcp-deploy-dev` / `npm run gcp-destroy-dev` (runs `pulumi up`/`pulumi destroy` from `infra/`).
+Pulumi (TypeScript) provisions GCP resources: Cloud Run service, Cloud SQL instance, Secret Manager secrets. Separate `dev`/`prod` stacks (`infra/Pulumi.dev.yaml` / `Pulumi.prod.yaml`, GCP resource/secret names suffixed by stack to avoid collisions). Deploy/destroy via `npm run gcp-deploy-dev` / `npm run gcp-destroy-dev` / `npm run gcp-deploy-prod` / `npm run gcp-destroy-prod` (run `pulumi up`/`pulumi destroy --stack <dev|prod>` from `infra/`). In CI, `deploy-dev.yml`/`deploy-prod.yml` run the same on merge to `dev`/`main` via GCP Workload Identity Federation — not yet configured (see TODOs in the Pulumi stack files).
 
 ## Known incomplete areas
 
