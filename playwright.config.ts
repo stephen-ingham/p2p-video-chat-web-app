@@ -42,11 +42,18 @@ export default defineConfig({
 		trace: 'on-first-retry',
 	},
 
-	/* Fake media device flags are Chromium-only, so that's the only project. */
-	projects: [
-		{
-			name: 'chromium',
-			use: {...devices['Desktop Chrome']},
-		},
-	],
+	/* Fake media device flags are Chromium-only, so that's the only browser.
+	 * E2E_NAT=1 (set by `npm run test:e2e:nat`) swaps in the NAT-traversal
+	 * specs instead: they drive containerised browsers on separate Docker
+	 * networks (e2e/compose.nat.yaml), so they can't run against the plain
+	 * e2e stack, and the regular specs don't run against the NAT one. */
+	projects: process.env.E2E_NAT
+		? [{name: 'nat-traversal', testMatch: 'nat/**/*.spec.ts'}]
+		: [
+				{
+					name: 'chromium',
+					testIgnore: 'nat/**',
+					use: {...devices['Desktop Chrome']},
+				},
+			],
 });
