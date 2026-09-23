@@ -51,7 +51,12 @@ export function verifyClient(info) {
 			const allowedOrigins = process.env.ALLOWED_ORIGIN
 				? [process.env.ALLOWED_ORIGIN]
 				: [];
-			if (!allowedOrigins.includes(info.origin)) {
+			// Browsers always send Origin on a WS upgrade, so a missing one means
+			// a non-browser client (mirrors the `|| !origin` CORS check in app.js).
+			// Origin is only a guard against cross-site browser pages — native
+			// clients could spoof it anyway. React Native on Android sends a
+			// default Origin derived from the socket URL, so doesn't hit this.
+			if (info.origin && !allowedOrigins.includes(info.origin)) {
 				console.log(`Rejected unauthorized origin: ${info.origin}`);
 				return false;
 			}

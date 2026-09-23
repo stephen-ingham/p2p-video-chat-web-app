@@ -83,4 +83,14 @@ describe('Origin verification in production', () => {
 			ws.close();
 		});
 	});
+
+	it('accepts a connection with no Origin header (non-browser client)', async () => {
+		const callID = await createCall();
+
+		await withProductionOrigin('https://allowed.example', async () => {
+			// The `ws` client sends no Origin unless the `origin` option is set.
+			const ws = await connectToCall(port, callID);
+			ws.close();
+		});
+	});
 });
