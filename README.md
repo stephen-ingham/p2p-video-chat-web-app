@@ -588,7 +588,9 @@ This image is used in GCP deployments - it is pushed to Artifact Registry and re
 
 1. Set `LOCAL=true` in the root `.env` and run `npm run dev`.
 2. Start an Android emulator (Android Studio → Device Manager).
-3. From `mobile-app/`, run `npx expo start` and press `a`. This opens the app in Expo Go. Once the app uses `react-native-webrtc`, it needs a development build instead (`eas build --profile development`, then `npx expo start --dev-client`).
+3. From `mobile-app/`, run `npx expo start --android --go`. This installs Expo Go on the emulator and opens the app in it. `--go` is needed because `expo-dev-client` is installed, so a plain `expo start` looks for a development build instead. Once the app uses `react-native-webrtc`, it needs that development build (`eas build --profile development`, then `npx expo start --dev-client`).
+
+Avoid regular expressions in `mobile-app/` code: XO requires the `v` flag on them, and Hermes (React Native's JavaScript engine) rejects that flag when the app loads.
 
 A physical phone can't reach `10.0.2.2`. Point `EXPO_PUBLIC_API_URL` at your machine's LAN IP, or at the ngrok tunnel with `LOCAL=false`.
 
