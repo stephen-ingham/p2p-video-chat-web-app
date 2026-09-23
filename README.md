@@ -25,6 +25,8 @@
 [![Prettier](https://img.shields.io/badge/Prettier-F7B93E?logo=prettier&logoColor=black)](https://prettier.io/)
 [![Playwright](https://img.shields.io/badge/Playwright-2EAD33?logo=playwright&logoColor=white)](https://playwright.dev/)
 [![Vitest](https://img.shields.io/badge/Vitest-6E9F18?logo=vitest&logoColor=white)](https://vitest.dev/)
+[![Jest](https://img.shields.io/badge/Jest-C21325?logo=jest&logoColor=white)](https://jestjs.io/)
+[![Maestro](https://img.shields.io/badge/Maestro-4A4AFF?logo=&logoColor=white)](https://maestro.mobile.dev/)
 [![Supertest](https://img.shields.io/badge/Supertest-07B203?logo=&logoColor=white)](https://github.com/visionmedia/supertest)
 [![Testing Library](https://img.shields.io/badge/Testing_Library-E33332?logo=testinglibrary&logoColor=white)](https://testing-library.com/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -578,17 +580,31 @@ This image is used in GCP deployments - it is pushed to Artifact Registry and re
 
 ## Mobile app (Expo, Android)
 
-`mobile-app/` is an Expo (React Native) Android app. It talks to the signalling API directly, with no code shared with `web-server`. Calling will use `react-native-webrtc`. For now, `app.tsx` is a connectivity check screen: log in, create or join a call, connect to its WebSocket and list the participants.
+`mobile-app/` is an Expo (React Native) Android app. It talks to the signalling API directly, with no code shared with `web-server`, and uses `react-native-webrtc` for calls. Its signalling matches the web client's, so web and mobile users can be on the same call.
 
+- `app.tsx` — shows `AuthScreen` while logged out and `CallScreen` once logged in. It uses plain state rather than Expo Router: there are only two screens, and Expo Router would need a new native build.
+- `src/screens/` — `auth-screen.tsx` (login/register), `call-screen.tsx` (create or join a call), `in-call-view.tsx` (local and remote video, participants, chat, hang up).
 - `src/lib/config.ts` — API base URL, from `EXPO_PUBLIC_API_URL`. The default, `http://10.0.2.2:3000`, is the Android emulator's alias for the host machine, direct to the API port. It suits the `LOCAL=true` dev stack. Expo inlines the variable when Metro starts, so restart Metro after changing it.
-- `src/lib/call-url.ts` — builds a call's WebSocket URL from its `callID`: `ws://<host>/ws/:callID` for an `http` API URL, `wss://<host>/wss/:callID` for `https`.
-- `src/lib/api.ts` / `src/lib/signalling.ts` — REST client and the WebSocket join handshake.
+- `src/lib/call-url.ts` — builds a call's WebSocket URL from its `callID` (`ws://<host>/ws/:callID` for an `http` API URL, `wss://<host>/wss/:callID` for `https`), and validates call IDs.
+- `src/lib/api.ts` / `src/lib/signalling.ts` — REST client (including ICE servers) and the WebSocket join handshake.
+- `src/lib/call-session.ts` — the call's WebRTC signalling: the joiner offers to everyone already on the call, they answer, and ICE candidates are exchanged. Peers are injected, so it's tested with fakes.
+- `src/lib/webrtc.ts` — the only module using `react-native-webrtc` directly: camera/mic capture and the real peer connections.
+- `src/lib/use-call.ts` — the hook tying these together for the call screen.
 
 **Running it against the dev stack:**
 
+The app needs a development build, because Expo Go doesn't include `react-native-webrtc`'s native code. Build it once with `eas build --profile development --platform android` and install the APK on the emulator. Rebuild only after adding native packages or changing native config in `app.json`.
+
 1. Set `LOCAL=true` in the root `.env` and run `npm run dev`.
 2. Start an Android emulator (Android Studio → Device Manager).
-3. From `mobile-app/`, run `npx expo start --android --go`. This installs Expo Go on the emulator and opens the app in it. `--go` is needed because `expo-dev-client` is installed, so a plain `expo start` looks for a development build instead. Once the app uses `react-native-webrtc`, it needs that development build (`eas build --profile development`, then `npx expo start --dev-client`).
+3. From `mobile-app/`, run `npx expo start --dev-client` and press `a`.
+
+`react-native-webrtc` asks for camera and microphone permission itself when a call starts.
+
+**Tests:**
+
+- `npm test` in `mobile-app/` runs Jest (`jest-expo` preset) with [React Native Testing Library](https://callstack.github.io/react-native-testing-library/). Tests live in `mobile-app/tests/`: unit tests for `api.ts`, `call-url.ts` and `call-session.ts`, and component tests for the auth and call screens with the API, signalling and WebRTC modules mocked. `mobile-ci.yml` runs them on PRs that touch `mobile-app/`.
+- [Maestro](https://maestro.mobile.dev/) flows in `mobile-app/.maestro/` cover logging in, creating a call and hanging up, and a failed login. They need the dev-client build installed and the `LOCAL=true` dev stack running, and are run by `mobile-e2e.yml`, whose build step is still a TODO.
 
 Avoid regular expressions in `mobile-app/` code: XO requires the `v` flag on them, and Hermes (React Native's JavaScript engine) rejects that flag when the app loads.
 

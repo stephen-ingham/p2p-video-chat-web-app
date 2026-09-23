@@ -136,7 +136,11 @@ See `web-server/src/CLAUDE.md` for Astro-specific dev-server guidance (backgroun
 
 ### Mobile app (`mobile-app/`)
 
-Expo (React Native) Android app, see `mobile-app/CLAUDE.md` for Expo-specific rules. It talks to the signalling API directly: `src/lib/config.ts` (API URL from `EXPO_PUBLIC_API_URL`, default `http://10.0.2.2:3000` for the emulator against the `LOCAL=true` stack), `src/lib/call-url.ts` (WS URL from `callID`), `src/lib/api.ts`, and `src/lib/signalling.ts` (WS join handshake). `app.tsx` is a temporary connectivity check screen. There's no test runner yet, so `mobile-ci.yml`'s test job fails until Jest is added.
+Expo (React Native) Android app, see `mobile-app/CLAUDE.md` for Expo-specific rules. It talks to the signalling API directly and uses `react-native-webrtc`, so it needs the EAS dev-client build (Expo Go can't load it; run with `npx expo start --dev-client`).
+- `app.tsx` switches between `src/screens/auth-screen.tsx` and `call-screen.tsx` (+ `in-call-view.tsx`) with plain state, not Expo Router (two screens, and Expo Router needs a native rebuild).
+- `src/lib/`: `config.ts` (API URL from `EXPO_PUBLIC_API_URL`, default `http://10.0.2.2:3000` for the emulator against the `LOCAL=true` stack), `call-url.ts` (WS URL from `callID`, call ID check), `api.ts`, `signalling.ts` (WS join handshake), `call-session.ts` (WebRTC signalling matching the web client's `rtc-utils.ts`, peers injected via `call-types.ts`), `webrtc.ts` (the only `react-native-webrtc` user), `use-call.ts` (hook wiring them together).
+- Tests: `npm test` in `mobile-app/` runs Jest (`jest-expo`) + React Native Testing Library over `mobile-app/tests/`; Maestro flows in `mobile-app/.maestro/` (need the dev build + dev stack; `mobile-e2e.yml`'s build step is still a TODO).
+- No regexes in `mobile-app/`: XO requires the `v` flag, which Hermes rejects at load.
 
 ### Infra (`infra/`)
 
