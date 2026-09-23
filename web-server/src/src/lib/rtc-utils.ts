@@ -102,18 +102,22 @@ function createPeerConnection(
 
 	myPeerConnection.onicecandidate = (event) => {
 		if (!event.candidate || event.candidate.candidate === '') return;
+		const myEmail = getCurrentUser();
+		const target = myEmail === caller ? recipient : caller;
 		sendMessage({
 			type: 'candidate',
-			// eslint-disable-next-line @typescript-eslint/naming-convention -- wire property name is fixed by the backend signalling protocol
-			data: {candidate: event.candidate, recipient, caller, callID: callId},
+			data: {
+				candidate: event.candidate,
+				recipient: target,
+				caller: myEmail,
+				// eslint-disable-next-line @typescript-eslint/naming-convention -- wire property name is fixed by the backend signalling protocol
+				callID: callId,
+			},
 		});
 	};
 
 	myPeerConnection.ontrack = (event) => {
-		const existing = document.querySelector(`#video-from-${peerUser}`);
-		if (!existing) {
-			addRemoteVideo(peerUser, event.streams[0]);
-		}
+		addRemoteVideo(peerUser, event.streams[0]);
 	};
 
 	myPeerConnection.oniceconnectionstatechange = () => {
@@ -338,7 +342,7 @@ export async function attachWsConnListeners(
 					}
 
 					await Promise.all(
-						otherCallParticipants.map(async (participant) => {
+						participants.map(async (participant) => {
 							const offer = await sendOffer(
 								callerEmail,
 								participant,
@@ -417,9 +421,9 @@ export async function attachWsConnListeners(
 			}
 
 			case 'candidate': {
-				const {candidate, recipient} = message.data;
+				const {candidate, caller} = message.data;
 				const idx = peerConnectionsArray.findIndex(
-					(pc) => pc.recipient === recipient,
+					(pc) => pc.peerUser === caller,
 				);
 				if (peerConnectionsArray[idx]) {
 					await peerConnectionsArray[idx].addIceCandidate(
