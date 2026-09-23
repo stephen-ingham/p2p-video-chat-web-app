@@ -105,3 +105,34 @@ export async function leaveCall(token: string, callId: string) {
 		token,
 	});
 }
+
+export type IceServer = {
+	urls: string | string[];
+	username?: string;
+	credential?: string;
+};
+
+function isIceServer(value: unknown): value is IceServer {
+	if (!isRecord(value)) return false;
+	const {urls} = value;
+	return (
+		typeof urls === 'string' ||
+		(Array.isArray(urls) && urls.every((url) => typeof url === 'string'))
+	);
+}
+
+// STUN/TURN config for the peer connections: the self-hosted coturn server
+// with short-lived credentials when the API has TURN configured, otherwise
+// Google's public STUN servers.
+export async function getIceServers(token: string) {
+	const data = await request('/call/ice-servers', {token});
+	const {iceServers} = data;
+	if (
+		!Array.isArray(iceServers) ||
+		!iceServers.every((server): server is IceServer => isIceServer(server))
+	) {
+		throw new TypeError('Expected an "iceServers" list in the API response');
+	}
+
+	return iceServers;
+}
