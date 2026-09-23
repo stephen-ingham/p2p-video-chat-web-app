@@ -24,6 +24,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
+      # xo/prettier (and globals, imported by xo.config.mjs) are root
+      # devDependencies, reused rather than duplicated in mobile-app/ —
+      # `npm run lint --prefix mobile-app` finds them via the root's
+      # node_modules/.bin, so both installs are needed.
+      - name: Install root dependencies (xo, prettier)
+        run: npm ci
       - name: Install dependencies
         run: npm ci --prefix mobile-app
       - name: Lint (xo + prettier)
