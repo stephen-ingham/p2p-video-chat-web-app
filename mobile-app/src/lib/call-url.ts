@@ -7,16 +7,20 @@ import {apiBaseUrl} from './config.ts';
 // - http (LOCAL=true dev stack): ws://<host>/ws/:callID
 // - https (ngrok dev tunnel / production): wss://<host>/wss/:callID
 // Parsed by hand rather than with `URL`, whose React Native implementation
-// doesn't support most getters (e.g. `host`).
+// doesn't support most getters (e.g. `host`), or a regex (see config.ts).
 export function buildCallUrl(callId: string, apiBase = apiBaseUrl): string {
-	const match = /^(https?):\/\/([^\/]+)\/?$/v.exec(apiBase);
-	if (!match) {
+	const isSecure = apiBase.startsWith('https://');
+	const host = apiBase.slice(isSecure ? 'https://'.length : 'http://'.length);
+	if (
+		!(isSecure || apiBase.startsWith('http://')) ||
+		host === '' ||
+		host.includes('/')
+	) {
 		throw new Error(
 			`API base URL must be http(s)://host[:port] with no path, got: ${apiBase}`,
 		);
 	}
 
-	const [, protocol, host] = match;
-	const scheme = protocol === 'https' ? 'wss' : 'ws';
+	const scheme = isSecure ? 'wss' : 'ws';
 	return `${scheme}://${host}/${scheme}/${encodeURIComponent(callId)}`;
 }

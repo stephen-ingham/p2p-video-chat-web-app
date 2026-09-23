@@ -13,7 +13,14 @@ const defaultApiUrl = 'http://10.0.2.2:3000';
 // eslint-disable-next-line n/prefer-global/process
 const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL;
 
-export const apiBaseUrl = (configuredApiUrl ?? defaultApiUrl).replace(
-	/\/+$/v,
-	'',
+function trimTrailingSlashes(url: string) {
+	let end = url.length;
+	while (end > 0 && url[end - 1] === '/') end--;
+	return url.slice(0, end);
+}
+
+// No regex here or in call-url.ts: XO requires the `v` flag on regexes, and
+// Hermes (React Native's JS engine) rejects it at bundle load.
+export const apiBaseUrl = trimTrailingSlashes(
+	configuredApiUrl ?? defaultApiUrl,
 );
