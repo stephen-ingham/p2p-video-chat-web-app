@@ -22,14 +22,12 @@ export async function createCall(request, response) {
 	try {
 		const {email} = request.user;
 
-		const wsServerInfo = {callID: '', uri: ''};
+		let callID;
 
-		// Handling creating new websockets server for call
+		// Handling creating new websockets server for call. Clients build the
+		// server's URL themselves from the callID, so only the ID is returned.
 		try {
-			const {callID, uri} = await createWebSocketsServer();
-			console.log(callID, uri);
-			wsServerInfo.callID = callID;
-			wsServerInfo.uri = uri;
+			callID = await createWebSocketsServer();
 		} catch (error) {
 			console.error('Error during creation of WebSocket server:', error);
 			throw new Error('An error occured in our systems, please try again', {
@@ -38,15 +36,10 @@ export async function createCall(request, response) {
 		}
 
 		// Checking details present for created websockets server before storing to memory
-		if (!(wsServerInfo.callID || wsServerInfo.uri)) {
-			console.error('No value stored for callID or uri fields in wsServerInfo');
+		if (!callID) {
+			console.error('No callID returned for the created WebSocket server');
 			throw new Error('An error occured in our systems, please try again');
 		}
-
-		const {uri} = wsServerInfo;
-		const {callID} = wsServerInfo;
-
-		console.log('this is the uri within createCall handler:', uri);
 
 		// Find the entry in 'users' table for user creating the call
 		const retrievedUser = await User.findByPk(email);
@@ -58,14 +51,13 @@ export async function createCall(request, response) {
 		// Add new call details and linked user to DB
 		const newCall = await Call.create({
 			callID,
-			callURL: uri,
 			totalDurationSecs: 0,
 			activeCall: false,
 		});
 
 		await newCall.addUser(retrievedUser);
 
-		response.status(201).json({success: true, data: {callID, callURL: uri}});
+		response.status(201).json({success: true, data: {callID}});
 	} catch (error) {
 		console.error('Error during call creation:', error);
 		response.status(500).json({success: false, data: {error: 'Server error'}});
@@ -114,12 +106,9 @@ export async function joinCall(request, response) {
 		// Add pending participant (has to join WebSocket server) to in-memory config for current call
 		await requestedCall.addUser(retrievedUser);
 
-		// Retrieving the URL of the web socket server
-		const requestedCallURL = requestedCall.callURL;
-
 		return response
 			.status(201)
-			.json({success: true, data: {callURL: requestedCallURL}});
+			.json({success: true, data: {callID: requestedCall.callID}});
 	} catch {
 		response.status(500).json({success: false, data: {error: 'Server error'}});
 	}

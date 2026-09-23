@@ -28,7 +28,7 @@ describe('POST /call/create', () => {
 			response.body.data.callID,
 			/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iv,
 		);
-		assert.equal(typeof response.body.data.callURL, 'string');
+		assert.deepEqual(Object.keys(response.body.data), ['callID']);
 
 		const callRow = await Call.findByPk(response.body.data.callID);
 		assert.ok(callRow, 'expected the Call row to be persisted');
@@ -64,7 +64,7 @@ describe('PUT /call/:callID/join', () => {
 
 		assert.equal(response.status, 201);
 		assert.equal(response.body.success, true);
-		assert.equal(response.body.data.callURL, createResponse.body.data.callURL);
+		assert.deepEqual(response.body.data, {callID});
 
 		const participantRow = await CallParticipants.findOne({
 			where: {callCallID: callID, userEmail: joiner.email},

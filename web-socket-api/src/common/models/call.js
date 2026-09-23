@@ -7,7 +7,6 @@ const CallModel = {
 		unique: true,
 		primaryKey: true,
 	},
-	callURL: {type: DataTypes.STRING, allowNull: false},
 	totalDurationSecs: {
 		type: DataTypes.INTEGER,
 		allowNull: false,

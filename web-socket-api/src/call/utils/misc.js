@@ -73,26 +73,6 @@ export function verifyClient(info) {
 	}
 }
 
-export function constructURI(callID) {
-	const isProd = process.env.NODE_ENV === 'production';
-	const host = process.env.NGROK_HOST;
-	const isLocal = process.env.LOCAL === 'true';
-
-	if (isProd) {
-		// Call WebSocket servers share the app's single listening port (3000) via
-		// noServer + the HTTP server's 'upgrade' event, so the URL is path-based
-		// rather than per-call-port, same shape as the dev/ngrok URL below.
-		const allowedOrigin = process.env.ALLOWED_ORIGIN;
-		return `${allowedOrigin.replace('https://', 'wss://')}/wss/${callID}`;
-	}
-
-	if (!host && isLocal) {
-		return `http://localhost:4321/ws/${callID}`;
-	}
-
-	return `${host}/wss/${callID}`;
-}
-
 export async function sendMessageToAllParticipants(message, callID) {
 	try {
 		console.log('broadcasting message');

@@ -7,7 +7,6 @@ import {
 	handleOffer,
 	handleAnswer,
 	handleICECandidate,
-	constructURI,
 	getRelevantWSS,
 	verifyClient,
 	handleParticipantLeftCall,
@@ -141,8 +140,9 @@ export async function createWebSocketsServer() {
 
 		await handleServerMessages(activeWSS.server, callID);
 
-		const uri = constructURI(callID);
-		return {callID, uri};
+		// Clients build the WS URL from the callID themselves (/ws/:callID when
+		// LOCAL=true, /wss/:callID otherwise — see handleUpgrade above).
+		return callID;
 	} catch (error) {
 		console.error('This is the error:', error);
 		throw new Error('Error creating WebSockets Server', {cause: error});
