@@ -2,8 +2,7 @@
 # Same requirements as create-call.yaml.
 appId: com.voneo.app
 ---
-- launchApp:
-    clearState: true
+- runFlow: subflows/launch.yaml
 - tapOn:
     id: "email-input"
 - inputText: "john.smith@gmail.com"

@@ -1,0 +1,29 @@
+# Fresh launch with camera/mic allowed. On the dev-client build, clearState
+# drops the dev client's last server, so it opens on its launcher screen
+# (after a few seconds): tap the running Metro server it lists (port 8081) to
+# load the app, then dismiss the dev menu's first-run intro if it shows. A
+# build with the JS bundled in has no launcher, so those steps are skipped.
+appId: com.voneo.app
+---
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+- extendedWaitUntil:
+    visible: "DEVELOPMENT SERVERS"
+    timeout: 15000
+    optional: true
+- runFlow:
+    when:
+      visible: "DEVELOPMENT SERVERS"
+    commands:
+      - tapOn: ".*:8081"
+- extendedWaitUntil:
+    visible:
+      id: "email-input"
+    timeout: 60000
+- runFlow:
+    when:
+      visible: "Continue"
+    commands:
+      - tapOn: "Continue"

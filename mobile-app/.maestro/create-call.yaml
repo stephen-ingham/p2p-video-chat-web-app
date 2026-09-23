@@ -3,10 +3,7 @@
 # (NODE_ENV=dev, so the seeded users exist) reachable at 10.0.2.2:3000.
 appId: com.voneo.app
 ---
-- launchApp:
-    clearState: true
-    permissions:
-      all: allow
+- runFlow: subflows/launch.yaml
 - tapOn:
     id: "email-input"
 - inputText: "john.smith@gmail.com"
