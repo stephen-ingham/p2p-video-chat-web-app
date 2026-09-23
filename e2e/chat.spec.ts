@@ -30,7 +30,8 @@ test('a chat message sent by one participant appears for the other', async ({
 		const alicePage = await alice.newPage();
 		const bobPage = await bob.newPage();
 
-		await signUp(alicePage, uniqueUser('alice'));
+		const aliceUser = uniqueUser('alice');
+		await signUp(alicePage, aliceUser);
 		await signUp(bobPage, uniqueUser('bob'));
 
 		await alicePage.getByTestId('create-call-button').click();
@@ -41,6 +42,11 @@ test('a chat message sent by one participant appears for the other', async ({
 		await bobPage.getByTestId('join-call-input').fill(callId);
 		await bobPage.getByTestId('join-call-button').click();
 		await expect(bobPage.getByTestId('hang-up-button')).toBeVisible();
+		// The hang-up button appears before Bob's WebSocket join is processed;
+		// until then the server still has him as a pending participant and
+		// drops his chat. Seeing Alice in his participant list means the
+		// join has gone through.
+		await expect(bobPage.getByText(aliceUser.email).first()).toBeVisible();
 
 		const message = `hello from bob ${Date.now()}`;
 		await bobPage.getByTestId('chat-message-input').fill(message);
