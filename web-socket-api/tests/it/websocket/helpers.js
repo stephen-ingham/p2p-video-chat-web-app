@@ -1,6 +1,7 @@
 import process from 'node:process';
 import {WebSocket} from 'ws';
 import {server} from '../../../src/app.js';
+import {wss} from '../../../src/call/utils/session-store.js';
 
 export async function startServer() {
 	await new Promise((resolve) => {
@@ -13,6 +14,13 @@ export async function stopServer() {
 	// Server.close()'s callback only fires once every connection has ended,
 	// and test WS clients are mostly left open rather than closed per-test —
 	// force them shut so this doesn't hang the file's `after` hook.
+	// closeAllConnections() only covers plain HTTP connections: sockets
+	// upgraded to WebSockets are no longer tracked as HTTP connections, but
+	// still keep close() waiting, so terminate every call's clients too.
+	for (const {server: callServer} of wss.values()) {
+		for (const client of callServer.clients) client.terminate();
+	}
+
 	server.closeAllConnections();
 	await new Promise((resolve) => {
 		server.close(resolve);
