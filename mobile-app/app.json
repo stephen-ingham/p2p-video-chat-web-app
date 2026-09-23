@@ -30,6 +30,12 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "9d5d39bb-7b1f-42d3-9d38-bbc3ae28aea4"
+      }
+    },
+    "owner": "stephen200399"
   }
 }
