@@ -101,7 +101,7 @@ If anything is noticed, whether due to the change itself or due to the change be
   - `utils/ice-servers.js` — builds the `RTCPeerConnection` `iceServers` list. With `TURN_URLS` and `TURN_SECRET` set (prod, CI NAT stack), it returns the self-hosted coturn STUN/TURN URLs with short-lived credentials in the TURN REST API format (`<expiry>:<email>` / base64 HMAC-SHA1 of that, keyed with the shared secret). Without them it returns Google's public STUN servers only (dev default, no relay).
   - `utils/session-store.js` — in-memory `Map` of `callId → { wsURL, participants, pendingParticipants }`. **No persistence** — restarting the API drops all active calls.
   - `utils/ws-server.js` — creates a WebSocket server per call for signalling.
-  - `utils/misc.js` — helpers including `constructURI`, which behaves differently in dev vs. production (see below).
+  - `utils/misc.js` — WS message handlers plus `verifyClient` (WS origin check, see below).
 - `common/` — `database.js` (MySQL via Sequelize, `sync()` on first run; dev seeder adds test users only when `NODE_ENV=dev`), `middlewares/` (auth/permission/token handling), `models/` (`User`, `Call`, `CallParticipants`, `RefreshToken`).
 - `openapi.yaml` — Located at @web-socket-api/src/openapi.yaml - the API schema reference, kept in sync with the controllers/routes as of this writing; re-verify against the controller if it's been a while since it was last updated.
 
@@ -115,8 +115,8 @@ WebSocket message protocol (client ↔ per-call WS server):
 Several behaviors branch on `NODE_ENV`/`LOCAL` — check these before assuming behavior is environment-independent:
 
 - WS server port: every call's WebSocket server shares the app's single listening port (`3000`) in both dev and production, via `noServer: true` and the shared HTTP server's `upgrade` event (`handleUpgrade` in `call/utils/ws-server.js`), routed by `callID` path.
-- WS URL construction (`constructURI` in `call/utils/misc.js`): dev path is `/wss/:callID` (or `/ws/:callID` when `LOCAL=true`); production builds `wss://<ALLOWED_ORIGIN>/wss/:callID` — same path shape, different scheme/host.
-- WS origin verification (`verifyClient` in `call/utils/misc.js`) and CORS (`app.js`) both check the `Origin` header against `ALLOWED_ORIGIN` (env var) in production, and against `LOCAL`/`NGROK_HOST`-derived origins in dev.
+- WS URL construction: the API returns only a `callID` from create/join. Clients build the URL: `/wss/:callID`, or `/ws/:callID` when `LOCAL=true`, on whichever host routes to the API for them. The web app derives it from the page origin (`web-server/src/src/lib/call-url.ts`). The mobile app uses its own configured API host (e.g. `10.0.2.2:3000` in the emulator).
+- WS origin verification (`verifyClient` in `call/utils/misc.js`) checks `Origin` against `ALLOWED_ORIGIN` in production only, and allows every origin in dev. CORS (`app.js`) checks against `ALLOWED_ORIGIN` in production and `LOCAL`/`NGROK_HOST`-derived origins in dev. Both allow requests with no `Origin` (non-browser clients). React Native on Android does send an `Origin` on WebSocket upgrades, built from the socket URL, so it isn't treated as a missing-`Origin` client.
 - Refresh token cookie: `Secure` only set in production.
 - ICE servers: this depends on `TURN_URLS`/`TURN_SECRET` rather than `NODE_ENV`. Pulumi sets them only on the prod stack (`turnEnabled`); in dev they're normally unset, so the API falls back to Google STUN.
 

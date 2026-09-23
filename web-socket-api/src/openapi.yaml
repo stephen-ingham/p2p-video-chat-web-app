@@ -231,9 +231,11 @@ paths:
                       callID:
                         type: string
                         format: uuid
-                      callURL:
-                        type: string
-                        description: WebSocket URL for the call's signalling server
+                        description: >
+                          Clients build the call's WebSocket URL from the callID
+                          themselves — `/ws/{callID}` when the API runs with
+                          `LOCAL=true`, `/wss/{callID}` otherwise — on whatever
+                          host fronts the API for them.
         '500':
           description: Server error during call/WebSocket server creation
           content:
@@ -262,9 +264,14 @@ paths:
                   data:
                     type: object
                     properties:
-                      callURL:
+                      callID:
                         type: string
-                        description: WebSocket URL for the call's signalling server
+                        format: uuid
+                        description: >
+                          The joined call's ID, echoed back. Clients build the call's WebSocket URL from the callID
+                          themselves — `/ws/{callID}` when the API runs with
+                          `LOCAL=true`, `/wss/{callID}` otherwise — on whatever
+                          host fronts the API for them.
         '400':
           description: Invalid call ID, or call has already ended
           content:
@@ -441,8 +448,9 @@ components:
         login.
 
 # WebSocket protocol (per-call server, not covered by the schema above):
-# Each call gets a dedicated WebSocket server at the URL returned from
-# /call/create or /call/{callID}/join.
+# Each call gets a dedicated WebSocket server at /ws/{callID} (LOCAL=true) or
+# /wss/{callID}, built client-side from the callID returned by /call/create
+# or /call/{callID}/join.
 #
 # Client -> server messages:
 #   - newParticipantOnCall

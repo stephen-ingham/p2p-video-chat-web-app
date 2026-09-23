@@ -114,6 +114,7 @@ video-chat-application/
 │           │   └── ui/          # shadcn/ui primitives
 │           ├── lib/
 │           │   ├── rtc-utils.ts # WebRTC helpers (media, peer connections, WS messaging)
+│           │   ├── call-url.ts  # Builds a call's WebSocket URL from its callID + the page origin
 │           │   ├── use-token-worker.ts # Hook — module-level singleton Worker
 │           │   └── utils.ts     # shadcn cn() class utility
 │           ├── styles/
@@ -278,8 +279,8 @@ Instead of tunnelling through Ngrok (steps 2 and 5 above), you can run the app d
 | Method   | Path                     | Auth | Request                 | Success response                                                                                         |
 | -------- | ------------------------ | ---- | ----------------------- | -------------------------------------------------------------------------------------------------------- |
 | `GET`    | `/call/ice-servers`      | Yes  | —                       | `200` — `{ "success": true, "data": { "iceServers": [ { "urls": [...] }, ... ] } }`                      |
-| `POST`   | `/call/create`           | Yes  | —                       | `201` — `{ "success": true, "data": { "callID": "<uuid>", "callURL": "wss://..." } }`                    |
-| `PUT`    | `/call/:callID/join`     | Yes  | Params: `callID` (UUID) | `200` — `{ "success": true, "data": { "callURL": "wss://..." }}`                                         |
+| `POST`   | `/call/create`           | Yes  | —                       | `201` — `{ "success": true, "data": { "callID": "<uuid>" } }`                                            |
+| `PUT`    | `/call/:callID/join`     | Yes  | Params: `callID` (UUID) | `201` — `{ "success": true, "data": { "callID": "<uuid>" }}`                                             |
 | `DELETE` | `/call/:callID/leave`    | Yes  | Params: `callID` (UUID) | `200` — `{ "success": true, "data": { "message": "Succesfully left call" }}`                             |
 | `POST`   | `/call/:callID/messages` | Yes  | Params: `callID` (UUID) | `201` — `{ "success": true, "data": { "message": "Message sent to all call participants succesfully" }}` |
 
@@ -303,7 +304,7 @@ Tokens are issued on successful **login** (`POST /auth/login`). Secrets for crea
 
 ### WebSocket signalling (per call)
 
-After `create` or `join`, clients connect to `callURL` and send JSON messages, for example:
+After `create` or `join`, clients build the call's WebSocket URL from the returned `callID` themselves and connect to it: `/wss/:callID`, or `/ws/:callID` when the API runs with `LOCAL=true`, on whichever host routes to the API for that client. The web app uses its own page origin (`web-server/src/src/lib/call-url.ts`: `https:` pages get `wss://<host>/wss/:callID`, `http:` pages get `ws://<host>/ws/:callID`). The API doesn't return a URL because the right host differs per client, e.g. the Android emulator reaches the dev API at `10.0.2.2:3000`. Once connected, clients send JSON messages, for example:
 
 | Client → server `type` | Purpose                                                         |
 | ---------------------- | --------------------------------------------------------------- |
@@ -479,8 +480,8 @@ None of these steps happen automatically. Until they're done, merges to `main` w
 - **Refresh Token CookieL:** Setting `production` ensures the refresh token cookie can only be sent over secure `HTTPS` connections (sets `Secure` property to `true`).
 - **CORS:** the API checks `Origin` against a single `ALLOWED_ORIGIN` env var in both dev and production (dev also accepts `LOCAL`/`NGROK_HOST`-derived origins) — `ALLOWED_ORIGIN` must be set to the deployed frontend domain before a production deployment will accept any cross-origin request (`web-socket-api/src/app.js`).
 - **WebSocket server port:** every call's WebSocket server shares the app's single listening port (`3000`) in both dev and production — there is no per-call port. This is a deliberate constraint so the API stays deployable on Cloud Run, which only exposes one port per service; see the TODO in [Gotchas & Experimentation](#gotchas--experimentation) below.
-- **WebSocket URL construction:** `constructURI` returns `wss://<ALLOWED_ORIGIN>/wss/:callID` in production — same path shape as the dev-mode `/wss/:callID` (or `/ws/:callID` when `LOCAL=true`) path, just a different scheme/host (`web-socket-api/src/call/utils/misc.js`).
-- **WebSocket origin verification:** `verifyClient` rejects any WebSocket upgrade whose `Origin` header doesn't match `ALLOWED_ORIGIN` (`web-socket-api/src/call/utils/misc.js`).
+- **WebSocket URL construction:** the API only returns a `callID`; clients build the URL themselves (see [WebSocket signalling](#websocket-signalling-per-call)). The path is `/wss/:callID` in production, the same as in ngrok dev mode.
+- **WebSocket origin verification:** `verifyClient` rejects any WebSocket upgrade whose `Origin` header is present but doesn't match `ALLOWED_ORIGIN` (`web-socket-api/src/call/utils/misc.js`). Upgrades with no `Origin` header are allowed, like the CORS check: browsers always send one, so a missing header means a non-browser client. React Native on Android sends a default `Origin` built from the socket URL (`wss://host` → `https://host`), so the mobile app's socket host must match `ALLOWED_ORIGIN`, or the app must set an explicit `origin` header. In dev, `verifyClient` allows every origin.
 
 ---
 
@@ -504,7 +505,6 @@ erDiagram
 
     CALL {
         uuid callID PK
-        string callURL
         int totalDurationSecs
         boolean activeCall
         datetime startedAt
