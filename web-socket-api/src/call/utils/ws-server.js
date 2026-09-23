@@ -92,8 +92,20 @@ export async function createWebSocketsServer() {
 					}
 				});
 
-				// When connection closes
-				connection.on('close', function (connection) {
+				// Without a listener, `ws` rethrows socket errors (e.g. a message
+				// over maxPayload -> RangeError) as uncaught exceptions, crashing
+				// the whole API process. `ws` closes the socket itself afterwards.
+				connection.on('error', function (error) {
+					console.error(`WebSocket error on call ${callID}:`, error.message);
+				});
+
+				// When connection closes. (The listener's first argument is the
+				// close code, not the socket — use the outer `connection`.)
+				connection.on('close', function () {
+					// Sockets that never sent newParticipantOnCall have no email and
+					// never joined, so there's no one to announce as leaving.
+					if (!connection.email) return;
+
 					const data = {
 						leavingUser: connection.email,
 						callID,
