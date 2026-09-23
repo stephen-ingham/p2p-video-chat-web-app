@@ -11,3 +11,7 @@ config:
   #   pulumi config set --secret dbPassword <value> --stack dev
   #   pulumi config set --secret jwtSecret <value> --stack dev
   #   pulumi config set --secret refreshTokenSecret <value> --stack dev
+  # Self-hosted coturn STUN/TURN VM (infra/turn-server.ts) — off for dev, so
+  # the API falls back to Google's public STUN servers. If enabled, needs:
+  #   pulumi config set --secret turnSecret <value> --stack dev
+  voneo-video-chat:turnEnabled: false

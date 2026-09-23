@@ -11,3 +11,6 @@ config:
   #   pulumi config set --secret dbPassword <value> --stack prod
   #   pulumi config set --secret jwtSecret <value> --stack prod
   #   pulumi config set --secret refreshTokenSecret <value> --stack prod
+  # Self-hosted coturn STUN/TURN VM (infra/turn-server.ts). Needs:
+  #   pulumi config set --secret turnSecret <value> --stack prod
+  voneo-video-chat:turnEnabled: true

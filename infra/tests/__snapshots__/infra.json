@@ -97,6 +97,19 @@
                       "version": "latest"
                     }
                   }
+                },
+                {
+                  "name": "TURN_URLS",
+                  "value": "stun:undefined:3478,turn:undefined:3478?transport=udp,turn:undefined:3478?transport=tcp"
+                },
+                {
+                  "name": "TURN_SECRET",
+                  "valueSource": {
+                    "secretKeyRef": {
+                      "secret": "turn-secret-snapshot-test",
+                      "version": "latest"
+                    }
+                  }
                 }
               ],
               "image": "europe-west2-docker.pkg.dev/signalling-api/voneo/voneo-backend:snapshot-test-tag",
@@ -136,6 +149,43 @@
       }
     },
     {
+      "type": "gcp:compute/address:Address",
+      "name": "turn-ip",
+      "inputs": {
+        "networkTier": "STANDARD",
+        "region": "europe-west2"
+      }
+    },
+    {
+      "type": "gcp:compute/firewall:Firewall",
+      "name": "turn-firewall",
+      "inputs": {
+        "allows": [
+          {
+            "ports": [
+              "3478",
+              "49152-49252"
+            ],
+            "protocol": "udp"
+          },
+          {
+            "ports": [
+              "3478"
+            ],
+            "protocol": "tcp"
+          }
+        ],
+        "direction": "INGRESS",
+        "network": "default",
+        "sourceRanges": [
+          "0.0.0.0/0"
+        ],
+        "targetTags": [
+          "voneo-turn-snapshot-test"
+        ]
+      }
+    },
+    {
       "type": "gcp:compute/forwardingRule:ForwardingRule",
       "name": "lb-forwarding-rule",
       "inputs": {
@@ -144,6 +194,42 @@
         "portRange": "443",
         "region": "europe-west2",
         "target": "lb-https-proxy_id"
+      }
+    },
+    {
+      "type": "gcp:compute/instance:Instance",
+      "name": "turn-vm",
+      "inputs": {
+        "allowStoppingForUpdate": true,
+        "bootDisk": {
+          "initializeParams": {
+            "image": "cos-cloud/cos-stable",
+            "size": 10,
+            "type": "pd-standard"
+          }
+        },
+        "machineType": "e2-micro",
+        "metadataStartupScript": "#!/bin/bash\nset -euo pipefail\n\nmd=http://metadata.google.internal/computeMetadata/v1\ninternal_ip=$(curl -sf -H 'Metadata-Flavor: Google' \"$md/instance/network-interfaces/0/ip\")\ntoken=$(curl -sf -H 'Metadata-Flavor: Google' \"$md/instance/service-accounts/default/token\" | sed -nE 's/.*\"access_token\": *\"([^\"]+)\".*/\\1/p')\nturn_secret=$(curl -sf -H \"Authorization: Bearer $token\" \"https://secretmanager.googleapis.com/v1/turn-secret_id/versions/latest:access\" | sed -nE 's/.*\"data\": *\"([^\"]+)\".*/\\1/p' | base64 -d)\n\nconf_dir=/var/lib/voneo-coturn\nmkdir -p \"$conf_dir\"\ncat > \"$conf_dir/turnserver.conf\" <<'BASE_CONF'\n# Base coturn config shared by the production GCE VM (infra/turn-server.ts appends\n# its environment-specific lines at boot) and the CI NAT-traversal e2e stack\n# (e2e/compose.nat.yaml mounts this file and passes its extras as CLI flags).\n# Keep anything that should behave identically in both places in here, so CI\n# tests the same server config that production runs.\n\n# Plain STUN/TURN on the standard port, over both UDP and TCP. TLS (turns:)\n# needs a certificate for a real domain, which doesn't exist yet.\nlistening-port=3478\nno-tls\n\n# Relay ports. Kept small so the GCP firewall rule stays narrow; each active\n# relayed peer connection holds one port, so this caps concurrent relayed\n# connections at ~100.\nmin-port=49152\nmax-port=49252\n\n# TURN REST API auth: the signalling API mints short-lived credentials from\n# this shared secret (web-socket-api/src/call/utils/ice-servers.js). The\n# secret itself (static-auth-secret) is supplied per environment.\nuse-auth-secret\nrealm=voneo\nfingerprint\nstale-nonce=600\n\n# Abuse/cost limits. Relayed media is billed as GCP egress, so cap both the\n# number of allocations and the bandwidth of each (~1.5 MB/s, plenty for a\n# 720p video + audio stream).\nuser-quota=12\ntotal-quota=100\nmax-bps=1500000\n\nno-multicast-peers\nlog-file=stdout\nsimple-log\n\nBASE_CONF\ncat >> \"$conf_dir/turnserver.conf\" <<PROD_CONF\nexternal-ip=undefined/$internal_ip\nstatic-auth-secret=$turn_secret\ndenied-peer-ip=0.0.0.0-0.255.255.255\ndenied-peer-ip=10.0.0.0-10.255.255.255\ndenied-peer-ip=100.64.0.0-100.127.255.255\ndenied-peer-ip=127.0.0.0-127.255.255.255\ndenied-peer-ip=169.254.0.0-169.254.255.255\ndenied-peer-ip=172.16.0.0-172.31.255.255\ndenied-peer-ip=192.168.0.0-192.168.255.255\nallowed-peer-ip=$internal_ip\nPROD_CONF\n# coturn's image runs as nobody (65534); the file holds the TURN secret.\nchown 65534:65534 \"$conf_dir/turnserver.conf\"\nchmod 600 \"$conf_dir/turnserver.conf\"\n\ndocker rm -f coturn || true\ndocker run -d --name coturn --restart unless-stopped --network host \\\n\t-v \"$conf_dir/turnserver.conf:/etc/coturn/turnserver.conf:ro\" \\\n\tcoturn/coturn:4.18.0 -c /etc/coturn/turnserver.conf\n",
+        "name": "voneo-turn-snapshot-test",
+        "networkInterfaces": [
+          {
+            "accessConfigs": [
+              {
+                "networkTier": "STANDARD"
+              }
+            ],
+            "network": "default"
+          }
+        ],
+        "serviceAccount": {
+          "scopes": [
+            "cloud-platform"
+          ]
+        },
+        "tags": [
+          "voneo-turn-snapshot-test"
+        ],
+        "zone": "europe-west2-a"
       }
     },
     {
@@ -271,6 +357,16 @@
       }
     },
     {
+      "type": "gcp:secretmanager/secret:Secret",
+      "name": "turn-secret",
+      "inputs": {
+        "replication": {
+          "auto": {}
+        },
+        "secretId": "turn-secret-snapshot-test"
+      }
+    },
+    {
       "type": "gcp:secretmanager/secretIamMember:SecretIamMember",
       "name": "db-password-secret-access",
       "inputs": {
@@ -295,6 +391,24 @@
         "member": "serviceAccount:undefined-compute@developer.gserviceaccount.com",
         "role": "roles/secretmanager.secretAccessor",
         "secretId": "refresh-token-secret_id"
+      }
+    },
+    {
+      "type": "gcp:secretmanager/secretIamMember:SecretIamMember",
+      "name": "turn-secret-access",
+      "inputs": {
+        "member": "serviceAccount:undefined-compute@developer.gserviceaccount.com",
+        "role": "roles/secretmanager.secretAccessor",
+        "secretId": "turn-secret_id"
+      }
+    },
+    {
+      "type": "gcp:secretmanager/secretIamMember:SecretIamMember",
+      "name": "turn-vm-secret-access",
+      "inputs": {
+        "member": "serviceAccount:undefined",
+        "role": "roles/secretmanager.secretAccessor",
+        "secretId": "turn-secret_id"
       }
     },
     {
@@ -325,6 +439,24 @@
           "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
           "value": "snapshot-test-refresh-secret"
         }
+      }
+    },
+    {
+      "type": "gcp:secretmanager/secretVersion:SecretVersion",
+      "name": "turn-secret-version",
+      "inputs": {
+        "secretData": {
+          "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+          "value": "snapshot-test-turn-secret"
+        }
+      }
+    },
+    {
+      "type": "gcp:serviceaccount/account:Account",
+      "name": "turn-vm-sa",
+      "inputs": {
+        "accountId": "voneo-turn-snapshot-test",
+        "displayName": "Voneo coturn VM (snapshot-test)"
       }
     },
     {

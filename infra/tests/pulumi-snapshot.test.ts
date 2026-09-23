@@ -58,6 +58,9 @@ pulumi.runtime.setAllConfig({
 	'voneo-video-chat:dbPassword': 'snapshot-test-password',
 	'voneo-video-chat:jwtSecret': 'snapshot-test-jwt-secret',
 	'voneo-video-chat:refreshTokenSecret': 'snapshot-test-refresh-secret',
+	// Prod's setting, so the snapshot also covers the coturn VM resources.
+	'voneo-video-chat:turnEnabled': 'true',
+	'voneo-video-chat:turnSecret': 'snapshot-test-turn-secret',
 });
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));

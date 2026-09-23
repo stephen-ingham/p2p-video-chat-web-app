@@ -1,5 +1,6 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as gcp from '@pulumi/gcp';
+import {createTurnServer} from './turn-server.js';
 
 const config = new pulumi.Config();
 
@@ -52,6 +53,22 @@ const refreshTokenSecretVersion = new gcp.secretmanager.SecretVersion(
 		secretData: refreshTokenSecret,
 	},
 );
+
+// Self-hosted STUN/TURN (coturn VM) — see infra/turn-server.ts. Opt-in per
+// stack via `voneo-video-chat:turnEnabled` (only prod enables it); without it
+// the signalling API falls back to Google's public STUN servers, which is
+// fine for same-network testing but gives no relay for peers behind strict
+// NATs. When enabled, also set:
+//   pulumi config set --secret turnSecret <value> --stack <dev|prod>
+const turnEnabled = config.getBoolean('turnEnabled') ?? false;
+const turnServer = turnEnabled
+	? createTurnServer({
+			stack,
+			region: 'europe-west2',
+			zone: 'europe-west2-a',
+			turnSecret: config.requireSecret('turnSecret'),
+		})
+	: undefined;
 
 // Voneo Frontend - Google Cloud V2 Run Service
 
@@ -111,6 +128,9 @@ const secretIds = [
 	{name: 'db-password-secret-access', secret: dbPasswordSecret},
 	{name: 'jwt-secret-access', secret: jwtSecret_},
 	{name: 'refresh-token-secret-access', secret: refreshTokenSecret_},
+	...(turnServer
+		? [{name: 'turn-secret-access', secret: turnServer.secret}]
+		: []),
 ];
 const _secretIamMembers = secretIds.map(
 	({name, secret}) =>
@@ -185,6 +205,20 @@ const voneoBackend = new gcp.cloudrunv2.Service(
 								},
 							},
 						},
+						...(turnServer
+							? [
+									{name: 'TURN_URLS', value: turnServer.urls},
+									{
+										name: 'TURN_SECRET',
+										valueSource: {
+											secretKeyRef: {
+												secret: turnServer.secret.secretId,
+												version: 'latest',
+											},
+										},
+									},
+								]
+							: []),
 					],
 					volumeMounts: [
 						{
@@ -207,6 +241,7 @@ const voneoBackend = new gcp.cloudrunv2.Service(
 			dbPasswordSecretVersion,
 			jwtSecretVersion,
 			refreshTokenSecretVersion,
+			...(turnServer ? [turnServer.secretVersion] : []),
 		],
 	},
 );
@@ -298,3 +333,4 @@ const forwardingRule = new gcp.compute.ForwardingRule('lb-forwarding-rule', {
 });
 
 export const lbIp = ip.address;
+export const turnIp = turnServer?.ip.address;
