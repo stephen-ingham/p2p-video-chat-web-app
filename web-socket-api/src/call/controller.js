@@ -186,7 +186,8 @@ export async function leaveCall(request, response) {
 		return response
 			.status(200)
 			.json({success: true, data: {message: 'User left call succesfully'}});
-	} catch {
+	} catch (error) {
+		console.error('Error leaving call:', error);
 		response.status(500).json({success: false, data: {error: 'Server error'}});
 	}
 }

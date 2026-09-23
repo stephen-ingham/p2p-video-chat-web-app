@@ -5,7 +5,11 @@ import {wss} from './session-store.js';
 // detaches `user` from `call`, finalising and tearing down the call's
 // WebSocket server if they were its last active participant.
 export async function removeUserFromCall(call, user) {
-	const activeUserCount = await call.countUsers({where: {status: 'active'}});
+	// `status` lives on the CallParticipants join table, not on User — so it
+	// has to be filtered via `through`, or MySQL rejects `user.status`.
+	const activeUserCount = await call.countUsers({
+		through: {where: {status: 'active'}},
+	});
 
 	if (activeUserCount > 1) {
 		await call.removeUser(user);
