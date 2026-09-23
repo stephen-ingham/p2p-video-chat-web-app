@@ -17,10 +17,12 @@ export const defaultIceServers: IceServer[] = [
 	{urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302']},
 ];
 
+// 640x480 at 24fps: plenty for a phone-sized tile, cheaper to encode on
+// low-end phones (and the emulator), and lighter on mobile data.
 export async function getLocalStream() {
 	return mediaDevices.getUserMedia({
 		audio: true,
-		video: {facingMode: 'user'},
+		video: {facingMode: 'user', width: 640, height: 480, frameRate: 24},
 	});
 }
 
