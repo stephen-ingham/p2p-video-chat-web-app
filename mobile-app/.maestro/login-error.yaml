@@ -1,0 +1,21 @@
+# A wrong password shows an error and stays on the login screen.
+# Same requirements as create-call.yaml.
+appId: com.voneo.app
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: "email-input"
+- inputText: "john.smith@gmail.com"
+- tapOn:
+    id: "password-input"
+- inputText: "not-the-password"
+- tapOn:
+    id: "auth-submit"
+- extendedWaitUntil:
+    visible:
+      id: "auth-error"
+    timeout: 15000
+- assertVisible: "Login failed. Check your email and password."
+- assertNotVisible:
+    id: "create-call-button"

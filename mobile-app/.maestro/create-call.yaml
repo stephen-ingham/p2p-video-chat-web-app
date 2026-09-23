@@ -1,0 +1,36 @@
+# Log in as the seeded dev user, create a call, check it's joined, hang up.
+# Needs the app's dev-client build installed, and the LOCAL=true dev stack
+# (NODE_ENV=dev, so the seeded users exist) reachable at 10.0.2.2:3000.
+appId: com.voneo.app
+---
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+- tapOn:
+    id: "email-input"
+- inputText: "john.smith@gmail.com"
+- tapOn:
+    id: "password-input"
+- inputText: "ExamplePassword123"
+- tapOn:
+    id: "auth-submit"
+- extendedWaitUntil:
+    visible:
+      id: "create-call-button"
+    timeout: 15000
+- tapOn:
+    id: "create-call-button"
+- extendedWaitUntil:
+    visible:
+      id: "call-id"
+    timeout: 20000
+- assertVisible:
+    id: "local-video"
+- assertVisible: "Waiting for others to join…"
+- tapOn:
+    id: "hang-up-button"
+- extendedWaitUntil:
+    visible:
+      id: "create-call-button"
+    timeout: 10000
