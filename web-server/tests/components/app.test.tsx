@@ -9,6 +9,7 @@ const logout = vi.fn();
 const createCall = vi.fn();
 const joinCall = vi.fn();
 const leaveCall = vi.fn();
+const getIceServers = vi.fn();
 
 vi.mock('@/lib/use-token-worker.ts', () => ({
 	useTokenWorker: () => ({
@@ -18,6 +19,7 @@ vi.mock('@/lib/use-token-worker.ts', () => ({
 		createCall,
 		joinCall,
 		leaveCall,
+		getIceServers,
 	}),
 }));
 

@@ -155,6 +155,39 @@ describe('token-worker', () => {
 		});
 	});
 
+	it('iceServers: GETs the ICE config and returns the iceServers list', async () => {
+		const iceServers = [
+			{urls: ['stun:turn.example.com:3478']},
+			{
+				urls: ['turn:turn.example.com:3478?transport=udp'],
+				username: '1700000000:a@example.com',
+				credential: 'hmac',
+			},
+		];
+		vi.mocked(fetch).mockResolvedValueOnce(
+			jsonResponse({success: true, data: {iceServers}}),
+		);
+
+		const result = await send('ReqIceServers');
+
+		expect(fetch).toHaveBeenCalledWith(
+			'http://localhost:3000/call/ice-servers',
+			expect.objectContaining({method: 'GET'}),
+		);
+		expect(result).toEqual({type: 'ResIceServers', message: iceServers});
+	});
+
+	it('iceServers: reports failure on a non-OK response', async () => {
+		vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({}, false));
+
+		const result = await send('ReqIceServers');
+
+		expect(result).toEqual({
+			type: 'ResIceServers',
+			message: 'Get ICE servers failed',
+		});
+	});
+
 	it('leaveCall: DELETEs the call ID and returns the server message', async () => {
 		vi.mocked(fetch).mockResolvedValueOnce(
 			jsonResponse({

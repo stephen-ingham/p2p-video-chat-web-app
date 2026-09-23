@@ -8,9 +8,16 @@ const createCall = vi.fn();
 const joinCall = vi.fn();
 const leaveCall = vi.fn();
 const logout = vi.fn();
+const getIceServers = vi.fn();
 
 vi.mock('@/lib/use-token-worker.ts', () => ({
-	useTokenWorker: () => ({createCall, joinCall, leaveCall, logout}),
+	useTokenWorker: () => ({
+		createCall,
+		joinCall,
+		leaveCall,
+		logout,
+		getIceServers,
+	}),
 }));
 
 const connectToCall = vi.fn();
@@ -57,6 +64,7 @@ beforeEach(() => {
 	joinCall.mockReset();
 	leaveCall.mockReset();
 	connectToCall.mockReset();
+	getIceServers.mockReset();
 	closeConns.mockReset();
 	closeWebSocketServerConn.mockReset();
 });
@@ -88,6 +96,59 @@ describe('CallScreen — create call', () => {
 		await waitFor(() => {
 			expect(screen.getByTestId('local-video').srcObject).toBe(fakeLocalStream);
 		});
+		expect(screen.getByTestId('call-id')).toHaveTextContent('call-1');
+	});
+});
+
+describe('CallScreen — ICE servers', () => {
+	// ConnectToCall's 13th parameter — the STUN/TURN config the peer
+	// connections are created with.
+	const iceServersArgumentIndex = 12;
+
+	it('passes the ICE servers fetched from the API through to connectToCall', async () => {
+		const iceServers = [
+			{urls: ['stun:turn.example.com:3478']},
+			{
+				urls: ['turn:turn.example.com:3478?transport=udp'],
+				username: '1700000000:alice@example.com',
+				credential: 'hmac',
+			},
+		];
+		getIceServers.mockResolvedValueOnce(iceServers);
+		createCall.mockResolvedValueOnce({
+			callID: 'call-1',
+			callURL: 'wss://example/call-1',
+		});
+		const user = userEvent.setup();
+		renderCallScreen();
+
+		await user.click(screen.getByTestId('create-call-button'));
+
+		await waitFor(() => {
+			expect(connectToCall).toHaveBeenCalledTimes(1);
+		});
+		expect(connectToCall.mock.calls[0][iceServersArgumentIndex]).toEqual(
+			iceServers,
+		);
+	});
+
+	it("falls back to connectToCall's default ICE servers when the fetch fails", async () => {
+		getIceServers.mockResolvedValueOnce('Get ICE servers failed');
+		createCall.mockResolvedValueOnce({
+			callID: 'call-1',
+			callURL: 'wss://example/call-1',
+		});
+		const user = userEvent.setup();
+		renderCallScreen();
+
+		await user.click(screen.getByTestId('create-call-button'));
+
+		await waitFor(() => {
+			expect(connectToCall).toHaveBeenCalledTimes(1);
+		});
+		expect(
+			connectToCall.mock.calls[0][iceServersArgumentIndex],
+		).toBeUndefined();
 		expect(screen.getByTestId('call-id')).toHaveTextContent('call-1');
 	});
 });
