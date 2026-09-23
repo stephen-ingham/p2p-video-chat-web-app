@@ -134,6 +134,10 @@ Astro (SSR via `@astrojs/node`) with React islands, Tailwind v4, shadcn/ui. Path
 
 See `web-server/src/CLAUDE.md` for Astro-specific dev-server guidance (background mode via `astro dev --background`).
 
+### Mobile app (`mobile-app/`)
+
+Expo (React Native) Android app, see `mobile-app/CLAUDE.md` for Expo-specific rules. It talks to the signalling API directly: `src/lib/config.ts` (API URL from `EXPO_PUBLIC_API_URL`, default `http://10.0.2.2:3000` for the emulator against the `LOCAL=true` stack), `src/lib/call-url.ts` (WS URL from `callID`), `src/lib/api.ts`, and `src/lib/signalling.ts` (WS join handshake). `app.tsx` is a temporary connectivity check screen. There's no test runner yet, so `mobile-ci.yml`'s test job fails until Jest is added.
+
 ### Infra (`infra/`)
 
 Pulumi (TypeScript) provisions GCP resources: Cloud Run service, Cloud SQL instance, Secret Manager secrets, and a self-hosted coturn STUN/TURN VM. The VM (`infra/turn-server.ts`) is only created when `voneo-video-chat:turnEnabled` is true, which today is the prod stack only. It's an `e2-micro` Container-Optimized OS instance with a static IP, a firewall rule, and its own service account that can read only the `turn-secret-<stack>` secret. It runs the pinned `coturn/coturn` image with `infra/coturn/turnserver.conf` plus prod-only lines (external IP, deny relaying to private/metadata ranges). Keep that image tag in sync with `e2e/compose.nat.yaml`. The Pulumi snapshot test enables TURN, so it covers these resources. Separate `dev`/`prod` stacks (`infra/Pulumi.dev.yaml` / `Pulumi.prod.yaml`, GCP resource/secret names suffixed by stack to avoid collisions). Deploy/destroy via `npm run gcp-deploy-dev` / `npm run gcp-destroy-dev` / `npm run gcp-deploy-prod` / `npm run gcp-destroy-prod` (run `pulumi up`/`pulumi destroy --stack <dev|prod>` from `infra/`). In CI, `deploy-dev.yml`/`deploy-prod.yml` run the same on merge to `dev`/`main` via GCP Workload Identity Federation — not yet configured (see TODOs in the Pulumi stack files).

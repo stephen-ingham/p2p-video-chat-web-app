@@ -48,6 +48,7 @@ Voneo is a peer-to-peer video chat application built with an Astro/React fronten
   - [STUN/TURN (NAT traversal)](#stunturn-nat-traversal)
 - [Database Structure & Data Models](#database-structure--data-models)
 - [Frontend (Astro + React)](#frontend-astro--react)
+- [Mobile app (Expo, Android)](#mobile-app-expo-android)
 - [End-to-end tests (Playwright)](#end-to-end-tests-playwright)
   - [NAT traversal suite (STUN/TURN)](#nat-traversal-suite-stunturn)
 - [Gotchas & Experimentation](#gotchas--experimentation)
@@ -572,6 +573,24 @@ Created for local development and syncs local file changes into the container au
 Produces a production-optimised image (`europe-west2-docker.pkg.dev/signalling-api/voneo/voneo-frontend:1.0.0`).
 
 This image is used in GCP deployments - it is pushed to Artifact Registry and referenced by the Cloud Run service provisioned via the Pulumi stack in `infra/`.
+
+---
+
+## Mobile app (Expo, Android)
+
+`mobile-app/` is an Expo (React Native) Android app. It talks to the signalling API directly, with no code shared with `web-server`. Calling will use `react-native-webrtc`. For now, `app.tsx` is a connectivity check screen: log in, create or join a call, connect to its WebSocket and list the participants.
+
+- `src/lib/config.ts` — API base URL, from `EXPO_PUBLIC_API_URL`. The default, `http://10.0.2.2:3000`, is the Android emulator's alias for the host machine, direct to the API port. It suits the `LOCAL=true` dev stack. Expo inlines the variable when Metro starts, so restart Metro after changing it.
+- `src/lib/call-url.ts` — builds a call's WebSocket URL from its `callID`: `ws://<host>/ws/:callID` for an `http` API URL, `wss://<host>/wss/:callID` for `https`.
+- `src/lib/api.ts` / `src/lib/signalling.ts` — REST client and the WebSocket join handshake.
+
+**Running it against the dev stack:**
+
+1. Set `LOCAL=true` in the root `.env` and run `npm run dev`.
+2. Start an Android emulator (Android Studio → Device Manager).
+3. From `mobile-app/`, run `npx expo start` and press `a`. This opens the app in Expo Go. Once the app uses `react-native-webrtc`, it needs a development build instead (`eas build --profile development`, then `npx expo start --dev-client`).
+
+A physical phone can't reach `10.0.2.2`. Point `EXPO_PUBLIC_API_URL` at your machine's LAN IP, or at the ngrok tunnel with `LOCAL=false`.
 
 ---
 
