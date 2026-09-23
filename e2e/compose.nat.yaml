@@ -1,0 +1,159 @@
+# NAT-traversal overlay for the e2e stack — layered on top of compose.e2e.yaml
+# by scripts/test-e2e-nat.{sh,ps1} (`npm run test:e2e:nat`).
+#
+# Simulates devices on two separate private networks:
+#   lan-a: browser-lan-a-1, browser-lan-a-2   lan-b: browser-lan-b
+# A lan-a device can't reach a lan-b device directly — only via the TURN
+# relay, like peers behind different home/mobile NATs. The proxy (the app)
+# and coturn are attached to both, the way public servers are reachable from
+# any network.
+#
+# That isolation is enforced here rather than left to Docker, whose handling
+# of traffic between bridge networks varies by version/platform (Docker
+# Desktop was found to route + masquerade lan-a -> lan-b, letting calls
+# connect directly and hiding whether TURN works at all):
+#   - each browser's firewall sidecar drops all traffic to/from the other LAN
+#   - IP masquerading is off on both LANs, so no packet crossing between them
+#     gets its source rewritten past those rules. That includes coturn's own
+#     traffic: relayed media stays inside coturn (allocation -> allocation),
+#     so both peers' selected ICE candidates are unambiguously `relay`.
+# With masquerading off these LANs have no internet access, so nothing on
+# them downloads anything at runtime.
+
+networks:
+  lan-a:
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: 'false'
+    ipam:
+      config:
+        - subnet: 172.31.201.0/24
+  lan-b:
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: 'false'
+    ipam:
+      config:
+        - subnet: 172.31.202.0/24
+
+# Remote Chromium, driven over WebSocket by the Playwright runner on the host
+# (e2e/nat/nat-traversal.spec.ts). Runs the host's own playwright-core (no
+# dependencies, so mounting it is enough), so client and server versions
+# always match; PLAYWRIGHT_VERSION, set by the test-e2e-nat scripts from
+# node_modules, picks the image with the matching browser builds. --unsafe
+# lets the client pass the fake-media Chromium flags.
+x-remote-browser: &remote-browser
+  image: mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION:?set by scripts/test-e2e-nat}-noble
+  init: true
+  user: pwuser
+  working_dir: /home/pwuser
+  volumes:
+    - ./node_modules/playwright-core:/opt/playwright-core:ro
+  command:
+    - node
+    - /opt/playwright-core/cli.js
+    - run-server
+    - --port=4444
+    - --host=0.0.0.0
+    - --unsafe
+  healthcheck:
+    test:
+      - CMD
+      - node
+      - -e
+      - "require('net').connect(4444, '127.0.0.1').on('connect', () => process.exit(0)).on('error', () => process.exit(1))"
+    interval: 2s
+    timeout: 5s
+    retries: 60
+
+# Shares its browser's network namespace (network_mode: service:<browser>)
+# and drops all traffic to/from the other simulated LAN's subnet. iptables is
+# baked in at build time, since the LANs have no internet access at runtime.
+x-lan-firewall: &lan-firewall
+  build:
+    dockerfile_inline: |
+      FROM alpine:3.22
+      RUN apk add --no-cache iptables
+  image: voneo-e2e-lan-firewall
+  cap_add: [NET_ADMIN]
+  command:
+    - /bin/sh
+    - -c
+    - >-
+      iptables -I OUTPUT -d "$$BLOCKED_SUBNET" -j DROP &&
+      iptables -I INPUT -s "$$BLOCKED_SUBNET" -j DROP &&
+      touch /tmp/firewall-ready &&
+      exec sleep infinity
+  healthcheck:
+    test: ['CMD', 'test', '-f', '/tmp/firewall-ready']
+    interval: 2s
+    timeout: 2s
+    retries: 60
+
+services:
+  signalling-server-prod:
+    environment:
+      # Same comma-separated shape Pulumi gives the Cloud Run backend
+      # (infra/turn-server.ts), pointed at the coturn container instead.
+      - TURN_URLS=stun:turn.voneo.test:3478,turn:turn.voneo.test:3478?transport=udp,turn:turn.voneo.test:3478?transport=tcp
+      - TURN_SECRET=e2e-turn-secret
+
+  # Same image and base config as the production VM (infra/turn-server.ts).
+  # Production additionally sets external-ip (it sits behind GCP's 1:1 NAT)
+  # and denies relaying to private ranges, which would block every peer here
+  # since these simulated LANs are private Docker networks.
+  coturn:
+    image: coturn/coturn:4.18.0
+    command:
+      - -c
+      - /etc/coturn/turnserver.conf
+      - --static-auth-secret=e2e-turn-secret
+    volumes:
+      - ./infra/coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    networks:
+      lan-a:
+        aliases: [turn.voneo.test]
+      lan-b:
+        aliases: [turn.voneo.test]
+
+  proxy:
+    networks:
+      default: {}
+      lan-a:
+        aliases: [voneo.test]
+      lan-b:
+        aliases: [voneo.test]
+
+  browser-lan-a-1:
+    <<: *remote-browser
+    networks: [lan-a]
+    ports:
+      - '4441:4444'
+
+  browser-lan-a-2:
+    <<: *remote-browser
+    networks: [lan-a]
+    ports:
+      - '4442:4444'
+
+  browser-lan-b:
+    <<: *remote-browser
+    networks: [lan-b]
+    ports:
+      - '4443:4444'
+
+  firewall-lan-a-1:
+    <<: *lan-firewall
+    network_mode: service:browser-lan-a-1
+    environment:
+      - BLOCKED_SUBNET=172.31.202.0/24
+
+  firewall-lan-a-2:
+    <<: *lan-firewall
+    network_mode: service:browser-lan-a-2
+    environment:
+      - BLOCKED_SUBNET=172.31.202.0/24
+
+  firewall-lan-b:
+    <<: *lan-firewall
+    network_mode: service:browser-lan-b
+    environment:
+      - BLOCKED_SUBNET=172.31.201.0/24
