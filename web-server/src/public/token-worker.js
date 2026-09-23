@@ -85,6 +85,12 @@ onmessage = async function (event) {
 			break;
 		}
 
+		case 'ReqIceServers': {
+			const iceServersResult = await handleGetIceServers();
+			postMessage(iceServersResult);
+			break;
+		}
+
 		default: {
 			console.error('Unhandled worker message type received:', messageType);
 		}
@@ -269,6 +275,34 @@ async function handleLeaveCall(requestBody) {
 		resultMessage.message = message;
 	} else {
 		resultMessage.message = 'Leave new call failed';
+	}
+
+	return resultMessage;
+}
+
+async function handleGetIceServers() {
+	const resultMessage = {message: '', type: 'ResIceServers'};
+
+	const result = await apiFetch(`${apiBase}/call/ice-servers`, {
+		method: 'GET',
+		headers: {
+			Authorization: `Bearer ${tokenService.getToken()}`,
+		},
+	});
+
+	if (result.ok) {
+		const dataBody = await result.json();
+
+		const {success, data} = dataBody;
+
+		if (!success) {
+			resultMessage.message = 'Get ICE servers failed';
+			return resultMessage;
+		}
+
+		resultMessage.message = data.iceServers;
+	} else {
+		resultMessage.message = 'Get ICE servers failed';
 	}
 
 	return resultMessage;

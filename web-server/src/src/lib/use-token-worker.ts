@@ -10,7 +10,8 @@ type WorkerResponse =
 	| {type: 'ResLogout'; message: string}
 	| {type: 'ResCreateCall'; message: string | {callID: string; callURL: string}}
 	| {type: 'ResJoinCall'; message: string}
-	| {type: 'ResLeaveCall'; message: string};
+	| {type: 'ResLeaveCall'; message: string}
+	| {type: 'ResIceServers'; message: string | RTCIceServer[]};
 
 function getWorker(): Worker {
 	if (!workerInstance) {
@@ -92,5 +93,20 @@ export function useTokenWorker() {
 		return response.message;
 	}
 
-	return {login, register, logout, createCall, joinCall, leaveCall};
+	async function getIceServers(): Promise<string | RTCIceServer[]> {
+		const response = await ask('ReqIceServers', 'ResIceServers');
+		if (response.type !== 'ResIceServers')
+			throw new Error('Unexpected response');
+		return response.message;
+	}
+
+	return {
+		login,
+		register,
+		logout,
+		createCall,
+		joinCall,
+		leaveCall,
+		getIceServers,
+	};
 }

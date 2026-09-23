@@ -3,6 +3,13 @@ const peerConnectionsArray: ExtendedRtcPeerConnection[] = [];
 let websocket: WebSocket | undefined;
 
 const mediaConstraints = {audio: true, video: true};
+
+// Fallback when the API's ICE config can't be fetched: public STUN only (no
+// TURN relay), same as the API's own default when TURN isn't configured.
+export const defaultIceServers: RTCIceServer[] = [
+	{urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302']},
+];
+let iceServers: RTCIceServer[] = defaultIceServers;
 const otherCallParticipants: string[] = [];
 
 type ExtendedRtcPeerConnection = {
@@ -93,7 +100,7 @@ function createPeerConnection(
 	getCurrentUser: () => string,
 ): ExtendedRtcPeerConnection {
 	const myPeerConnection: ExtendedRtcPeerConnection = new RTCPeerConnection({
-		iceServers: [{urls: 'stun:stun.stunprotocol.org'}],
+		iceServers,
 	});
 
 	myPeerConnection.caller = caller;
@@ -492,7 +499,9 @@ export async function connectToCall(
 	addRemoteVideo: AddRemoteVideoFn,
 	isParticipant: (name: string) => boolean,
 	getCurrentUser: () => string,
+	callIceServers: RTCIceServer[] = defaultIceServers,
 ) {
+	iceServers = callIceServers;
 	await getLocalMedia(localVideoRef);
 	await establishWebSocketServerConn(callUrl);
 	await attachWsConnListeners(

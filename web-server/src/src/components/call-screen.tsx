@@ -36,7 +36,8 @@ export default function CallScreen({
 	username,
 	onLogout,
 }: CallScreenProps) {
-	const {createCall, joinCall, leaveCall, logout} = useTokenWorker();
+	const {createCall, joinCall, leaveCall, logout, getIceServers} =
+		useTokenWorker();
 	// eslint-disable-next-line @typescript-eslint/no-restricted-types -- React DOM refs are null-based, not undefined-based
 	const localVideoRef = useRef<HTMLVideoElement | null>(null);
 	const remoteVideoRefs = useRef<HTMLVideoElement[]>([]);
@@ -97,6 +98,17 @@ export default function CallScreen({
 		return remoteStreams.find((s) => s.peerUser === peerUser);
 	}
 
+	// Undefined (-> rtc-utils' public-STUN default) if the API call fails, so a
+	// hiccup fetching TURN credentials degrades the call rather than blocking it.
+	async function fetchIceServers(): Promise<RTCIceServer[] | undefined> {
+		try {
+			const result = await getIceServers();
+			return typeof result === 'string' ? undefined : result;
+		} catch {
+			return undefined;
+		}
+	}
+
 	async function handleCreate() {
 		setError('');
 		setLoading('create');
@@ -120,6 +132,7 @@ export default function CallScreen({
 				addRemoteVideo,
 				isParticipant,
 				getCurrentUser,
+				await fetchIceServers(),
 			);
 		} catch {
 			setError('Failed to create call.');
@@ -150,6 +163,7 @@ export default function CallScreen({
 				addRemoteVideo,
 				isParticipant,
 				getCurrentUser,
+				await fetchIceServers(),
 			);
 		} catch {
 			setError('Failed to join call. Check the call ID.');
