@@ -1,3 +1,5 @@
+import {buildCallUrl} from '@/lib/call-url.ts';
+
 let localMedia: Promise<MediaStream> | undefined;
 const peerConnectionsArray: ExtendedRtcPeerConnection[] = [];
 let websocket: WebSocket | undefined;
@@ -486,7 +488,6 @@ export function sendChatMessageToCall(
 }
 
 export async function connectToCall(
-	callUrl: string,
 	callId: string,
 	email: string,
 	username: string,
@@ -503,7 +504,7 @@ export async function connectToCall(
 ) {
 	iceServers = callIceServers;
 	await getLocalMedia(localVideoRef);
-	await establishWebSocketServerConn(callUrl);
+	await establishWebSocketServerConn(buildCallUrl(callId));
 	await attachWsConnListeners(
 		email,
 		remoteVideoRefs,

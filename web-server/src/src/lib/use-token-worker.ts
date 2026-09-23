@@ -8,7 +8,7 @@ type WorkerResponse =
 	| {type: 'ResLogin'; message: string}
 	| {type: 'ResSignup'; message: string}
 	| {type: 'ResLogout'; message: string}
-	| {type: 'ResCreateCall'; message: string | {callID: string; callURL: string}}
+	| {type: 'ResCreateCall'; message: string | {callID: string}}
 	| {type: 'ResJoinCall'; message: string}
 	| {type: 'ResLeaveCall'; message: string}
 	| {type: 'ResIceServers'; message: string | RTCIceServer[]};
@@ -71,9 +71,7 @@ export function useTokenWorker() {
 		return response.message;
 	}
 
-	async function createCall(): Promise<
-		string | {callID: string; callURL: string}
-	> {
+	async function createCall(): Promise<string | {callID: string}> {
 		const response = await ask('ReqCreateCall', 'ResCreateCall');
 		if (response.type !== 'ResCreateCall')
 			throw new Error('Unexpected response');

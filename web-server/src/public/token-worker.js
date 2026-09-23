@@ -209,8 +209,9 @@ async function handleCreateCall() {
 			return resultMessage;
 		}
 
-		const {callID, callURL} = data;
-		resultMessage.message = {callID, callURL};
+		// The client builds the call's WebSocket URL itself (lib/call-url.ts).
+		const {callID} = data;
+		resultMessage.message = {callID};
 	} else {
 		resultMessage.message = 'Create new call failed';
 	}
@@ -233,15 +234,14 @@ async function handleJoinCall(requestBody) {
 	if (result.ok) {
 		const dataBody = await result.json();
 
-		const {success, data} = dataBody;
+		const {success} = dataBody;
 
 		if (!success) {
 			resultMessage.message = 'Join new call failed';
 			return resultMessage;
 		}
 
-		const {callURL} = data;
-		resultMessage.message = callURL;
+		resultMessage.message = callID;
 	} else {
 		resultMessage.message = 'Join new call failed';
 	}

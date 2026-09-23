@@ -116,11 +116,10 @@ export default function CallScreen({
 			const result = await createCall();
 			console.log('result of createCall:', result);
 			if (typeof result === 'string') throw new Error(result);
-			const {callID: newCallId, callURL: newCallUrl} = result;
+			const {callID: newCallId} = result;
 			setCallId(newCallId);
 
 			await connectToCall(
-				newCallUrl,
 				newCallId,
 				email,
 				username,
@@ -146,12 +145,11 @@ export default function CallScreen({
 		setError('');
 		setLoading('join');
 		try {
-			const callUrl = await joinCall(trimmedJoinInput);
-			if (callUrl === 'Join new call failed')
+			const joinResult = await joinCall(trimmedJoinInput);
+			if (joinResult === 'Join new call failed')
 				throw new Error('Join new call failed');
 			setCallId(trimmedJoinInput);
 			await connectToCall(
-				callUrl,
 				trimmedJoinInput,
 				email,
 				username,
