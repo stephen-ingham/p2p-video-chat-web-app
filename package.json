@@ -10,6 +10,7 @@
     "test:it": "cd web-socket-api/src && npm run test:it",
     "test:e2e": "node scripts/dispatch.mjs test-e2e",
     "test:e2e:happy-path": "node scripts/dispatch.mjs test-e2e --grep @happy-path",
+    "test:e2e:nat": "node scripts/dispatch.mjs test-e2e-nat",
     "test:component": "cd web-server/src && npm run test",
     "test": "xo",
     "lint": "xo --prettier",

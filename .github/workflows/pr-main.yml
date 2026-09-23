@@ -90,3 +90,30 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 30
+
+  # Same-network vs cross-network calls through a self-hosted coturn TURN
+  # server — same image + base config as the production VM
+  # (infra/turn-server.ts, infra/coturn/turnserver.conf). Browsers run in
+  # containers on firewalled, simulated LANs (e2e/compose.nat.yaml), so the
+  # runner itself needs no Playwright browsers or voneo.test hosts entry.
+  e2e-nat-traversal:
+    needs: [api-tests, component-tests]
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Install dependencies
+        run: npm ci
+      - name: Create .env from example
+        run: cp .env.example .env
+      - name: Run NAT-traversal e2e suite
+        run: npm run test:e2e:nat
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report-nat-traversal
+          path: playwright-report/
+          retention-days: 30
