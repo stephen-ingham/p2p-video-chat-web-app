@@ -3,6 +3,7 @@ import addFormats from 'ajv-formats';
 import {Call, User, CallParticipants} from '../common/models/index.js';
 import {createWebSocketsServer} from './utils/ws-server.js';
 import {removeUserFromCall} from './utils/leave-call.js';
+import {getIceServersForUser} from './utils/ice-servers.js';
 
 const ajv = new Ajv();
 addFormats(ajv);
@@ -186,6 +187,16 @@ export async function leaveCall(request, response) {
 			.status(200)
 			.json({success: true, data: {message: 'User left call succesfully'}});
 	} catch {
+		response.status(500).json({success: false, data: {error: 'Server error'}});
+	}
+}
+
+export async function getIceServers(request, response) {
+	try {
+		const iceServers = getIceServersForUser(request.user.email);
+		response.status(200).json({success: true, data: {iceServers}});
+	} catch (error) {
+		console.error('Error building ICE server config:', error);
 		response.status(500).json({success: false, data: {error: 'Server error'}});
 	}
 }

@@ -24,6 +24,8 @@ services:
       - DB_HOST=${DB_HOST}
       - DB_PORT=${DB_PORT}
       - NGROK_HOST=${NGROK_HOST}
+      - TURN_URLS=${TURN_URLS:-}
+      - TURN_SECRET=${TURN_SECRET:-}
     depends_on:
       mysql-db:
         condition: service_healthy
@@ -44,6 +46,8 @@ services:
       - DB_HOST=${DB_HOST}
       - DB_PORT=${DB_PORT}
       - ALLOWED_ORIGIN=${ALLOWED_ORIGIN}
+      - TURN_URLS=${TURN_URLS:-}
+      - TURN_SECRET=${TURN_SECRET:-}
 
   mysql-db:
       image: mysql:8.4
