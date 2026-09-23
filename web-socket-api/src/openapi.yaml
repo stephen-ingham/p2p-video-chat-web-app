@@ -150,6 +150,62 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorMessage'
 
+  /call/ice-servers:
+    get:
+      summary: Get the STUN/TURN servers to use for WebRTC peer connections
+      description: >
+        Returns an `RTCPeerConnection` `iceServers` list. When the API has
+        `TURN_URLS` and `TURN_SECRET` configured, this is the self-hosted
+        coturn server's STUN and TURN URLs, with TURN credentials minted for
+        the requesting user that expire after 12 hours (coturn TURN REST API
+        scheme). Otherwise it's Google's public STUN servers only, with no
+        TURN relay.
+      operationId: getIceServers
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: ICE server configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      iceServers:
+                        type: array
+                        items:
+                          type: object
+                          required: [urls]
+                          properties:
+                            urls:
+                              type: array
+                              items:
+                                type: string
+                              example: ['turn:203.0.113.10:3478?transport=udp']
+                            username:
+                              type: string
+                              description: TURN only — `<expiry unix secs>:<email>`
+                            credential:
+                              type: string
+                              description: TURN only — base64 HMAC-SHA1 of `username`
+        '401':
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+
   /call/create:
     post:
       summary: Create a new call

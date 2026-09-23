@@ -8,6 +8,7 @@
 [![Express](https://img.shields.io/badge/Express-000000?logo=express&logoColor=white)](https://expressjs.com/)
 [![WebSocket](https://img.shields.io/badge/WebSocket-010101?logo=websocket&logoColor=white)](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API)
 [![WebRTC](https://img.shields.io/badge/WebRTC-333333?logo=webrtc&logoColor=white)](https://webrtc.org/)
+[![coturn](https://img.shields.io/badge/coturn-2C3E50?logo=&logoColor=white)](https://github.com/coturn/coturn/wiki)
 [![MySQL](https://img.shields.io/badge/MySQL-4479A1?logo=mysql&logoColor=white)](https://www.mysql.com/)
 [![Sequelize](https://img.shields.io/badge/Sequelize-52B0E7?logo=sequelize&logoColor=white)](https://sequelize.org/)
 [![JWT](https://img.shields.io/badge/JWT-black?logo=jsonwebtokens&logoColor=white)](https://jwt.io/)
@@ -44,9 +45,11 @@ Voneo is a peer-to-peer video chat application built with an Astro/React fronten
   - [WebSocket Signalling](#websocket-signalling-per-call)
   - [API Examples](#api-examples)
   - [Environment Variables](#environment-variables)
+  - [STUN/TURN (NAT traversal)](#stunturn-nat-traversal)
 - [Database Structure & Data Models](#database-structure--data-models)
 - [Frontend (Astro + React)](#frontend-astro--react)
 - [End-to-end tests (Playwright)](#end-to-end-tests-playwright)
+  - [NAT traversal suite (STUN/TURN)](#nat-traversal-suite-stunturn)
 - [Gotchas & Experimentation](#gotchas--experimentation)
 
 ## Overview
@@ -58,7 +61,7 @@ Typical flow:
 1. A user opens the app, authenticates (login or register), then creates a call or joins one with a call ID.
 2. The Express API spins up a dedicated WebSocket server for that call and returns its URL.
 3. The client connects to that WebSocket server and exchanges signalling messages (participants, offers, chat).
-4. WebRTC negotiation runs in the browser (`rtcUtils.ts`) to establish P2P video/audio where implemented.
+4. WebRTC negotiation runs in the browser (`rtc-utils.ts`) to establish P2P video/audio where implemented, using the STUN/TURN servers returned by `GET /call/ice-servers` (see [STUN/TURN](#stunturn-nat-traversal)).
 
 ## Project Structure
 
@@ -118,13 +121,19 @@ video-chat-application/
 │           └── middleware.ts    # CSP header (nonce-based, skipped in dev mode)
 ├── mobile-app/                  # Expo (React Native) Android app — react-native-webrtc for calling, talks to web-socket-api directly (no shared code with web-server)
 ├── infra/                       # Pulumi (TypeScript) IaC — provisions GCP resources (Cloud Run service, Cloud SQL instance, Secret Manager secrets) for production deployments
+│   ├── turn-server.ts           # Self-hosted coturn STUN/TURN VM (prod stack only)
+│   └── coturn/turnserver.conf   # Base coturn config shared by the prod VM and the CI NAT e2e stack
 ├── scripts/                     # OS-specific scripts backing root npm run commands (setup, nuke, dev, halt-dev)
 │   ├── dispatch.mjs             # Detects the host OS and runs the matching .ps1/.sh script
 │   ├── setup.sh / setup.ps1
 │   ├── nuke.sh / nuke.ps1
 │   ├── dev.sh / dev.ps1
-│   └── halt-dev.sh / halt-dev.ps1
+│   ├── halt-dev.sh / halt-dev.ps1
+│   ├── test-e2e.sh / test-e2e.ps1
+│   └── test-e2e-nat.sh / test-e2e-nat.ps1
 ├── e2e/                         # End-to-end tests (Playwright)
+│   ├── compose.nat.yaml         # NAT-traversal overlay: coturn + browsers on isolated Docker networks
+│   └── nat/                     # Same-network vs cross-network (TURN relay) call tests
 ├── .github/workflows/           # CI/CD workflows
 ├── .husky/                      # Git hooks
 ├── .env.example                 # Example environment variables for local setup
@@ -268,6 +277,7 @@ Instead of tunnelling through Ngrok (steps 2 and 5 above), you can run the app d
 
 | Method   | Path                     | Auth | Request                 | Success response                                                                                         |
 | -------- | ------------------------ | ---- | ----------------------- | -------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/call/ice-servers`      | Yes  | —                       | `200` — `{ "success": true, "data": { "iceServers": [ { "urls": [...] }, ... ] } }`                      |
 | `POST`   | `/call/create`           | Yes  | —                       | `201` — `{ "success": true, "data": { "callID": "<uuid>", "callURL": "wss://..." } }`                    |
 | `PUT`    | `/call/:callID/join`     | Yes  | Params: `callID` (UUID) | `200` — `{ "success": true, "data": { "callURL": "wss://..." }}`                                         |
 | `DELETE` | `/call/:callID/leave`    | Yes  | Params: `callID` (UUID) | `200` — `{ "success": true, "data": { "message": "Succesfully left call" }}`                             |
@@ -384,6 +394,8 @@ DB_HOST=mysql-db
 DB_PORT=3306
 NGROK_HOST=wss://<tunnel>.ngrok-free.dev
 LOCAL=false
+TURN_URLS=
+TURN_SECRET=
 ```
 
 This should be defined in the root directory in order for both the Astro frontend and Express.js/WebSockets backend to access these variables.
@@ -398,6 +410,69 @@ A `.env.example` file has been defined using these defaults for local testing. F
 If you set `LOCAL=true`, you must leave `NGROK_HOST` with no value in your `.env` — having both set at once leads to the wrong host/allowed-origins configuration being used and will prevent correct deployment.
 
 Bear in mind that running this way restricts your ability to test with anything other than the machine you're developing on: the app will only be reachable at `http://localhost:4321`, so you won't be able to test from another device (e.g. a phone on the same network, or a remote peer) unless you expose your local server to your LAN or the wider internet by some other means. That isn't covered here, since this README only documents the Ngrok tunnel approach.
+
+#### STUN/TURN (NAT traversal)
+
+Before creating its peer connections, the frontend asks the API for its ICE servers (`GET /call/ice-servers`, built in `web-socket-api/src/call/utils/ice-servers.js`):
+
+- **`TURN_URLS`/`TURN_SECRET` unset (default for local dev):** Google's public STUN servers (`stun.l.google.com:19302`, `stun1.l.google.com:19302`). Fine for testing with devices on the same network, but there's no TURN relay, so peers behind symmetric/carrier-grade NAT (e.g. a phone on mobile data) often can't connect to each other.
+- **Both set (production, CI NAT tests):** the self-hosted [coturn](https://github.com/coturn/coturn) server, for both STUN and TURN. `TURN_URLS` is a comma-separated list, e.g. `stun:<ip>:3478,turn:<ip>:3478?transport=udp,turn:<ip>:3478?transport=tcp`. `TURN_SECRET` is coturn's `static-auth-secret`. The API uses it to mint TURN credentials for each user that are valid for 12 hours, using coturn's TURN REST API scheme, so the secret never reaches the browser.
+
+In production, Pulumi provisions coturn (`infra/turn-server.ts`) and sets both variables on the backend Cloud Run service. The deploy runs from `deploy-prod.yml` when a PR merges into `main`. Cloud Run can't host coturn, because TURN needs inbound UDP and a range of relay ports. So Pulumi creates:
+
+- an `e2-micro` Container-Optimized OS VM with a static IP, running the pinned `coturn/coturn` image
+- firewall rules for `3478` UDP/TCP and relay ports `49152-49252` UDP
+- a Secret Manager secret holding `TURN_SECRET`
+
+The VM uses the shared base config `infra/coturn/turnserver.conf` plus two production-only additions: its external IP mapping, and a block on relaying into private/metadata IP ranges.
+
+Only the `prod` stack enables TURN (`voneo-video-chat:turnEnabled: true`). The dev stack uses Google STUN.
+
+To try TURN locally, run coturn yourself (e.g. the `coturn` service in `e2e/compose.nat.yaml`) and point these variables at it.
+
+##### One-time setup before TURN works in production
+
+None of these steps happen automatically. Until they're done, merges to `main` won't deploy TURN, or won't be gated on the TURN tests.
+
+1. **Finish the prod deploy pipeline.** `deploy-prod.yml` needs GCP Workload Identity Federation (`GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_DEPLOY_SERVICE_ACCOUNT`) and a Pulumi backend (`PULUMI_ACCESS_TOKEN`) set as repo secrets, and a real `gcp:project` in `infra/Pulumi.prod.yaml`. See the TODOs in those files. Until then the workflow fails at its auth step, by design.
+2. **Set the TURN secret** (any long random string, e.g. from `openssl rand -hex 32`):
+   ```bash
+   cd infra && pulumi config set --secret turnSecret <value> --stack prod
+   ```
+   Pulumi refuses to deploy the prod stack without it.
+3. **Require the TURN tests before merging.** Add the `e2e-nat-traversal` job from `pr-main.yml` as a required status check on `main`, so a PR that breaks TURN can't merge and deploy. You can do this in the GitHub UI or with `gh api` (see below).
+4. **Check it after the first deploy.** Get the VM's IP from `cd infra && pulumi stack output turnIp --stack prod`. Then log in to the app and copy the `iceServers` from the `GET /call/ice-servers` response (browser devtools → Network). Enter the TURN URL, username and credential on the [Trickle ICE page](https://webrtc.github.io/samples/src/content/peerconnection/trickle-ice/) and click "Gather candidates": a `relay` candidate means TURN works, a `srflx` candidate means STUN works.
+
+**Operating notes:**
+
+- Changing the VM's startup script (e.g. bumping the coturn image) replaces the VM but keeps its static IP.
+- Rotating only the secret (`pulumi config set` + deploy) needs a VM reset (`gcloud compute instances reset voneo-turn-prod --zone europe-west2-a`) before coturn picks it up.
+- The coturn image tag in `infra/turn-server.ts` and `e2e/compose.nat.yaml` must stay the same, so CI keeps testing what production runs.
+- Cost: `europe-west2` isn't in GCP's free tier, so expect a few dollars a month for the VM and static IP, plus egress for relayed media. `infra/coturn/turnserver.conf` caps concurrent allocations and per-session bandwidth to limit this.
+- TURN runs without TLS (no `turns:` on port 443). It needs a domain and certificate first. Until then, users on networks that allow only 443 can't use the relay.
+
+**Making `e2e-nat-traversal` a required check:**
+
+- **GitHub UI:** go to *Settings → Branches* and edit the `main` protection rule. Tick *Require status checks to pass before merging*, then search for `e2e-nat-traversal`. The UI only lists checks that have run on the repo recently, so open a PR into `main` first. Or use *Settings → Rules → Rulesets* to add a *Require status checks to pass* rule targeting `main`.
+- **CLI:** create a ruleset, which leaves any existing classic protection untouched:
+  ```bash
+  gh api -X POST repos/{owner}/{repo}/rulesets --input - <<'JSON'
+  {
+    "name": "main: required checks",
+    "target": "branch",
+    "enforcement": "active",
+    "conditions": {"ref_name": {"include": ["refs/heads/main"], "exclude": []}},
+    "rules": [{
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": false,
+        "required_status_checks": [{"context": "e2e-nat-traversal", "integration_id": 15368}]
+      }
+    }]
+  }
+  JSON
+  ```
+  `integration_id` 15368 is GitHub Actions, so only an Actions job can satisfy the check. Add more `{"context": ...}` entries for the other `pr-main.yml` jobs (`lint`, `api-tests`, `component-tests`, `infra-tests`, `e2e-full-suite`) to require those as well.
 
 #### Runtime changes when `NODE_ENV=production`
 
@@ -472,7 +547,7 @@ Source of truth for these models: `web-socket-api/src/common/models/user.js`, `c
 
 **Entry:** `src/pages/index.astro` imports global CSS and renders `<App client:load />`.
 
-### `useTokenWorker.ts`
+### `use-token-worker.ts`
 
 Hook that wraps the `token-worker.js` Web Worker. The Worker instance is a **module-level singleton** so all components share the same instance and the token stored after login is available to subsequent calls. Exposes: `login`, `register`, `logout`, `createCall`, `joinCall`.
 
@@ -520,6 +595,33 @@ This brings up the e2e compose stack (building fresh images), runs Playwright, a
 Camera/microphone are faked via Chromium's `--use-fake-device-for-media-stream` flag (see `playwright.config.ts`), so no real hardware or OS permission prompts are needed. Test data is isolated per run: `e2e/global-setup.ts` truncates the `test-db` tables before the suite starts, and specs create their own users with unique emails rather than relying on any pre-seeded data.
 
 **Browser coverage:** only the `chromium` Playwright project is configured — no Firefox or WebKit. This is deliberate, for dev speed/simplicity, and because the fake-media-stream flags above are Chromium-specific.
+
+**Media on the same network:** `e2e/media.spec.ts` checks that both participants actually receive each other's video. It also checks, from the peer connections' ICE stats, that media flows directly and not through a relay.
+
+### NAT traversal suite (STUN/TURN)
+
+```bash
+npm run test:e2e:nat
+```
+
+This checks how calls behave for devices on the same network versus different networks, through the self-hosted coturn server. It runs on PRs into `main` (the `e2e-nat-traversal` job in `pr-main.yml`).
+
+It layers `e2e/compose.nat.yaml` on top of the e2e stack. That file adds a `coturn` container using the same image and base config as the production VM. It also adds three containerised Chromium browsers, which the host's Playwright runner drives remotely over `playwright run-server`:
+
+- two browsers on a simulated LAN, `lan-a`
+- one browser on a separate one, `lan-b`
+
+`lan-a` and `lan-b` devices can only reach each other through the TURN relay. The overlay enforces that itself, not through Docker. Docker's isolation between bridge networks varies by platform: Docker Desktop was found to route and NAT traffic between them, which let calls connect directly.
+
+- Each browser has a firewall sidecar that drops traffic to and from the other LAN.
+- IP masquerading is off on both LANs, so nothing gets rewritten past those rules. As a side effect the LANs have no internet access, so the browsers run your installed `playwright-core` from a mount instead of downloading it.
+
+The two tests in `e2e/nat/nat-traversal.spec.ts` check:
+
+- **Same network (`lan-a` ↔ `lan-a`):** the call connects directly over a `host`↔`host` candidate pair, even though TURN is available.
+- **Different networks (`lan-a` ↔ `lan-b`):** both peers send media through their TURN allocations (`relay` local candidates), and video still plays on both sides.
+
+This suite needs no `voneo.test` hosts entry and no local Playwright browsers, because the browsers run in containers. It uses the same host ports as `npm run test:e2e`, so don't run the two at the same time. In CI the coturn container differs from production in two ways: it doesn't block private IP ranges (the simulated LANs are private Docker networks), and it doesn't need an external IP mapping.
 
 ---
 

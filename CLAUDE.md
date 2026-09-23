@@ -20,6 +20,7 @@ All commands below are run from the repo root unless noted.
 - `npm test` (root) — runs `xo` (lint) across the repo; this is the only root-level test/lint command.
 - `npm run test:e2e` — run e2e tests in `e2e/` against a prod-mode simulation stack (own compose project, isolated `test-db`, Caddy TLS proxy at `https://voneo.test`; see `e2e/compose.e2e.yaml`). Brings the stack up, runs Playwright, tears down. Requires `voneo.test` to resolve to `127.0.0.1` in your hosts file, and stopping `npm run dev` first (fixed host ports collide). Don't run `npx playwright test` directly — it expects the stack already running at that URL. Only the `chromium` project is configured (see `playwright.config.ts`) — kept deliberately single-browser for dev speed/simplicity, and because the fake-media-stream flags the suite relies on are Chromium-only; no Firefox/WebKit coverage exists.
 - `npm run test:e2e:happy-path` — same as `test:e2e` but filtered to specs tagged `@happy-path` (currently just call creation/join); used by the `pr-dev.yml` CI workflow for a faster PR check into `dev`.
+- `npm run test:e2e:nat` — NAT-traversal e2e suite (`e2e/nat/`), run by the `e2e-nat-traversal` job in `pr-main.yml`. Adds `e2e/compose.nat.yaml` on top of the e2e stack. That overlay adds a `coturn` container, using the same pinned image and `infra/coturn/turnserver.conf` as the prod VM, plus three `playwright run-server` browser containers, two on Docker network `lan-a` and one on `lan-b`. Lan-a↔lan-b calls can only connect through the TURN relay. Don't rely on Docker for that isolation: Docker Desktop routes and NATs between bridge networks. The overlay enforces it itself, with per-browser iptables sidecars that drop the other LAN's subnet and with `enable_ip_masquerade: false` on both LANs. As a result the LANs have no internet, so the browsers run the host's mounted `node_modules/playwright-core`. The tests assert same-network = `host`↔`host` pair, cross-network = both local candidates `relay`. `E2E_NAT=1` swaps `playwright.config.ts` to this project only; the regular `chromium` project ignores `e2e/nat/`. The browser container image version comes from the installed `@playwright/test` (`PLAYWRIGHT_VERSION`, set by `scripts/test-e2e-nat.*`, which also pre-pulls that image because Compose can crash pulling one image for several services at once). No hosts entry or local browsers are needed. It uses the same host ports as `test:e2e`, so don't run both at once.
 - `npm run lint` — Runs XO linting with prettier config passed in
 - `npm run lint:fix` — Applies XO linting and prettier formatting fixes where possible, identifies any errors/warnings that couldn't be implemented
 - `npm run test:it` — alias to run the integration tests for the API (and eventually the websocket infra)
@@ -96,7 +97,8 @@ If anything is noticed, whether due to the change itself or due to the change be
 - `app.js` — Express entry point (port 3000 in dev).
 - `authorization/` — signup/login/logout/refresh routes and controller. JWT-based; access token via `Authorization: Bearer`, refresh token via cookie.
 - `call/` — call lifecycle:
-  - `controller.js` / `routes.js` — `POST /call/create`, `PUT /call/:callID/join`, `DELETE /call/:callID/leave`, `POST /call/:callID/messages`.
+  - `controller.js` / `routes.js` — `GET /call/ice-servers`, `POST /call/create`, `PUT /call/:callID/join`, `DELETE /call/:callID/leave`, `POST /call/:callID/messages`.
+  - `utils/ice-servers.js` — builds the `RTCPeerConnection` `iceServers` list. With `TURN_URLS` and `TURN_SECRET` set (prod, CI NAT stack), it returns the self-hosted coturn STUN/TURN URLs with short-lived credentials in the TURN REST API format (`<expiry>:<email>` / base64 HMAC-SHA1 of that, keyed with the shared secret). Without them it returns Google's public STUN servers only (dev default, no relay).
   - `utils/session-store.js` — in-memory `Map` of `callId → { wsURL, participants, pendingParticipants }`. **No persistence** — restarting the API drops all active calls.
   - `utils/ws-server.js` — creates a WebSocket server per call for signalling.
   - `utils/misc.js` — helpers including `constructURI`, which behaves differently in dev vs. production (see below).
@@ -116,16 +118,17 @@ Several behaviors branch on `NODE_ENV`/`LOCAL` — check these before assuming b
 - WS URL construction (`constructURI` in `call/utils/misc.js`): dev path is `/wss/:callID` (or `/ws/:callID` when `LOCAL=true`); production builds `wss://<ALLOWED_ORIGIN>/wss/:callID` — same path shape, different scheme/host.
 - WS origin verification (`verifyClient` in `call/utils/misc.js`) and CORS (`app.js`) both check the `Origin` header against `ALLOWED_ORIGIN` (env var) in production, and against `LOCAL`/`NGROK_HOST`-derived origins in dev.
 - Refresh token cookie: `Secure` only set in production.
+- ICE servers: this depends on `TURN_URLS`/`TURN_SECRET` rather than `NODE_ENV`. Pulumi sets them only on the prod stack (`turnEnabled`); in dev they're normally unset, so the API falls back to Google STUN.
 
 ### Frontend (`web-server/src`)
 
 Astro (SSR via `@astrojs/node`) with React islands, Tailwind v4, shadcn/ui. Paths below are relative to `web-server/src/` (the Astro source tree itself lives one level further down, at `web-server/src/src/`).
 
 - `src/pages/index.astro` — shell page, renders `<App client:load />`.
-- `src/components/App.tsx` — root, switches between `AuthScreen` (logged out) and `CallScreen` (logged in).
-- `src/components/CallScreen.tsx`, `VideoGrid.tsx`, `ChatPanel.tsx` — call UI, video tiles, chat sidebar.
-- `src/lib/rtcUtils.ts` — WebRTC helpers (media capture, `RTCPeerConnection` setup, WS messaging).
-- `src/lib/useTokenWorker.ts` — hook wrapping `token-worker.js`; the Worker instance is a **module-level singleton** so all components share one instance/token.
+- `src/components/app.tsx` — root, switches between `AuthScreen` (`auth-screen.tsx`, logged out) and `CallScreen` (logged in).
+- `src/components/call-screen.tsx`, `video-grid.tsx`, `chat-panel.tsx` — call UI, video tiles, chat sidebar.
+- `src/lib/rtc-utils.ts` — WebRTC helpers (media capture, `RTCPeerConnection` setup, WS messaging).
+- `src/lib/use-token-worker.ts` — hook wrapping `token-worker.js`; the Worker instance is a **module-level singleton** so all components share one instance/token.
 - `public/token-worker.js` — plain JS Web Worker owning `TokenService`, which holds the JWT access token in a private field and performs all `fetch` calls to the Express API, so the token never touches the main thread.
 - `src/middleware.ts` — nonce-based CSP header, applied in production only (skipped in dev to avoid blocking Vite HMR/dev toolbar).
 
@@ -133,7 +136,7 @@ See `web-server/src/CLAUDE.md` for Astro-specific dev-server guidance (backgroun
 
 ### Infra (`infra/`)
 
-Pulumi (TypeScript) provisions GCP resources: Cloud Run service, Cloud SQL instance, Secret Manager secrets. Separate `dev`/`prod` stacks (`infra/Pulumi.dev.yaml` / `Pulumi.prod.yaml`, GCP resource/secret names suffixed by stack to avoid collisions). Deploy/destroy via `npm run gcp-deploy-dev` / `npm run gcp-destroy-dev` / `npm run gcp-deploy-prod` / `npm run gcp-destroy-prod` (run `pulumi up`/`pulumi destroy --stack <dev|prod>` from `infra/`). In CI, `deploy-dev.yml`/`deploy-prod.yml` run the same on merge to `dev`/`main` via GCP Workload Identity Federation — not yet configured (see TODOs in the Pulumi stack files).
+Pulumi (TypeScript) provisions GCP resources: Cloud Run service, Cloud SQL instance, Secret Manager secrets, and a self-hosted coturn STUN/TURN VM. The VM (`infra/turn-server.ts`) is only created when `voneo-video-chat:turnEnabled` is true, which today is the prod stack only. It's an `e2-micro` Container-Optimized OS instance with a static IP, a firewall rule, and its own service account that can read only the `turn-secret-<stack>` secret. It runs the pinned `coturn/coturn` image with `infra/coturn/turnserver.conf` plus prod-only lines (external IP, deny relaying to private/metadata ranges). Keep that image tag in sync with `e2e/compose.nat.yaml`. The Pulumi snapshot test enables TURN, so it covers these resources. Separate `dev`/`prod` stacks (`infra/Pulumi.dev.yaml` / `Pulumi.prod.yaml`, GCP resource/secret names suffixed by stack to avoid collisions). Deploy/destroy via `npm run gcp-deploy-dev` / `npm run gcp-destroy-dev` / `npm run gcp-deploy-prod` / `npm run gcp-destroy-prod` (run `pulumi up`/`pulumi destroy --stack <dev|prod>` from `infra/`). In CI, `deploy-dev.yml`/`deploy-prod.yml` run the same on merge to `dev`/`main` via GCP Workload Identity Federation — not yet configured (see TODOs in the Pulumi stack files).
 
 ## Known incomplete areas
 
