@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/naming-convention -- object literals below mirror the real HTTP wire format (Authorization header, callID/callURL response fields), not variable names */
+/* eslint-disable @typescript-eslint/naming-convention -- object literals below mirror the real HTTP wire format (Authorization header, callID response field), not variable names */
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 
 type WorkerEvent = {data: {messageType: string; requestBody?: unknown}};
@@ -113,7 +113,7 @@ describe('token-worker', () => {
 		// Token was actually cleared, not just reported as cleared: the next
 		// authenticated request carries no real bearer token.
 		vi.mocked(fetch).mockResolvedValueOnce(
-			jsonResponse({success: true, data: {callID: 'x', callURL: 'y'}}),
+			jsonResponse({success: true, data: {callID: 'x'}}),
 		);
 		await send('ReqCreateCall');
 		const [, createCallOptions] = vi.mocked(fetch).mock.calls[2];
@@ -122,25 +122,22 @@ describe('token-worker', () => {
 		});
 	});
 
-	it('createCall: returns the callID/callURL on success', async () => {
+	it('createCall: returns the callID on success', async () => {
 		vi.mocked(fetch).mockResolvedValueOnce(
-			jsonResponse({
-				success: true,
-				data: {callID: 'call-1', callURL: 'wss://example/call-1'},
-			}),
+			jsonResponse({success: true, data: {callID: 'call-1'}}),
 		);
 
 		const result = await send('ReqCreateCall');
 
 		expect(result).toEqual({
 			type: 'ResCreateCall',
-			message: {callID: 'call-1', callURL: 'wss://example/call-1'},
+			message: {callID: 'call-1'},
 		});
 	});
 
-	it('joinCall: PUTs to the call ID and returns the callURL', async () => {
+	it('joinCall: PUTs to the call ID and returns the callID', async () => {
 		vi.mocked(fetch).mockResolvedValueOnce(
-			jsonResponse({success: true, data: {callURL: 'wss://example/call-1'}}),
+			jsonResponse({success: true, data: {callID: 'call-1'}}),
 		);
 
 		const result = await send('ReqJoinCall', 'call-1');
@@ -151,7 +148,7 @@ describe('token-worker', () => {
 		);
 		expect(result).toEqual({
 			type: 'ResJoinCall',
-			message: 'wss://example/call-1',
+			message: 'call-1',
 		});
 	});
 

@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/naming-convention -- callID/callURL mirror the real HTTP response shape, not variable names */
+/* eslint-disable @typescript-eslint/naming-convention -- callID mirrors the real HTTP response shape, not variable names */
 import {render, screen, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {beforeEach, describe, expect, it, vi} from 'vitest';
@@ -71,13 +71,9 @@ beforeEach(() => {
 
 describe('CallScreen — create call', () => {
 	it('attaches local media to the local video element', async () => {
-		createCall.mockResolvedValueOnce({
-			callID: 'call-1',
-			callURL: 'wss://example/call-1',
-		});
+		createCall.mockResolvedValueOnce({callID: 'call-1'});
 		connectToCall.mockImplementationOnce(
 			async (
-				_url: string,
 				_callId: string,
 				_email: string,
 				_username: string,
@@ -101,9 +97,9 @@ describe('CallScreen — create call', () => {
 });
 
 describe('CallScreen — ICE servers', () => {
-	// ConnectToCall's 13th parameter — the STUN/TURN config the peer
+	// ConnectToCall's 12th parameter — the STUN/TURN config the peer
 	// connections are created with.
-	const iceServersArgumentIndex = 12;
+	const iceServersArgumentIndex = 11;
 
 	it('passes the ICE servers fetched from the API through to connectToCall', async () => {
 		const iceServers = [
@@ -115,10 +111,7 @@ describe('CallScreen — ICE servers', () => {
 			},
 		];
 		getIceServers.mockResolvedValueOnce(iceServers);
-		createCall.mockResolvedValueOnce({
-			callID: 'call-1',
-			callURL: 'wss://example/call-1',
-		});
+		createCall.mockResolvedValueOnce({callID: 'call-1'});
 		const user = userEvent.setup();
 		renderCallScreen();
 
@@ -134,10 +127,7 @@ describe('CallScreen — ICE servers', () => {
 
 	it("falls back to connectToCall's default ICE servers when the fetch fails", async () => {
 		getIceServers.mockResolvedValueOnce('Get ICE servers failed');
-		createCall.mockResolvedValueOnce({
-			callID: 'call-1',
-			callURL: 'wss://example/call-1',
-		});
+		createCall.mockResolvedValueOnce({callID: 'call-1'});
 		const user = userEvent.setup();
 		renderCallScreen();
 
@@ -171,10 +161,9 @@ describe('CallScreen — join call', () => {
 
 	it('enables join for a valid UUID and renders a remote participant on success', async () => {
 		const validCallId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
-		joinCall.mockResolvedValueOnce('wss://example/call-1');
+		joinCall.mockResolvedValueOnce(validCallId);
 		connectToCall.mockImplementationOnce(
 			async (
-				_url: string,
 				_callId: string,
 				_email: string,
 				_username: string,
@@ -201,6 +190,10 @@ describe('CallScreen — join call', () => {
 		await user.click(screen.getByTestId('join-call-button'));
 
 		expect(joinCall).toHaveBeenCalledWith(validCallId);
+		// ConnectToCall builds the WebSocket URL from the callID itself.
+		await waitFor(() => {
+			expect(connectToCall.mock.calls[0][0]).toBe(validCallId);
+		});
 		await waitFor(() => {
 			expect(screen.getByTestId('remote-video-bob@example.com').srcObject).toBe(
 				fakeRemoteStream,
@@ -212,7 +205,7 @@ describe('CallScreen — join call', () => {
 describe('CallScreen — leave call', () => {
 	it('clears call state and shows the controls bar again on hang up', async () => {
 		const validCallId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
-		joinCall.mockResolvedValueOnce('wss://example/call-1');
+		joinCall.mockResolvedValueOnce(validCallId);
 		leaveCall.mockResolvedValueOnce('User left call succesfully');
 		const user = userEvent.setup();
 		renderCallScreen();
