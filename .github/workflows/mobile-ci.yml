@@ -9,10 +9,14 @@ on:
   pull_request:
     paths:
       - "mobile-app/**"
+      # Shared palette, read by the app (src/theme/theme.ts)
+      - "colors.json"
   push:
     branches: [dev, main]
     paths:
       - "mobile-app/**"
+      # Shared palette, read by the app (src/theme/theme.ts)
+      - "colors.json"
   workflow_dispatch:
 
 jobs:

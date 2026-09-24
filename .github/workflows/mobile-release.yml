@@ -16,6 +16,8 @@ on:
     branches: [main]
     paths:
       - "mobile-app/**"
+      # Shared palette, read by the app (src/theme/theme.ts)
+      - "colors.json"
   workflow_dispatch:
 
 jobs:
