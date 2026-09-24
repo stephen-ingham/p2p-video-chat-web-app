@@ -221,7 +221,7 @@ For example:
 
 App URL: **https://horizon-velvet-symphony.ngrok-free.dev/**
 
-To spin down the dev containers smoothly use the following command:
+To spin down the dev containers smoothly use the following command. It also stops the `docker compose watch` processes that `npm run dev` started, which would otherwise keep a lock on the Compose projects and make the next `npm run dev` fail with "cannot take exclusive lock":
 
 ```bash
 npm run halt-dev
