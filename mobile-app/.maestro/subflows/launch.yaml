@@ -1,29 +1,29 @@
-# Fresh launch with camera/mic allowed. On the dev-client build, clearState
-# drops the dev client's last server, so it opens on its launcher screen
-# (after a few seconds): tap the running Metro server it lists (port 8081) to
-# load the app, then dismiss the dev menu's first-run intro if it shows. A
-# build with the JS bundled in has no launcher, so those steps are skipped.
+# Fresh launch with camera/mic allowed. Against the dev-client build, pass
+# `-e DEV_CLIENT=true`: clearState drops the dev client's last server, so a
+# deep link points it straight at Metro (the emulator reaches the host's 8081
+# at 10.0.2.2) and skips its launcher and first-run dev menu intro, whose
+# timing proved too flaky to tap through. CI's build has the JS bundled in and
+# no dev client, so it skips that step.
 appId: com.voneo.app
 ---
 - launchApp:
     clearState: true
     permissions:
       all: allow
-- extendedWaitUntil:
-    visible: "DEVELOPMENT SERVERS"
-    timeout: 15000
-    optional: true
 - runFlow:
     when:
-      visible: "DEVELOPMENT SERVERS"
+      true: ${DEV_CLIENT == 'true'}
     commands:
-      - tapOn: ".*:8081"
+      - openLink: "exp+voneo://expo-development-client/?url=http%3A%2F%2F10.0.2.2%3A8081&disableOnboarding=1"
+# Busy emulators (freshly booted, or CI's) can show a system "<app> isn't
+# responding" dialog over the app; waiting it out is harmless.
+- runFlow:
+    when:
+      visible: ".*isn't responding"
+    commands:
+      - tapOn: "Wait"
+# Generous, since a dev-client launch bundles the JS on first load.
 - extendedWaitUntil:
     visible:
       id: "email-input"
-    timeout: 60000
-- runFlow:
-    when:
-      visible: "Continue"
-    commands:
-      - tapOn: "Continue"
+    timeout: 120000
