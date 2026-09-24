@@ -135,7 +135,8 @@ video-chat-application/
 │   ├── dev.sh / dev.ps1
 │   ├── halt-dev.sh / halt-dev.ps1
 │   ├── test-e2e.sh / test-e2e.ps1
-│   └── test-e2e-nat.sh / test-e2e-nat.ps1
+│   ├── test-e2e-nat.sh / test-e2e-nat.ps1
+│   └── test-maestro.sh / test-maestro.ps1
 ├── e2e/                         # End-to-end tests (Playwright)
 │   ├── compose.nat.yaml         # NAT-traversal overlay: coturn + browsers on isolated Docker networks
 │   └── nat/                     # Same-network vs cross-network (TURN relay) call tests
@@ -616,7 +617,10 @@ The app needs a development build, because Expo Go doesn't include `react-native
 **Tests:**
 
 - `npm test` in `mobile-app/` runs Jest (`jest-expo` preset) with [React Native Testing Library](https://callstack.github.io/react-native-testing-library/). Tests live in `mobile-app/tests/`: unit tests for `api.ts`, `call-url.ts` and `call-session.ts`, and component tests for the auth and call screens with the API, signalling and WebRTC modules mocked. These include accessibility checks (labelled fields, tab and switch states, button names). `mobile-ci.yml` runs them on PRs that touch `mobile-app/` or `colors.json`.
-- [Maestro](https://maestro.mobile.dev/) flows in `mobile-app/.maestro/` cover logging in, creating a call and hanging up, and a failed login. They need the dev-client build installed and the `LOCAL=true` dev stack running, and are run by `mobile-e2e.yml`, which builds a release APK on the runner and runs them on an emulator.
+- [Maestro](https://maestro.mobile.dev/) flows in `mobile-app/.maestro/` cover logging in, creating a call and hanging up, and a failed login. They're run by `mobile-e2e.yml`, which builds a release APK on the runner and runs them on an emulator. To run them locally, start an Android emulator with the dev-client build installed and run `npm run test:maestro` from the repo root (or `npm run test:maestro -- .maestro/create-call.yaml` for one flow). It needs [Maestro](https://docs.maestro.dev/getting-started/installing-maestro) installed. The script:
+  - starts the signalling API and MySQL containers (`LOCAL=true`, `NODE_ENV=dev`, for the seeded users) and Metro, unless they're already running
+  - runs the flows against the dev client
+  - stops whatever it started, and deletes the ~220 MB copy of the app's APK that each Maestro run leaves in the temp folder
 
 Avoid regular expressions in `mobile-app/` app code: XO requires the `v` flag on them, and Hermes (React Native's JavaScript engine) rejects that flag when the app loads. Node-only config files such as `metro.config.js` don't run on Hermes, so they're exempt.
 
