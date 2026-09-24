@@ -209,23 +209,23 @@ export default function CallScreen({
 	const inCall = Boolean(callId);
 
 	return (
-		<div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
+		<div className="min-h-screen bg-canvas text-ink flex flex-col">
 			{/* Header */}
-			<header className="flex items-center justify-between px-6 py-3 border-b border-zinc-800 shrink-0">
+			<header className="flex items-center justify-between px-6 py-3 border-b border-line shrink-0">
 				<div className="flex items-center gap-2">
-					<Video className="h-5 w-5 text-zinc-300" />
-					<span className="font-semibold text-zinc-100">Voneo</span>
+					<Video className="h-5 w-5 text-ink-soft" />
+					<span className="font-semibold text-ink">Voneo</span>
 				</div>
 				<div className="flex items-center gap-3">
 					{callId && (
 						<Badge
 							variant="outline"
-							className="border-zinc-600 text-zinc-300 font-mono text-xs"
+							className="border-line-control text-ink-soft font-mono text-xs"
 						>
 							{callId}
 						</Badge>
 					)}
-					<span className="text-sm text-zinc-400" data-testid="username">
+					<span className="text-sm text-ink-muted" data-testid="username">
 						{username}
 					</span>
 					<Button
@@ -234,7 +234,7 @@ export default function CallScreen({
 						onClick={() => {
 							void handleLogout();
 						}}
-						className="text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"
+						className="text-ink-muted hover:text-ink hover:bg-surface-raised"
 						data-testid="logout-button"
 					>
 						<LogOut className="h-4 w-4 mr-1.5" />
@@ -245,19 +245,19 @@ export default function CallScreen({
 
 			{/* Controls bar — hidden once in a call */}
 			{!inCall && (
-				<div className="flex flex-wrap items-center gap-3 px-6 py-4 border-b border-zinc-800">
+				<div className="flex flex-wrap items-center gap-3 px-6 py-4 border-b border-line">
 					<Button
 						onClick={() => {
 							void handleCreate();
 						}}
 						disabled={loading !== undefined}
-						className="bg-zinc-100 text-zinc-900 hover:bg-zinc-200"
+						className="bg-action text-on-action hover:bg-action-hover"
 						data-testid="create-call-button"
 					>
 						{loading === 'create' ? 'Creating…' : 'Create Call'}
 					</Button>
 
-					<Separator orientation="vertical" className="h-6 bg-zinc-700" />
+					<Separator orientation="vertical" className="h-6 bg-line-strong" />
 
 					<div className="flex gap-2">
 						<Input
@@ -267,7 +267,7 @@ export default function CallScreen({
 							}}
 							placeholder="Enter call ID"
 							aria-label="Call ID"
-							className="w-64 bg-zinc-900 border-zinc-500 text-zinc-100 placeholder:text-zinc-400 focus-visible:ring-zinc-400"
+							className="w-64 bg-surface border-line-control text-ink placeholder:text-ink-muted focus-visible:ring-focus"
 							suppressHydrationWarning={true}
 							data-testid="join-call-input"
 						/>
@@ -277,7 +277,7 @@ export default function CallScreen({
 							}}
 							disabled={loading !== undefined || !isJoinInputValid}
 							variant="outline"
-							className="border-zinc-700 text-zinc-900 hover:bg-zinc-800"
+							className="border-line-control bg-surface text-ink hover:bg-surface-raised hover:text-ink"
 							data-testid="join-call-button"
 						>
 							{loading === 'join' ? 'Joining…' : 'Join Call'}
@@ -286,14 +286,14 @@ export default function CallScreen({
 
 					{joinInputError && (
 						<p
-							className="text-xs text-red-400 w-full"
+							className="text-xs text-danger w-full"
 							data-testid="join-call-input-error"
 						>
 							{joinInputError}
 						</p>
 					)}
 					{error && (
-						<p role="alert" className="text-sm text-red-400 w-full">
+						<p role="alert" className="text-sm text-danger w-full">
 							{error}
 						</p>
 					)}
@@ -307,7 +307,7 @@ export default function CallScreen({
 						<div className="flex items-center justify-between">
 							<Badge
 								variant="outline"
-								className="border-zinc-600 text-zinc-300 font-mono text-xs"
+								className="border-line-control text-ink-soft font-mono text-xs"
 							>
 								Call ID: <span data-testid="call-id">{callId}</span>
 							</Badge>
@@ -331,7 +331,7 @@ export default function CallScreen({
 				</div>
 
 				{/* Chat sidebar */}
-				<div className="w-80 shrink-0 border-l border-zinc-800 flex flex-col">
+				<div className="w-80 shrink-0 border-l border-line flex flex-col">
 					<ChatPanel
 						messages={messages}
 						participants={participants}

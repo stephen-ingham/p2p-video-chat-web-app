@@ -27,7 +27,7 @@ function VideoTile({
 	testId: string;
 }) {
 	return (
-		<Card className="relative overflow-hidden bg-zinc-900 aspect-video flex items-center justify-center min-w-[280px]">
+		<Card className="relative overflow-hidden bg-surface aspect-video flex items-center justify-center min-w-[280px]">
 			<video
 				ref={videoRef}
 				autoPlay
@@ -36,7 +36,7 @@ function VideoTile({
 				className="w-full h-full object-cover"
 				data-testid={testId}
 			/>
-			<Badge className="absolute bottom-2 left-2 bg-black/60 text-white border-0">
+			<Badge className="absolute bottom-2 left-2 bg-scrim text-ink border-0">
 				{label}
 			</Badge>
 		</Card>

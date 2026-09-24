@@ -137,37 +137,37 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 	}
 
 	return (
-		<div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
+		<div className="min-h-screen bg-canvas flex items-center justify-center p-4">
 			<div className="w-full max-w-md space-y-6">
 				<div className="flex flex-col items-center gap-2">
-					<div className="bg-zinc-800 p-3 rounded-full">
-						<Video className="h-7 w-7 text-zinc-100" />
+					<div className="bg-surface-raised p-3 rounded-full">
+						<Video className="h-7 w-7 text-ink" />
 					</div>
-					<h1 className="text-2xl font-bold text-zinc-100">Voneo</h1>
-					<p className="text-sm text-zinc-400">
+					<h1 className="text-2xl font-bold text-ink">Voneo</h1>
+					<p className="text-sm text-ink-muted">
 						Peer-to-peer video calls, right in your browser
 					</p>
 				</div>
 
-				<Card className="bg-zinc-900 border-zinc-800">
+				<Card className="bg-surface border-line">
 					<CardHeader className="pb-2">
-						<CardTitle className="text-zinc-100 text-lg">Get started</CardTitle>
-						<CardDescription className="text-zinc-400">
+						<CardTitle className="text-ink text-lg">Get started</CardTitle>
+						<CardDescription className="text-ink-muted">
 							Sign in or create a new account
 						</CardDescription>
 					</CardHeader>
 					<CardContent>
 						<Tabs defaultValue="login">
-							<TabsList className="w-full bg-zinc-800 mb-4">
+							<TabsList className="w-full bg-surface-raised mb-4">
 								<TabsTrigger
 									value="login"
-									className="flex-1 data-[state=active]:bg-zinc-700 data-[state=active]:text-zinc-100 text-zinc-400"
+									className="flex-1 data-active:bg-surface-active data-active:text-ink text-ink-muted"
 								>
 									Login
 								</TabsTrigger>
 								<TabsTrigger
 									value="register"
-									className="flex-1 data-[state=active]:bg-zinc-700 data-[state=active]:text-zinc-100 text-zinc-400"
+									className="flex-1 data-active:bg-surface-active data-active:text-ink text-ink-muted"
 								>
 									Register
 								</TabsTrigger>
@@ -190,13 +190,13 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 											setLoginForm((f) => ({...f, email: event.target.value}));
 										}}
 										required
-										className="bg-zinc-800 border-zinc-500 text-zinc-100 placeholder:text-zinc-400 focus-visible:ring-zinc-400"
+										className="bg-surface-raised border-line-control text-ink placeholder:text-ink-muted focus-visible:ring-focus"
 										suppressHydrationWarning={true}
 										data-testid="login-email"
 									/>
 									{loginEmailError && (
 										<p
-											className="text-xs text-red-400"
+											className="text-xs text-danger"
 											data-testid="login-email-error"
 										>
 											{loginEmailError}
@@ -214,19 +214,19 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 											}));
 										}}
 										required
-										className="bg-zinc-800 border-zinc-500 text-zinc-100 placeholder:text-zinc-400 focus-visible:ring-zinc-400"
+										className="bg-surface-raised border-line-control text-ink placeholder:text-ink-muted focus-visible:ring-focus"
 										suppressHydrationWarning={true}
 										data-testid="login-password"
 									/>
 									{error && (
-										<p role="alert" className="text-sm text-red-400">
+										<p role="alert" className="text-sm text-danger">
 											{error}
 										</p>
 									)}
 									<Button
 										type="submit"
 										disabled={loading || !isLoginValid}
-										className="w-full bg-zinc-100 text-zinc-900 hover:bg-zinc-200"
+										className="w-full bg-action text-on-action hover:bg-action-hover"
 										data-testid="login-submit"
 									>
 										{loading ? 'Signing in…' : 'Sign in'}
@@ -255,13 +255,13 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 										}}
 										required
 										minLength={3}
-										className="bg-zinc-800 border-zinc-500 text-zinc-100 placeholder:text-zinc-400 focus-visible:ring-zinc-400"
+										className="bg-surface-raised border-line-control text-ink placeholder:text-ink-muted focus-visible:ring-focus"
 										suppressHydrationWarning={true}
 										data-testid="register-username"
 									/>
 									{registerUsernameError && (
 										<p
-											className="text-xs text-red-400"
+											className="text-xs text-danger"
 											data-testid="register-username-error"
 										>
 											{registerUsernameError}
@@ -279,13 +279,13 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 											}));
 										}}
 										required
-										className="bg-zinc-800 border-zinc-500 text-zinc-100 placeholder:text-zinc-400 focus-visible:ring-zinc-400"
+										className="bg-surface-raised border-line-control text-ink placeholder:text-ink-muted focus-visible:ring-focus"
 										suppressHydrationWarning={true}
 										data-testid="register-email"
 									/>
 									{registerEmailError && (
 										<p
-											className="text-xs text-red-400"
+											className="text-xs text-danger"
 											data-testid="register-email-error"
 										>
 											{registerEmailError}
@@ -304,27 +304,27 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 										}}
 										required
 										minLength={6}
-										className="bg-zinc-800 border-zinc-500 text-zinc-100 placeholder:text-zinc-400 focus-visible:ring-zinc-400"
+										className="bg-surface-raised border-line-control text-ink placeholder:text-ink-muted focus-visible:ring-focus"
 										suppressHydrationWarning={true}
 										data-testid="register-password"
 									/>
 									{registerPasswordError && (
 										<p
-											className="text-xs text-red-400"
+											className="text-xs text-danger"
 											data-testid="register-password-error"
 										>
 											{registerPasswordError}
 										</p>
 									)}
 									{error && (
-										<p role="alert" className="text-sm text-red-400">
+										<p role="alert" className="text-sm text-danger">
 											{error}
 										</p>
 									)}
 									<Button
 										type="submit"
 										disabled={loading || !isRegisterValid}
-										className="w-full bg-zinc-100 text-zinc-900 hover:bg-zinc-200"
+										className="w-full bg-action text-on-action hover:bg-action-hover"
 										data-testid="register-submit"
 									>
 										{loading ? 'Creating account…' : 'Create account'}
