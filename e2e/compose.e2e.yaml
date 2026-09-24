@@ -18,6 +18,8 @@ services:
   web-server-prod:
     build:
       context: ./web-server/src
+      additional_contexts:
+        root: .
     environment:
       - NODE_ENV=production
 

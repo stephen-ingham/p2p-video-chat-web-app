@@ -5,6 +5,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.prod
+      # The repo root, for the shared colors.json (see Dockerfile.prod).
+      additional_contexts:
+        root: ../..
     image: europe-west2-docker.pkg.dev/signalling-api/voneo/voneo-frontend:1.0.0
     ports:
       - "8080:8080"
@@ -15,6 +18,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
+      additional_contexts:
+        root: ../..
     image: web-server-dev:1.0.0
     ports:
       - "4321:4321"
@@ -22,7 +27,11 @@ services:
       watch:
         - action: sync
           path: .
-          target: /app
+          target: /voneo/web-server/src
+        # The Tailwind plugin reads colors.json once at startup.
+        - action: sync+restart
+          path: ../../colors.json
+          target: /voneo/colors.json
     environment:
       - NODE_ENV=${NODE_ENV}
       - NGROK_HOST=${NGROK_HOST}

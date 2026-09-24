@@ -1,0 +1,88 @@
+{
+  "$description": "Voneo's colour palette, shared by the web app and the mobile app. The web app reads it through a Tailwind plugin (web-server/src/src/styles/colors-plugin.mjs) and the mobile app imports it directly (mobile-app/src/theme/theme.ts). Contrast ratios are WCAG, against the surface each colour is used on.",
+  "canvas": {
+    "value": "#09090b",
+    "tailwind": "zinc-950",
+    "use": "Screen background"
+  },
+  "surface": {
+    "value": "#18181b",
+    "tailwind": "zinc-900",
+    "use": "Cards, video tiles, fields placed directly on the canvas"
+  },
+  "surface-raised": {
+    "value": "#27272a",
+    "tailwind": "zinc-800",
+    "use": "Fields inside cards, tab bars, icon circles, hover on surface"
+  },
+  "surface-active": {
+    "value": "#3f3f46",
+    "tailwind": "zinc-700",
+    "use": "Selected tab, avatars, secondary icon buttons"
+  },
+  "surface-active-hover": {
+    "value": "#52525b",
+    "tailwind": "zinc-600",
+    "use": "Hover/pressed state of surface-active"
+  },
+  "line": {
+    "value": "#27272a",
+    "tailwind": "zinc-800",
+    "use": "Decorative dividers and card edges (not a control boundary)"
+  },
+  "line-strong": {
+    "value": "#3f3f46",
+    "tailwind": "zinc-700",
+    "use": "Stronger decorative dividers"
+  },
+  "line-control": {
+    "value": "#71717a",
+    "tailwind": "zinc-500",
+    "use": "Borders of inputs and outline controls: 3.1:1 on surface-raised, 3.7:1 on surface"
+  },
+  "ink": {
+    "value": "#f4f4f5",
+    "tailwind": "zinc-100",
+    "use": "Body text and headings: 16.1:1 or better"
+  },
+  "ink-soft": {
+    "value": "#d4d4d8",
+    "tailwind": "zinc-300",
+    "use": "Less prominent labels (sender names, badges): 13.5:1 on canvas"
+  },
+  "ink-muted": {
+    "value": "#a1a1aa",
+    "tailwind": "zinc-400",
+    "use": "Secondary text and placeholders: 5.8:1 or better, up to surface-raised"
+  },
+  "focus": {
+    "value": "#a1a1aa",
+    "tailwind": "zinc-400",
+    "use": "Keyboard focus rings: 5.8:1 or better, up to surface-raised"
+  },
+  "action": {
+    "value": "#f4f4f5",
+    "tailwind": "zinc-100",
+    "use": "Primary button background"
+  },
+  "action-hover": {
+    "value": "#e4e4e7",
+    "tailwind": "zinc-200",
+    "use": "Primary button hover/pressed"
+  },
+  "on-action": {
+    "value": "#18181b",
+    "tailwind": "zinc-900",
+    "use": "Text and icons on action: 16.1:1"
+  },
+  "danger": {
+    "value": "#f87171",
+    "tailwind": "red-400",
+    "use": "Errors and hang up: 5.4:1 or better, up to surface-raised"
+  },
+  "scrim": {
+    "value": "rgba(0, 0, 0, 0.6)",
+    "tailwind": "black/60",
+    "use": "Labels laid over video"
+  }
+}
