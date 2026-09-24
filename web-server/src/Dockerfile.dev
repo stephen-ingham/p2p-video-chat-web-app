@@ -3,13 +3,18 @@
 
 FROM dhi.io/node:26-alpine-dev AS dev
 
-WORKDIR /app
+# Mirrors the repo layout so the Tailwind colours plugin finds the shared
+# colors.json at ../../colors.json, as it does outside Docker.
+WORKDIR /voneo/web-server/src
 
 COPY package.json package-lock.json* .
 
 RUN --mount=type=cache,target=/root/.npm npm install
 
 COPY . .
+
+# Shared palette from the repo root, via the `root` build context.
+COPY --from=root colors.json /voneo/colors.json
 
 ENV HOST=0.0.0.0
 ENV PORT=4321
