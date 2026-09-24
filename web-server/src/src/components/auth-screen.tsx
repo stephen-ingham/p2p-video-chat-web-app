@@ -184,12 +184,13 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 									<Input
 										type="email"
 										placeholder="Email"
+										aria-label="Email"
 										value={loginForm.email}
 										onChange={(event) => {
 											setLoginForm((f) => ({...f, email: event.target.value}));
 										}}
 										required
-										className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-zinc-600"
+										className="bg-zinc-800 border-zinc-500 text-zinc-100 placeholder:text-zinc-400 focus-visible:ring-zinc-400"
 										suppressHydrationWarning={true}
 										data-testid="login-email"
 									/>
@@ -204,6 +205,7 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 									<Input
 										type="password"
 										placeholder="Password"
+										aria-label="Password"
 										value={loginForm.password}
 										onChange={(event) => {
 											setLoginForm((f) => ({
@@ -212,11 +214,15 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 											}));
 										}}
 										required
-										className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-zinc-600"
+										className="bg-zinc-800 border-zinc-500 text-zinc-100 placeholder:text-zinc-400 focus-visible:ring-zinc-400"
 										suppressHydrationWarning={true}
 										data-testid="login-password"
 									/>
-									{error && <p className="text-sm text-red-400">{error}</p>}
+									{error && (
+										<p role="alert" className="text-sm text-red-400">
+											{error}
+										</p>
+									)}
 									<Button
 										type="submit"
 										disabled={loading || !isLoginValid}
@@ -239,6 +245,7 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 									<Input
 										type="text"
 										placeholder="Username"
+										aria-label="Username"
 										value={registerForm.username}
 										onChange={(event) => {
 											setRegisterForm((f) => ({
@@ -248,7 +255,7 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 										}}
 										required
 										minLength={3}
-										className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-zinc-600"
+										className="bg-zinc-800 border-zinc-500 text-zinc-100 placeholder:text-zinc-400 focus-visible:ring-zinc-400"
 										suppressHydrationWarning={true}
 										data-testid="register-username"
 									/>
@@ -263,6 +270,7 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 									<Input
 										type="email"
 										placeholder="Email"
+										aria-label="Email"
 										value={registerForm.email}
 										onChange={(event) => {
 											setRegisterForm((f) => ({
@@ -271,7 +279,7 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 											}));
 										}}
 										required
-										className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-zinc-600"
+										className="bg-zinc-800 border-zinc-500 text-zinc-100 placeholder:text-zinc-400 focus-visible:ring-zinc-400"
 										suppressHydrationWarning={true}
 										data-testid="register-email"
 									/>
@@ -286,6 +294,7 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 									<Input
 										type="password"
 										placeholder="Password"
+										aria-label="Password"
 										value={registerForm.password}
 										onChange={(event) => {
 											setRegisterForm((f) => ({
@@ -295,7 +304,7 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 										}}
 										required
 										minLength={6}
-										className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-zinc-600"
+										className="bg-zinc-800 border-zinc-500 text-zinc-100 placeholder:text-zinc-400 focus-visible:ring-zinc-400"
 										suppressHydrationWarning={true}
 										data-testid="register-password"
 									/>
@@ -307,7 +316,11 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 											{registerPasswordError}
 										</p>
 									)}
-									{error && <p className="text-sm text-red-400">{error}</p>}
+									{error && (
+										<p role="alert" className="text-sm text-red-400">
+											{error}
+										</p>
+									)}
 									<Button
 										type="submit"
 										disabled={loading || !isRegisterValid}

@@ -42,7 +42,7 @@ export default function ChatPanel({
 			<ScrollArea className="flex-1 px-4 py-3">
 				<div className="flex flex-col gap-3">
 					{messages.length === 0 && (
-						<p className="text-xs text-zinc-500 text-center py-4">
+						<p className="text-xs text-zinc-400 text-center py-4">
 							No messages yet
 						</p>
 					)}
@@ -82,13 +82,15 @@ export default function ChatPanel({
 						if (event.key === 'Enter') handleSend();
 					}}
 					placeholder="Type a message…"
-					className="bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-zinc-600"
+					aria-label="Chat message"
+					className="bg-zinc-900 border-zinc-500 text-zinc-100 placeholder:text-zinc-400 focus-visible:ring-zinc-400"
 					suppressHydrationWarning={true}
 					data-testid="chat-message-input"
 				/>
 				<Button
 					onClick={handleSend}
 					size="icon"
+					aria-label="Send message"
 					className="bg-zinc-700 hover:bg-zinc-600 shrink-0"
 					data-testid="chat-send-button"
 				>

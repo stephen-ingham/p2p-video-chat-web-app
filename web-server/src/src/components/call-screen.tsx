@@ -266,7 +266,8 @@ export default function CallScreen({
 								setJoinInput(event.target.value);
 							}}
 							placeholder="Enter call ID"
-							className="w-64 bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-zinc-600"
+							aria-label="Call ID"
+							className="w-64 bg-zinc-900 border-zinc-500 text-zinc-100 placeholder:text-zinc-400 focus-visible:ring-zinc-400"
 							suppressHydrationWarning={true}
 							data-testid="join-call-input"
 						/>
@@ -291,7 +292,11 @@ export default function CallScreen({
 							{joinInputError}
 						</p>
 					)}
-					{error && <p className="text-sm text-red-400 w-full">{error}</p>}
+					{error && (
+						<p role="alert" className="text-sm text-red-400 w-full">
+							{error}
+						</p>
+					)}
 				</div>
 			)}
 
