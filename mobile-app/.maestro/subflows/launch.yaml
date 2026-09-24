@@ -16,10 +16,24 @@ appId: com.voneo.app
       true: ${DEV_CLIENT == 'true'}
     commands:
       # A link sent before the launcher has finished starting is ignored.
-      # The launcher can sit on a blank screen for a while on a cold start.
+      # The launcher can sit on a blank screen for a while on a cold start,
+      # and a busy emulator can cover it with a "System UI isn't responding"
+      # dialog, which hides it from Maestro: wait for either, and wait out
+      # any such dialog.
+      - extendedWaitUntil:
+          visible: "DEVELOPMENT SERVERS|.*isn't responding"
+          timeout: 90000
+      - repeat:
+          times: 3
+          while:
+            visible: ".*isn't responding"
+          commands:
+            - tapOn: "Wait"
+            - waitForAnimationToEnd:
+                timeout: 3000
       - extendedWaitUntil:
           visible: "DEVELOPMENT SERVERS"
-          timeout: 90000
+          timeout: 30000
       - openLink: "exp+voneo://expo-development-client/?url=http%3A%2F%2F10.0.2.2%3A8081&disableOnboarding=1"
       # Once the JS loads, the dev client opens a sheet over the app: its
       # one-off "This is the developer menu" intro (clearState resets it;
