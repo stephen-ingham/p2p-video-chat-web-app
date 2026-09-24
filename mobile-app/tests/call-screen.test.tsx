@@ -23,7 +23,14 @@ const mockedSignalling = jest.mocked(signalling);
 const mockedWebrtc = jest.mocked(webrtc);
 
 const socket = {send: jest.fn(), close: jest.fn(), addEventListener: jest.fn()};
-const stream = {toURL: () => 'local-stream', release: jest.fn()};
+const audioTrack = {enabled: true};
+const videoTrack = {enabled: true};
+const stream = {
+	toURL: () => 'local-stream',
+	release: jest.fn(),
+	getAudioTracks: () => [audioTrack],
+	getVideoTracks: () => [videoTrack],
+};
 const validCallId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 const session = {
 	token: 'jwt-abc',
@@ -33,6 +40,8 @@ const session = {
 
 beforeEach(() => {
 	jest.resetAllMocks();
+	audioTrack.enabled = true;
+	videoTrack.enabled = true;
 	mockedApi.getIceServers.mockResolvedValue([]);
 	mockedApi.leaveCall.mockResolvedValue(undefined);
 	mockedWebrtc.getLocalStream.mockResolvedValue(
@@ -126,13 +135,31 @@ describe('CallScreen', () => {
 		expect(screen.getByTestId('create-call-button')).toBeOnTheScreen();
 	});
 
+	it('mutes the mic and turns the camera off from labelled switches', async () => {
+		mockedApi.createCall.mockResolvedValueOnce(validCallId);
+		await renderScreen();
+		await fireEvent.press(screen.getByTestId('create-call-button'));
+		await screen.findByTestId('call-id');
+
+		const mic = screen.getByRole('switch', {name: 'Microphone'});
+		expect(mic).toBeChecked();
+		await fireEvent.press(mic);
+		expect(screen.getByRole('switch', {name: 'Microphone'})).not.toBeChecked();
+		expect(audioTrack.enabled).toBe(false);
+
+		await fireEvent.press(screen.getByRole('switch', {name: 'Camera'}));
+		expect(videoTrack.enabled).toBe(false);
+		expect(screen.queryByTestId('local-video')).toBeNull();
+		expect(screen.getByLabelText('Your camera is off')).toBeOnTheScreen();
+	});
+
 	it('hangs up: leaves the call and releases media', async () => {
 		mockedApi.createCall.mockResolvedValueOnce(validCallId);
 		await renderScreen();
 		await fireEvent.press(screen.getByTestId('create-call-button'));
 		await screen.findByTestId('call-id');
 
-		await fireEvent.press(screen.getByTestId('hang-up-button'));
+		await fireEvent.press(screen.getByRole('button', {name: 'Hang up'}));
 
 		expect(await screen.findByTestId('create-call-button')).toBeOnTheScreen();
 		expect(socket.close).toHaveBeenCalled();

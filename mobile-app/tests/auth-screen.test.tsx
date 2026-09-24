@@ -66,6 +66,18 @@ describe('AuthScreen', () => {
 		});
 	});
 
+	it('labels its fields and marks the selected tab for screen readers', async () => {
+		await render(<AuthScreen onAuthenticated={onAuthenticated} />);
+
+		expect(screen.getByLabelText('Email')).toBeOnTheScreen();
+		expect(screen.getByLabelText('Password')).toBeOnTheScreen();
+		expect(screen.getByRole('tab', {name: 'Login'})).toBeSelected();
+
+		await fireEvent.press(screen.getByRole('tab', {name: 'Register'}));
+		expect(screen.getByRole('tab', {name: 'Register'})).toBeSelected();
+		expect(screen.getByLabelText('Username')).toBeOnTheScreen();
+	});
+
 	it('shows an error and stays logged out when login fails', async () => {
 		mockedApi.login.mockRejectedValueOnce(new Error('400'));
 		await render(<AuthScreen onAuthenticated={onAuthenticated} />);
