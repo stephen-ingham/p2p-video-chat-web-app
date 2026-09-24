@@ -30,6 +30,8 @@ export function useCall({
 	);
 	const [participants, setParticipants] = useState<string[]>([]);
 	const [chat, setChat] = useState<ChatLine[]>([]);
+	const [micOn, setMicOn] = useState(true);
+	const [cameraOn, setCameraOn] = useState(true);
 	const session = useRef<CallSession | undefined>(undefined);
 	const localStream = useRef<MediaStream | undefined>(undefined);
 	const nextChatId = useRef(0);
@@ -50,6 +52,18 @@ export function useCall({
 		setRemoteStreams({});
 		setParticipants([]);
 		setChat([]);
+		setMicOn(true);
+		setCameraOn(true);
+	}
+
+	// Muting disables the local track rather than removing it, so peers keep
+	// their connection and just receive silence / black frames.
+	function setTracksEnabled(kind: 'audio' | 'video', enabled: boolean) {
+		const tracks =
+			kind === 'audio'
+				? localStream.current?.getAudioTracks()
+				: localStream.current?.getVideoTracks();
+		for (const track of tracks ?? []) track.enabled = enabled;
 	}
 
 	// Leave the call's media and socket behind if the screen goes away.
@@ -107,6 +121,16 @@ export function useCall({
 		enter,
 		hangUp,
 		teardown,
+		micOn,
+		cameraOn,
+		toggleMic() {
+			setTracksEnabled('audio', !micOn);
+			setMicOn(!micOn);
+		},
+		toggleCamera() {
+			setTracksEnabled('video', !cameraOn);
+			setCameraOn(!cameraOn);
+		},
 		sendChat(message: string) {
 			session.current?.sendChat(message);
 		},
