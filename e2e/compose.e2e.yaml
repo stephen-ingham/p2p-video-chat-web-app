@@ -28,7 +28,8 @@ services:
       MYSQL_ROOT_PASSWORD: e2e-test-password
       MYSQL_DATABASE: test-db
     healthcheck:
-      test: ['CMD-SHELL', 'mysqladmin ping -h localhost -pe2e-test-password']
+      # TCP, not the socket: see the mysql-db healthcheck in web-socket-api/src/compose.yaml.
+      test: ['CMD-SHELL', 'mysqladmin ping -h 127.0.0.1 -P 3306 -pe2e-test-password']
       interval: 10s
       timeout: 5s
       retries: 5

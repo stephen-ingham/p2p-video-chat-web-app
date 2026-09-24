@@ -59,7 +59,16 @@ services:
       ports:
         - "${DB_PORT:-3306}:3306"
       healthcheck:
-        test: ["CMD-SHELL", "mysqladmin ping -h localhost -p${DB_PASSWORD}"]
+        # Over TCP (127.0.0.1), which is how the API connects. `-h localhost`
+        # uses the Unix socket, and on first start MySQL's entrypoint runs a
+        # temporary server with networking off: a socket ping passes then,
+        # marking MySQL healthy (starting the API) while TCP is still refused.
+        test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -P 3306 -p${DB_PASSWORD}"]
         interval: 10s
         timeout: 5s
         retries: 5
+        # First-time initialisation takes ~1.5 min on Docker Desktop. Failed
+        # checks during it don't count towards `retries`, and it checks
+        # every 3s meanwhile so dependants start soon after MySQL is ready.
+        start_period: 180s
+        start_interval: 3s
