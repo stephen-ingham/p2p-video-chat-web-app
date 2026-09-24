@@ -121,9 +121,10 @@ video-chat-application/
 │           │   ├── use-token-worker.ts # Hook — module-level singleton Worker
 │           │   └── utils.ts     # shadcn cn() class utility
 │           ├── styles/
-│           │   └── global.css   # Tailwind v4 + shadcn CSS variable theme
+│           │   ├── global.css   # Tailwind v4 + shadcn CSS variable theme
+│           │   └── colors-plugin.mjs # Adds the shared colors.json palette as Tailwind colours
 │           └── middleware.ts    # CSP header (nonce-based, skipped in dev mode)
-├── mobile-app/                  # Expo (React Native) Android app — react-native-webrtc for calling, talks to web-socket-api directly (no shared code with web-server)
+├── mobile-app/                  # Expo (React Native) Android app — react-native-webrtc for calling, talks to web-socket-api directly (shares only colors.json with web-server)
 ├── infra/                       # Pulumi (TypeScript) IaC — provisions GCP resources (Cloud Run service, Cloud SQL instance, Secret Manager secrets) for production deployments
 │   ├── turn-server.ts           # Self-hosted coturn STUN/TURN VM (prod stack only)
 │   └── coturn/turnserver.conf   # Base coturn config shared by the prod VM and the CI NAT e2e stack
@@ -140,6 +141,7 @@ video-chat-application/
 │   └── nat/                     # Same-network vs cross-network (TURN relay) call tests
 ├── .github/workflows/           # CI/CD workflows
 ├── .husky/                      # Git hooks
+├── colors.json                  # Shared colour palette for the web and mobile apps (see Colours)
 ├── .env.example                 # Example environment variables for local setup
 ├── .prettierrc                  # Prettier configuration
 ├── package.json                 # Root scripts to run both servers
@@ -558,6 +560,15 @@ Hook that wraps the `token-worker.js` Web Worker. The Worker instance is a **mod
 
 Plain JS Web Worker served from `public/`. Owns the `TokenService` class which holds the JWT access token in a private field. Handles all `fetch` calls to the Express API so the token never touches the main thread.
 
+### Colours (`colors.json`)
+
+The web and mobile apps share one colour palette, `colors.json` in the repo root. Each entry has a role-based name (`canvas`, `surface`, `ink-muted`, `line-control`, `focus`, `danger`…), its hex value, and what it's for, including its WCAG contrast ratio where it's used for text or control edges.
+
+- **Web:** `src/styles/colors-plugin.mjs` adds each entry as a Tailwind colour, so components use classes like `bg-surface` and `text-ink-muted` rather than raw `zinc-*` classes.
+- **Mobile:** `mobile-app/src/theme/theme.ts` imports the same file.
+
+The file sits outside `web-server/src`, which is the web images' Docker build context. So the Dockerfiles copy it in from a second build context named `root` (the repo root), set in `compose.yaml` and `e2e/compose.e2e.yaml` (`additional_contexts`) and in the setup scripts (`--build-context root=.`). The images use `/voneo/web-server/src` as their working directory, so the plugin finds `colors.json` at the same relative path as in the repo. `npm run dev` restarts the web container when `colors.json` changes.
+
 ### CSP middleware (`src/middleware.ts`)
 
 Sets a nonce-based `Content-Security-Policy` header on every response in production. Skipped in dev mode to avoid blocking Vite's HMR and dev toolbar scripts. Directives cover `script-src`, `worker-src`, `connect-src` (API + WebSocket), `media-src`, `style-src`, `img-src`, `object-src`, and `base-uri`.
@@ -583,7 +594,8 @@ This image is used in GCP deployments - it is pushed to Artifact Registry and re
 `mobile-app/` is an Expo (React Native) Android app. It talks to the signalling API directly, with no code shared with `web-server`, and uses `react-native-webrtc` for calls. Its signalling matches the web client's, so web and mobile users can be on the same call.
 
 - `app.tsx` — shows `AuthScreen` while logged out and `CallScreen` once logged in. It uses plain state rather than Expo Router: there are only two screens, and Expo Router would need a new native build.
-- `src/screens/` — `auth-screen.tsx` (login/register), `call-screen.tsx` (create or join a call), `in-call-view.tsx` (local and remote video, participants, chat, hang up).
+- `src/screens/` — `auth-screen.tsx` (login/register), `call-screen.tsx` (create or join a call), `in-call-view.tsx` (full-screen remote video, your video in a corner, mic/camera/chat/hang-up controls), `chat-sheet.tsx` (chat as a bottom sheet).
+- `src/theme/theme.ts` and `src/components/` — the look shared with the web app: the palette from the root `colors.json`, Geist type scale, spacing and 48dp touch targets, and the `Button`, `IconButton`, `TextField`, `Tabs` and `Card` primitives. `metro.config.js` lets Metro read `colors.json` from outside `mobile-app/`.
 - `src/lib/config.ts` — API base URL, from `EXPO_PUBLIC_API_URL`. The default, `http://10.0.2.2:3000`, is the Android emulator's alias for the host machine, direct to the API port. It suits the `LOCAL=true` dev stack. Expo inlines the variable when Metro starts, so restart Metro after changing it.
 - `src/lib/call-url.ts` — builds a call's WebSocket URL from its `callID` (`ws://<host>/ws/:callID` for an `http` API URL, `wss://<host>/wss/:callID` for `https`), and validates call IDs.
 - `src/lib/api.ts` / `src/lib/signalling.ts` — REST client (including ICE servers) and the WebSocket join handshake.
@@ -593,7 +605,7 @@ This image is used in GCP deployments - it is pushed to Artifact Registry and re
 
 **Running it against the dev stack:**
 
-The app needs a development build, because Expo Go doesn't include `react-native-webrtc`'s native code. Build it once with `eas build --profile development --platform android` and install the APK on the emulator. Rebuild only after adding native packages or changing native config in `app.json`.
+The app needs a development build, because Expo Go doesn't include `react-native-webrtc`'s native code. Build it once with `eas build --profile development --platform android` and install the APK on the emulator. Rebuild only after adding native packages or changing native config in `app.json`, including the fonts embedded by the `expo-font` config plugin.
 
 1. Set `LOCAL=true` in the root `.env` and run `npm run dev`.
 2. Start an Android emulator (Android Studio → Device Manager).
@@ -603,10 +615,10 @@ The app needs a development build, because Expo Go doesn't include `react-native
 
 **Tests:**
 
-- `npm test` in `mobile-app/` runs Jest (`jest-expo` preset) with [React Native Testing Library](https://callstack.github.io/react-native-testing-library/). Tests live in `mobile-app/tests/`: unit tests for `api.ts`, `call-url.ts` and `call-session.ts`, and component tests for the auth and call screens with the API, signalling and WebRTC modules mocked. `mobile-ci.yml` runs them on PRs that touch `mobile-app/`.
-- [Maestro](https://maestro.mobile.dev/) flows in `mobile-app/.maestro/` cover logging in, creating a call and hanging up, and a failed login. They need the dev-client build installed and the `LOCAL=true` dev stack running, and are run by `mobile-e2e.yml`, whose build step is still a TODO.
+- `npm test` in `mobile-app/` runs Jest (`jest-expo` preset) with [React Native Testing Library](https://callstack.github.io/react-native-testing-library/). Tests live in `mobile-app/tests/`: unit tests for `api.ts`, `call-url.ts` and `call-session.ts`, and component tests for the auth and call screens with the API, signalling and WebRTC modules mocked. These include accessibility checks (labelled fields, tab and switch states, button names). `mobile-ci.yml` runs them on PRs that touch `mobile-app/` or `colors.json`.
+- [Maestro](https://maestro.mobile.dev/) flows in `mobile-app/.maestro/` cover logging in, creating a call and hanging up, and a failed login. They need the dev-client build installed and the `LOCAL=true` dev stack running, and are run by `mobile-e2e.yml`, which builds a release APK on the runner and runs them on an emulator.
 
-Avoid regular expressions in `mobile-app/` code: XO requires the `v` flag on them, and Hermes (React Native's JavaScript engine) rejects that flag when the app loads.
+Avoid regular expressions in `mobile-app/` app code: XO requires the `v` flag on them, and Hermes (React Native's JavaScript engine) rejects that flag when the app loads. Node-only config files such as `metro.config.js` don't run on Hermes, so they're exempt.
 
 A physical phone can't reach `10.0.2.2`. Point `EXPO_PUBLIC_API_URL` at your machine's LAN IP, or at the ngrok tunnel with `LOCAL=false`.
 

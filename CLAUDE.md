@@ -131,16 +131,18 @@ Astro (SSR via `@astrojs/node`) with React islands, Tailwind v4, shadcn/ui. Path
 - `src/lib/use-token-worker.ts` — hook wrapping `token-worker.js`; the Worker instance is a **module-level singleton** so all components share one instance/token.
 - `public/token-worker.js` — plain JS Web Worker owning `TokenService`, which holds the JWT access token in a private field and performs all `fetch` calls to the Express API, so the token never touches the main thread.
 - `src/middleware.ts` — nonce-based CSP header, applied in production only (skipped in dev to avoid blocking Vite HMR/dev toolbar).
+- Colours come from the shared palette in the repo-root `colors.json` (also used by the mobile app): `src/styles/colors-plugin.mjs` adds each entry as a Tailwind colour (`bg-surface`, `text-ink-muted`, `border-line-control`, `ring-focus`…). Use those, not raw `zinc-*` classes. Because the file is outside `web-server/src`, both Dockerfiles use `WORKDIR /voneo/web-server/src` and `COPY --from=root colors.json /voneo/colors.json`, with the `root` build context set in `compose.yaml` / `e2e/compose.e2e.yaml` (`additional_contexts`) and the setup scripts (`--build-context root=.`); `npm run dev` restarts the container when `colors.json` changes.
 
 See `web-server/src/CLAUDE.md` for Astro-specific dev-server guidance (background mode via `astro dev --background`).
 
 ### Mobile app (`mobile-app/`)
 
 Expo (React Native) Android app, see `mobile-app/CLAUDE.md` for Expo-specific rules. It talks to the signalling API directly and uses `react-native-webrtc`, so it needs the EAS dev-client build (Expo Go can't load it; run with `npx expo start --dev-client`).
-- `app.tsx` switches between `src/screens/auth-screen.tsx` and `call-screen.tsx` (+ `in-call-view.tsx`) with plain state, not Expo Router (two screens, and Expo Router needs a native rebuild).
+- `app.tsx` switches between `src/screens/auth-screen.tsx` and `call-screen.tsx` (+ `in-call-view.tsx`, `chat-sheet.tsx`) with plain state, not Expo Router (two screens, and Expo Router needs a native rebuild).
+- UI matches the web app: `src/theme/theme.ts` reads the repo-root `colors.json` (so `metro.config.js` watches the repo root, blocking everything there but `colors.json` and `mobile-app/`) and defines the Geist type scale, spacing and 48dp touch size; `src/components/` holds `Button`, `IconButton`, `TextField`, `Tabs`, `Card`. Geist is embedded by the `expo-font` config plugin in `app.json`, so font or icon (`react-native-svg`) changes need a new dev-client build. Import Lucide icons one at a time (`lucide-react-native/icons/<name>`): Metro doesn't tree-shake the package index.
 - `src/lib/`: `config.ts` (API URL from `EXPO_PUBLIC_API_URL`, default `http://10.0.2.2:3000` for the emulator against the `LOCAL=true` stack), `call-url.ts` (WS URL from `callID`, call ID check), `api.ts`, `signalling.ts` (WS join handshake), `call-session.ts` (WebRTC signalling matching the web client's `rtc-utils.ts`, peers injected via `call-types.ts`), `webrtc.ts` (the only `react-native-webrtc` user), `use-call.ts` (hook wiring them together).
-- Tests: `npm test` in `mobile-app/` runs Jest (`jest-expo`) + React Native Testing Library over `mobile-app/tests/`; Maestro flows in `mobile-app/.maestro/` (need the dev build + dev stack; `mobile-e2e.yml`'s build step is still a TODO).
-- No regexes in `mobile-app/`: XO requires the `v` flag, which Hermes rejects at load.
+- Tests: `npm test` in `mobile-app/` runs Jest (`jest-expo`) + React Native Testing Library over `mobile-app/tests/`; Maestro flows in `mobile-app/.maestro/` (need the dev build + dev stack locally; `mobile-e2e.yml` builds a release APK with `expo prebuild` + Gradle and runs them on an emulator). `tests/setup.ts` stubs safe-area insets and reduced motion with plain functions, because the tests' `jest.resetAllMocks()` wipes the libraries' own `jest.fn()` mocks.
+- No regexes in `mobile-app/` app code: XO requires the `v` flag, which Hermes rejects at load. (Node-only config like `metro.config.js` is exempt.)
 
 ### Infra (`infra/`)
 
