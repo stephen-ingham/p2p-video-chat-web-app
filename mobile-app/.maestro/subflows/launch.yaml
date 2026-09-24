@@ -1,9 +1,10 @@
 # Fresh launch with camera/mic allowed. Against the dev-client build, pass
-# `-e DEV_CLIENT=true`: clearState drops the dev client's last server, so a
-# deep link points it straight at Metro (the emulator reaches the host's 8081
-# at 10.0.2.2) and skips its launcher and first-run dev menu intro, whose
-# timing proved too flaky to tap through. CI's build has the JS bundled in and
-# no dev client, so it skips that step.
+# `-e DEV_CLIENT=true`: clearState drops the dev client's last server, so once
+# its launcher is up a deep link points it at Metro (the emulator reaches the
+# host's 8081 at 10.0.2.2), then the dev menu sheet it opens over the app is
+# closed. CI's build has the JS bundled in and no dev client, so it skips that.
+# Slow emulators may need MAESTRO_DRIVER_STARTUP_TIMEOUT (ms) raised for
+# Maestro's on-device driver to start.
 appId: com.voneo.app
 ---
 - launchApp:
@@ -14,7 +15,38 @@ appId: com.voneo.app
     when:
       true: ${DEV_CLIENT == 'true'}
     commands:
+      # A link sent before the launcher has finished starting is ignored.
+      # The launcher can sit on a blank screen for a while on a cold start.
+      - extendedWaitUntil:
+          visible: "DEVELOPMENT SERVERS"
+          timeout: 90000
       - openLink: "exp+voneo://expo-development-client/?url=http%3A%2F%2F10.0.2.2%3A8081&disableOnboarding=1"
+      # Once the JS loads, the dev client opens a sheet over the app: its
+      # one-off "This is the developer menu" intro (clearState resets it;
+      # disableOnboarding doesn't stop it in SDK 57) or the dev menu itself.
+      # While it's open the app underneath is hidden from Maestro. Wait for
+      # the app or a sheet (bundling can take a while), then close sheets
+      # (Continue on the intro, back on the menu) until none is left.
+      - extendedWaitUntil:
+          visible: "Runtime version.*|Peer-to-peer video calls.*"
+          timeout: 120000
+      - waitForAnimationToEnd:
+          timeout: 5000
+      - repeat:
+          times: 3
+          while:
+            visible: "Runtime version.*"
+          commands:
+            - tapOn:
+                text: "Continue"
+                optional: true
+            - runFlow:
+                when:
+                  visible: "Runtime version.*"
+                commands:
+                  - back
+            - waitForAnimationToEnd:
+                timeout: 3000
 # Busy emulators (freshly booted, or CI's) can show a system "<app> isn't
 # responding" dialog over the app; waiting it out is harmless.
 - runFlow:
