@@ -1,14 +1,17 @@
 $ErrorActionPreference = "Stop"
 
 # Runs the mobile app's Maestro flows (mobile-app/.maestro/) against the
-# dev-client build on a running Android emulator/device, starting what they
-# need first and cleaning up afterwards:
+# dev-client build on an Android emulator/device, starting what they need
+# first and cleaning up afterwards:
+#   - an Android emulator, if no device is connected (the first AVD, or
+#     $env:VONEO_AVD). The emulator the flows ran on is closed at the end,
+#     whoever started it; a physical device is left alone.
 #   - the signalling API + MySQL containers, with LOCAL=true and NODE_ENV=dev
 #     (the flows log in as the seeded users, at 10.0.2.2:3000)
 #   - Metro, serving the app's JS to the dev client
-# Anything already running (e.g. from `npm run dev`) is reused and left
-# running. Extra args are passed to `maestro test` in place of the default
-# `.maestro/`, e.g. `npm run test:maestro -- .maestro/create-call.yaml`.
+# An API or Metro that's already running (e.g. from `npm run dev`) is reused
+# and left running. Extra args are passed to `maestro test` in place of the
+# default `.maestro/`, e.g. `npm run test:maestro -- .maestro/create-call.yaml`.
 
 Set-Location (Join-Path $PSScriptRoot "..")
 $startedAt = Get-Date
@@ -31,19 +34,51 @@ if (-not (Test-Path $maestro)) {
 	Fail "Maestro not found on PATH or in %USERPROFILE%\.maestro-cli. Install it: https://docs.maestro.dev/getting-started/installing-maestro"
 }
 
-$devices = adb devices | Select-String "\tdevice$"
-if (-not $devices) {
-	Fail "no Android emulator/device connected (adb devices). Start one first."
-}
-if (-not (adb shell pm list packages com.voneo.app | Select-String "com.voneo.app")) {
-	Fail "the Voneo dev client isn't installed on the device. Build it with 'eas build --profile development --platform android' and install the APK."
-}
-
 $compose = @("--env-file", ".env", "-f", "web-socket-api/src/compose.yaml")
 $startedApi = $false
 $metro = $null
+$device = $null
+
+function Get-Device {
+	$line = adb devices | Select-String "^(\S+)\tdevice$" | Select-Object -First 1
+	if ($line) { $line.Matches[0].Groups[1].Value }
+}
 
 try {
+	# --- Emulator / device ------------------------------------------------
+
+	$device = Get-Device
+	if ($device) {
+		Write-Output "Using connected device $device."
+	} else {
+		$sdk = if ($env:ANDROID_HOME) { $env:ANDROID_HOME } else { Join-Path $env:LOCALAPPDATA "Android\Sdk" }
+		$emulator = Join-Path $sdk "emulator\emulator.exe"
+		if (-not (Test-Path $emulator)) { Fail "no device connected, and no emulator found at $emulator." }
+		$avd = if ($env:VONEO_AVD) { $env:VONEO_AVD } else { & $emulator -list-avds | Select-Object -First 1 }
+		if (-not $avd) { Fail "no device connected, and no emulator (AVD) exists. Create one in Android Studio's Device Manager." }
+		Write-Output "Booting emulator $avd..."
+		# Cold boot without snapshots (loading the old quick-boot snapshot can
+		# fail and hang the boot), and guest RAM not backed by a file on disk
+		# (otherwise it writes a RAM-sized ram.img).
+		Start-Process -FilePath $emulator -WindowStyle Minimized -ArgumentList `
+			"-avd", $avd, "-no-snapshot-load", "-no-snapshot-save", "-feature", "-QuickbootFileBacked", "-no-audio", "-no-boot-anim"
+		# adb complains on stderr ("device offline") while it boots, which
+		# "Stop" would turn into a terminating error.
+		$ErrorActionPreference = "Continue"
+		$deadline = (Get-Date).AddMinutes(5)
+		do {
+			Start-Sleep -Seconds 5
+			$device = Get-Device
+			$booted = $device -and ((adb -s $device shell getprop sys.boot_completed 2>$null) -match "1")
+			if ((Get-Date) -gt $deadline) { Fail "the emulator didn't finish booting within 5 minutes." }
+		} until ($booted)
+		$ErrorActionPreference = "Stop"
+	}
+
+	if (-not (adb -s $device shell pm list packages com.voneo.app | Select-String "com.voneo.app")) {
+		Fail "the Voneo dev client isn't installed on $device. Build it with 'eas build --profile development --platform android' and install the APK."
+	}
+
 	# --- API + MySQL ------------------------------------------------------
 
 	if (-not (docker compose @compose ps --status running -q signalling-server-dev)) {
@@ -109,7 +144,7 @@ try {
 
 	Push-Location mobile-app
 	$ErrorActionPreference = "Continue"
-	& $maestro test -e DEV_CLIENT=true $flows
+	& $maestro --device $device test -e DEV_CLIENT=true $flows
 	$exitCode = $LASTEXITCODE
 	$ErrorActionPreference = "Stop"
 	Pop-Location
@@ -123,6 +158,10 @@ try {
 	if ($startedApi) {
 		Write-Output "Stopping the API + MySQL containers..."
 		docker compose @compose down
+	}
+	if ($device -like "emulator-*") {
+		Write-Output "Closing emulator $device..."
+		adb -s $device emu kill | Out-Null
 	}
 	# Each Maestro run leaves a ~220 MB copy of the app's APK in %TEMP%.
 	Get-ChildItem $env:TEMP -Filter "tmp*.apk" -File -ErrorAction SilentlyContinue |

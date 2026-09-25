@@ -2,14 +2,17 @@
 set -e
 
 # Runs the mobile app's Maestro flows (mobile-app/.maestro/) against the
-# dev-client build on a running Android emulator/device, starting what they
-# need first and cleaning up afterwards:
+# dev-client build on an Android emulator/device, starting what they need
+# first and cleaning up afterwards:
+#   - an Android emulator, if no device is connected (the first AVD, or
+#     $VONEO_AVD). The emulator the flows ran on is closed at the end,
+#     whoever started it; a physical device is left alone.
 #   - the signalling API + MySQL containers, with LOCAL=true and NODE_ENV=dev
 #     (the flows log in as the seeded users, at 10.0.2.2:3000)
 #   - Metro, serving the app's JS to the dev client
-# Anything already running (e.g. from `npm run dev`) is reused and left
-# running. Extra args are passed to `maestro test` in place of the default
-# `.maestro/`, e.g. `npm run test:maestro -- .maestro/create-call.yaml`.
+# An API or Metro that's already running (e.g. from `npm run dev`) is reused
+# and left running. Extra args are passed to `maestro test` in place of the
+# default `.maestro/`, e.g. `npm run test:maestro -- .maestro/create-call.yaml`.
 
 cd "$(dirname "$0")/.."
 
@@ -23,13 +26,10 @@ fail() {
 MAESTRO=$(command -v maestro || echo "$HOME/.maestro/bin/maestro")
 [ -x "$MAESTRO" ] || fail "Maestro not found on PATH or in ~/.maestro/bin. Install it: https://docs.maestro.dev/getting-started/installing-maestro"
 
-adb devices | grep -q $'\tdevice$' || fail "no Android emulator/device connected (adb devices). Start one first."
-adb shell pm list packages com.voneo.app | grep -q com.voneo.app ||
-	fail "the Voneo dev client isn't installed on the device. Build it with 'eas build --profile development --platform android' and install the APK."
-
 COMPOSE=(--env-file .env -f web-socket-api/src/compose.yaml)
 STARTED_API=false
 METRO_PID=""
+DEVICE=""
 # Each Maestro run leaves a ~220 MB copy of the app's APK in the temp dir.
 TEMP_DIR=${TMPDIR:-/tmp}
 STARTED_MARKER=$(mktemp)
@@ -43,10 +43,49 @@ cleanup() {
 		echo "Stopping the API + MySQL containers..."
 		docker compose "${COMPOSE[@]}" down || true
 	fi
+	case "$DEVICE" in
+	emulator-*)
+		echo "Closing emulator $DEVICE..."
+		adb -s "$DEVICE" emu kill >/dev/null 2>&1 || true
+		;;
+	esac
 	find "$TEMP_DIR" -maxdepth 1 -name 'tmp*.apk' -newer "$STARTED_MARKER" -delete 2>/dev/null || true
 	rm -f "$STARTED_MARKER"
 }
 trap cleanup EXIT
+
+# --- Emulator / device --------------------------------------------------------
+
+first_device() {
+	adb devices | awk -F'\t' '$2 == "device" { print $1; exit }'
+}
+
+DEVICE=$(first_device)
+if [ -n "$DEVICE" ]; then
+	echo "Using connected device $DEVICE."
+else
+	SDK=${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}}
+	[ -d "$SDK" ] || SDK=$HOME/Android/Sdk
+	EMULATOR=$SDK/emulator/emulator
+	[ -x "$EMULATOR" ] || fail "no device connected, and no emulator found at $EMULATOR."
+	AVD=${VONEO_AVD:-$("$EMULATOR" -list-avds | head -n 1)}
+	[ -n "$AVD" ] || fail "no device connected, and no emulator (AVD) exists. Create one in Android Studio's Device Manager."
+	echo "Booting emulator $AVD..."
+	# Cold boot without snapshots (loading the old quick-boot snapshot can
+	# fail and hang the boot), and guest RAM not backed by a file on disk
+	# (otherwise it writes a RAM-sized ram.img).
+	"$EMULATOR" -avd "$AVD" -no-snapshot-load -no-snapshot-save -feature -QuickbootFileBacked -no-audio -no-boot-anim >/dev/null 2>&1 &
+	for _ in $(seq 1 60); do
+		sleep 5
+		DEVICE=$(first_device)
+		[ -n "$DEVICE" ] && [ "$(adb -s "$DEVICE" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ] && break
+	done
+	[ "$(adb -s "$DEVICE" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ] ||
+		fail "the emulator didn't finish booting within 5 minutes."
+fi
+
+adb -s "$DEVICE" shell pm list packages com.voneo.app | grep -q com.voneo.app ||
+	fail "the Voneo dev client isn't installed on $DEVICE. Build it with 'eas build --profile development --platform android' and install the APK."
 
 # --- API + MySQL ------------------------------------------------------------
 
@@ -88,7 +127,7 @@ export MAESTRO_DRIVER_STARTUP_TIMEOUT=${MAESTRO_DRIVER_STARTUP_TIMEOUT:-180000}
 if [ $# -eq 0 ]; then set -- .maestro/; fi
 
 set +e
-(cd mobile-app && "$MAESTRO" test -e DEV_CLIENT=true "$@")
+(cd mobile-app && "$MAESTRO" --device "$DEVICE" test -e DEV_CLIENT=true "$@")
 EXIT_CODE=$?
 set -e
 
