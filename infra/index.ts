@@ -43,6 +43,32 @@ const apis = [
 );
 const afterApis = {dependsOn: apis};
 
+// Network //
+
+// Own VPC rather than the project's auto-created `default` one, so the
+// address ranges below are known and nothing depends on that network existing.
+const network = new gcp.compute.Network(
+	'vpc',
+	{name: `voneo-${stack}`, autoCreateSubnetworks: false},
+	afterApis,
+);
+const subnet = new gcp.compute.Subnetwork('vpc-subnet', {
+	name: `voneo-${stack}`,
+	region,
+	network: network.id,
+	ipCidrRange: '10.10.0.0/24',
+});
+// Regional external Application Load Balancers run their proxies in this
+// subnet; one is required per region and network before one can be created.
+const proxySubnet = new gcp.compute.Subnetwork('lb-proxy-subnet', {
+	name: `voneo-lb-proxy-${stack}`,
+	region,
+	network: network.id,
+	ipCidrRange: '10.10.2.0/23',
+	purpose: 'REGIONAL_MANAGED_PROXY',
+	role: 'ACTIVE',
+});
+
 // Secret Manager secrets //
 
 const dbPasswordSecret = new gcp.secretmanager.Secret(
@@ -96,7 +122,10 @@ const turnServer = turnEnabled
 			stack,
 			region,
 			zone,
+			network: network.id,
+			subnetwork: subnet.id,
 			turnSecret: config.requireSecret('turnSecret'),
+			dependsOn: apis,
 		})
 	: undefined;
 
@@ -376,22 +405,20 @@ const voneoBackend = new gcp.cloudrunv2.Service(
 	},
 );
 
-// Regional External ALB //
+// Regional External Application Load Balancer //
 
-// Regional IP
-const ip = new gcp.compute.Address('lb-ip', {
-	region,
-	networkTier: 'STANDARD',
-});
+const ip = new gcp.compute.Address(
+	'lb-ip',
+	{region, networkTier: 'STANDARD'},
+	afterApis,
+);
 
-// NEG for the backend Cloud Run service
+// Serverless NEGs point the load balancer at each Cloud Run service
 const backendNeg = new gcp.compute.RegionNetworkEndpointGroup('backend-neg', {
 	region,
 	networkEndpointType: 'SERVERLESS',
 	cloudRun: {service: voneoBackend.name},
 });
-
-// NEG for the frontend Cloud Run service
 const frontendNeg = new gcp.compute.RegionNetworkEndpointGroup('frontend-neg', {
 	region,
 	networkEndpointType: 'SERVERLESS',
@@ -402,19 +429,24 @@ const backendService = new gcp.compute.RegionBackendService('lb-backend', {
 	region,
 	protocol: 'HTTP',
 	loadBalancingScheme: 'EXTERNAL_MANAGED',
+	// Also the WebSocket connection limit, matching the Cloud Run timeout.
 	timeoutSec: 3600,
-	backends: [{group: backendNeg.id}],
+	backends: [
+		{group: backendNeg.id, balancingMode: 'UTILIZATION', capacityScaler: 1},
+	],
 });
-
 const frontendService = new gcp.compute.RegionBackendService('lb-frontend', {
 	region,
 	protocol: 'HTTP',
 	loadBalancingScheme: 'EXTERNAL_MANAGED',
 	timeoutSec: 30,
-	backends: [{group: frontendNeg.id}],
+	backends: [
+		{group: frontendNeg.id, balancingMode: 'UTILIZATION', capacityScaler: 1},
+	],
 });
 
-// Path-based routing: API + call routes → backend, everything else → frontend
+// Path-based routing: API, call and WebSocket routes → backend, everything
+// else → frontend. Same origin for both, so the web app needs no API URL.
 const urlMap = new gcp.compute.RegionUrlMap('lb-url-map', {
 	region,
 	defaultService: frontendService.id,
@@ -428,15 +460,31 @@ const urlMap = new gcp.compute.RegionUrlMap('lb-url-map', {
 		{
 			name: 'voneo-paths',
 			defaultService: frontendService.id,
-			pathRules: [{paths: ['/auth/*', '/call/*'], service: backendService.id}],
+			pathRules: [
+				{paths: ['/auth/*', '/call/*', '/wss/*'], service: backendService.id},
+			],
 		},
 	],
 });
 
-// Regional Google-managed SSL certificate via Certificate Manager
+// Google-managed TLS certificate. Regional certificates can only be
+// validated through DNS, via the CNAME in the `certDnsRecords` output.
+const certDnsAuthorization = new gcp.certificatemanager.DnsAuthorization(
+	'lb-cert-dns-auth',
+	{
+		name: `voneo-${stack}`,
+		location: region,
+		domain,
+		type: 'PER_PROJECT_RECORD',
+	},
+	afterApis,
+);
 const cert = new gcp.certificatemanager.Certificate('lb-cert', {
 	location: region,
-	managed: {domains: [domain]},
+	managed: {
+		domains: [domain],
+		dnsAuthorizations: [certDnsAuthorization.id],
+	},
 });
 
 const httpsProxy = new gcp.compute.RegionTargetHttpsProxy('lb-https-proxy', {
@@ -447,15 +495,43 @@ const httpsProxy = new gcp.compute.RegionTargetHttpsProxy('lb-https-proxy', {
 	],
 });
 
-// Regional Forwarding Rule maps the IP to the HTTPS proxy
-const forwardingRule = new gcp.compute.ForwardingRule('lb-forwarding-rule', {
+const _httpsForwardingRule = new gcp.compute.ForwardingRule(
+	'lb-forwarding-rule',
+	{
+		region,
+		target: httpsProxy.id,
+		portRange: '443',
+		loadBalancingScheme: 'EXTERNAL_MANAGED',
+		ipAddress: ip.address,
+		network: network.id,
+		networkTier: 'STANDARD',
+	},
+	{dependsOn: [proxySubnet]},
+);
+
+// Plain HTTP on the same IP only redirects to HTTPS.
+const httpRedirectUrlMap = new gcp.compute.RegionUrlMap('lb-http-redirect', {
 	region,
-	target: httpsProxy.id,
-	portRange: '443',
-	loadBalancingScheme: 'EXTERNAL_MANAGED',
-	ipAddress: ip.address,
-	networkTier: 'STANDARD',
+	defaultUrlRedirect: {httpsRedirect: true, stripQuery: false},
 });
+const httpProxy = new gcp.compute.RegionTargetHttpProxy('lb-http-proxy', {
+	region,
+	urlMap: httpRedirectUrlMap.id,
+});
+const _httpForwardingRule = new gcp.compute.ForwardingRule(
+	'lb-http-forwarding-rule',
+	{
+		region,
+		target: httpProxy.id,
+		portRange: '80',
+		loadBalancingScheme: 'EXTERNAL_MANAGED',
+		ipAddress: ip.address,
+		network: network.id,
+		networkTier: 'STANDARD',
+	},
+	{dependsOn: [proxySubnet]},
+);
 
 export const lbIp = ip.address;
+export const certDnsRecords = certDnsAuthorization.dnsResourceRecords;
 export const turnIp = turnServer?.ip.address;

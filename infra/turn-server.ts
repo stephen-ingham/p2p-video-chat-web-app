@@ -37,19 +37,27 @@ type TurnServerArguments = {
 	stack: string;
 	region: string;
 	zone: string;
+	network: pulumi.Input<string>;
+	subnetwork: pulumi.Input<string>;
 	turnSecret: pulumi.Output<string>;
+	// The GCP APIs these resources need (see index.ts).
+	dependsOn: pulumi.Resource[];
 };
 
 export function createTurnServer({
 	stack,
 	region,
 	zone,
+	network,
+	subnetwork,
 	turnSecret,
+	dependsOn,
 }: TurnServerArguments) {
-	const secret = new gcp.secretmanager.Secret('turn-secret', {
-		secretId: `turn-secret-${stack}`,
-		replication: {auto: {}},
-	});
+	const secret = new gcp.secretmanager.Secret(
+		'turn-secret',
+		{secretId: `turn-secret-${stack}`, replication: {auto: {}}},
+		{dependsOn},
+	);
 	const secretVersion = new gcp.secretmanager.SecretVersion(
 		'turn-secret-version',
 		{
@@ -60,10 +68,14 @@ export function createTurnServer({
 
 	// Dedicated identity so the VM can read only the TURN secret, rather than
 	// running as the project-wide default compute service account.
-	const serviceAccount = new gcp.serviceaccount.Account('turn-vm-sa', {
-		accountId: `voneo-turn-${stack}`,
-		displayName: `Voneo coturn VM (${stack})`,
-	});
+	const serviceAccount = new gcp.serviceaccount.Account(
+		'turn-vm-sa',
+		{
+			accountId: `voneo-turn-${stack}`,
+			displayName: `Voneo coturn VM (${stack})`,
+		},
+		{dependsOn},
+	);
 	const _secretAccess = new gcp.secretmanager.SecretIamMember(
 		'turn-vm-secret-access',
 		{
@@ -73,14 +85,15 @@ export function createTurnServer({
 		},
 	);
 
-	const ip = new gcp.compute.Address('turn-ip', {
-		region,
-		networkTier: 'STANDARD',
-	});
+	const ip = new gcp.compute.Address(
+		'turn-ip',
+		{region, networkTier: 'STANDARD'},
+		{dependsOn},
+	);
 
 	const networkTag = `voneo-turn-${stack}`;
 	const _firewall = new gcp.compute.Firewall('turn-firewall', {
-		network: 'default',
+		network,
 		direction: 'INGRESS',
 		sourceRanges: ['0.0.0.0/0'],
 		targetTags: [networkTag],
@@ -140,7 +153,7 @@ docker run -d --name coturn --restart unless-stopped --network host \\
 			},
 			networkInterfaces: [
 				{
-					network: 'default',
+					subnetwork,
 					accessConfigs: [{natIp: ip.address, networkTier: 'STANDARD'}],
 				},
 			],
