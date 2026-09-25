@@ -52,8 +52,8 @@ await pulumi.runtime.setMocks(
 );
 
 pulumi.runtime.setAllConfig({
-	'voneo-video-chat:frontendImageTag': 'snapshot-test-tag',
-	'voneo-video-chat:backendImageTag': 'snapshot-test-tag',
+	// eslint-disable-next-line @typescript-eslint/naming-convention -- Pulumi's `<namespace>:<key>` config format
+	'gcp:project': 'snapshot-test-project',
 	'voneo-video-chat:domain': 'snapshot.example.com',
 	'voneo-video-chat:dbPassword': 'snapshot-test-password',
 	'voneo-video-chat:jwtSecret': 'snapshot-test-jwt-secret',
