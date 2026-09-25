@@ -1,14 +1,19 @@
 import process from 'node:process';
 import {Sequelize} from 'sequelize';
 
+// On Cloud Run, DB_HOST is the Cloud SQL connector's Unix socket
+// (/cloudsql/<connection name>), which mysql2 takes as socketPath, not host.
+const isSocket = process.env.DB_HOST?.startsWith('/');
+
 const sequelize = new Sequelize(
 	process.env.DB_NAME,
-	'root',
+	process.env.DB_USER ?? 'root',
 	process.env.DB_PASSWORD,
 	{
-		host: process.env.DB_HOST,
+		...(isSocket
+			? {dialectOptions: {socketPath: process.env.DB_HOST}}
+			: {host: process.env.DB_HOST, port: process.env.DB_PORT || 3306}),
 		dialect: 'mysql',
-		port: process.env.DB_PORT || 3306,
 		logging: true,
 	},
 );
