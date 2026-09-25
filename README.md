@@ -125,7 +125,8 @@ video-chat-application/
 │           │   └── colors-plugin.mjs # Adds the shared colors.json palette as Tailwind colours
 │           └── middleware.ts    # CSP header (nonce-based, skipped in dev mode)
 ├── mobile-app/                  # Expo (React Native) Android app — react-native-webrtc for calling, talks to web-socket-api directly (shares only colors.json with web-server)
-├── infra/                       # Pulumi (TypeScript) IaC — provisions GCP resources (Cloud Run service, Cloud SQL instance, Secret Manager secrets) for production deployments
+├── infra/                       # Pulumi (TypeScript) IaC — GCP deployment (Cloud Run, Cloud SQL, load balancer, Artifact Registry, secrets); see infra/README.md for setup
+│   ├── index.ts                 # Everything except the TURN VM; also builds and pushes the prod images
 │   ├── turn-server.ts           # Self-hosted coturn STUN/TURN VM (prod stack only)
 │   └── coturn/turnserver.conf   # Base coturn config shared by the prod VM and the CI NAT e2e stack
 ├── scripts/                     # OS-specific scripts backing root npm run commands (setup, nuke, dev, halt-dev)
@@ -441,14 +442,9 @@ To try TURN locally, run coturn yourself (e.g. the `coturn` service in `e2e/comp
 
 None of these steps happen automatically. Until they're done, merges to `main` won't deploy TURN, or won't be gated on the TURN tests.
 
-1. **Finish the prod deploy pipeline.** `deploy-prod.yml` needs GCP Workload Identity Federation (`GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_DEPLOY_SERVICE_ACCOUNT`) and a Pulumi backend (`PULUMI_ACCESS_TOKEN`) set as repo secrets, and a real `gcp:project` in `infra/Pulumi.prod.yaml`. See the TODOs in those files. Until then the workflow fails at its auth step, by design.
-2. **Set the TURN secret** (any long random string, e.g. from `openssl rand -hex 32`):
-   ```bash
-   cd infra && pulumi config set --secret turnSecret <value> --stack prod
-   ```
-   Pulumi refuses to deploy the prod stack without it.
-3. **Require the TURN tests before merging.** Add the `e2e-nat-traversal` job from `pr-main.yml` as a required status check on `main`, so a PR that breaks TURN can't merge and deploy. You can do this in the GitHub UI or with `gh api` (see below).
-4. **Check it after the first deploy.** Get the VM's IP from `cd infra && pulumi stack output turnIp --stack prod`. Then log in to the app and copy the `iceServers` from the `GET /call/ice-servers` response (browser devtools → Network). Enter the TURN URL, username and credential on the [Trickle ICE page](https://webrtc.github.io/samples/src/content/peerconnection/trickle-ice/) and click "Gather candidates": a `relay` candidate means TURN works, a `srflx` candidate means STUN works.
+1. **Set up the prod stack.** Follow the one-time setup in [`infra/README.md`](infra/README.md): a GCP project, the deploy identity for GitHub Actions, the GitHub environment secrets, the Pulumi stack config (including `turnSecret`, which Pulumi requires on prod), and the DNS records. Until then `deploy-prod.yml` fails at its auth step, by design.
+2. **Require the TURN tests before merging.** Add the `e2e-nat-traversal` job from `pr-main.yml` as a required status check on `main`, so a PR that breaks TURN can't merge and deploy. You can do this in the GitHub UI or with `gh api` (see below).
+3. **Check it after the first deploy.** Get the VM's IP from `cd infra && pulumi stack output turnIp --stack prod`. Then log in to the app and copy the `iceServers` from the `GET /call/ice-servers` response (browser devtools → Network). Enter the TURN URL, username and credential on the [Trickle ICE page](https://webrtc.github.io/samples/src/content/peerconnection/trickle-ice/) and click "Gather candidates": a `relay` candidate means TURN works, a `srflx` candidate means STUN works.
 
 **Operating notes:**
 
@@ -584,9 +580,9 @@ Created for local development and syncs local file changes into the container au
 
 - `Dockerfile.prod`:
 
-Produces a production-optimised image (`europe-west2-docker.pkg.dev/signalling-api/voneo/voneo-frontend:1.0.0`).
+Produces a production-optimised image. The e2e stack also uses it.
 
-This image is used in GCP deployments - it is pushed to Artifact Registry and referenced by the Cloud Run service provisioned via the Pulumi stack in `infra/`.
+For GCP deployments, `pulumi up` builds this image and pushes it to the stack's Artifact Registry repo, as `europe-west2-docker.pkg.dev/<project>/voneo/voneo-frontend:<stack>`. The Cloud Run service then runs it by digest. The signalling API's `Dockerfile.prod` is handled the same way.
 
 ---
 
