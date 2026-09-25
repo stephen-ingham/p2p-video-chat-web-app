@@ -3,10 +3,8 @@ config:
   #   pulumi config set gcp:project YOUR_DEV_PROJECT_ID --stack dev
   gcp:project: TODO-dev-project-id
   gcp:region: europe-west2
-  # Container image tags to deploy — CI overrides these per-run via
-  # `pulumi config set --stack dev frontendImageTag <sha>` before `pulumi up`.
-  voneo-video-chat:frontendImageTag: latest
-  voneo-video-chat:backendImageTag: latest
+  # TODO: the public hostname the app is served on (see infra/README.md):
+  #   pulumi config set domain <host> --stack dev
   # Secrets — set locally once a Pulumi backend/passphrase is configured:
   #   pulumi config set --secret dbPassword <value> --stack dev
   #   pulumi config set --secret jwtSecret <value> --stack dev

@@ -1,24 +1,55 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as gcp from '@pulumi/gcp';
+import * as dockerBuild from '@pulumi/docker-build';
 import {createTurnServer} from './turn-server.js';
 
 const config = new pulumi.Config();
+const gcpConfig = new pulumi.Config('gcp');
 
-// Stack name (e.g. "dev"/"prod") suffixes resource/secret ids so the dev
-// and prod stacks can coexist in the same GCP project without colliding —
-// see infra/Pulumi.dev.yaml and infra/Pulumi.prod.yaml.
+// Stack name ("dev"/"prod") suffixes resource names. Each stack is meant to
+// deploy into its own GCP project (see infra/README.md): some resources here,
+// like the load balancer's proxy-only subnet, can only exist once per region
+// per network.
 const stack = pulumi.getStack();
+const project = gcpConfig.require('project');
+const region = gcpConfig.get('region') ?? 'europe-west2';
+const zone = `${region}-a`;
+// Public hostname the app is served on, e.g. voneo.example.com. Its DNS A
+// record must point at the `lbIp` output, and the `certDnsRecords` output must
+// be added as a CNAME before the TLS certificate can be issued.
+const domain = config.require('domain');
 
 // Sensitive values — store with: pulumi config set --secret <key> <value> --stack <dev|prod>
 const dbPassword = config.requireSecret('dbPassword');
 const jwtSecret = config.requireSecret('jwtSecret');
 const refreshTokenSecret = config.requireSecret('refreshTokenSecret');
 
-// Secret Manager secrets
-const dbPasswordSecret = new gcp.secretmanager.Secret('db-password-secret', {
-	secretId: `db-password-${stack}`,
-	replication: {auto: {}},
-});
+// GCP APIs are off by default in a new project, and every resource below
+// needs one of them.
+const apis = [
+	'artifactregistry',
+	'certificatemanager',
+	'compute',
+	'iam',
+	'run',
+	'secretmanager',
+	'sqladmin',
+].map(
+	(name) =>
+		new gcp.projects.Service(`${name}-api`, {
+			service: `${name}.googleapis.com`,
+			disableOnDestroy: false,
+		}),
+);
+const afterApis = {dependsOn: apis};
+
+// Secret Manager secrets //
+
+const dbPasswordSecret = new gcp.secretmanager.Secret(
+	'db-password-secret',
+	{secretId: `db-password-${stack}`, replication: {auto: {}}},
+	afterApis,
+);
 const dbPasswordSecretVersion = new gcp.secretmanager.SecretVersion(
 	'db-password-version',
 	{
@@ -27,10 +58,11 @@ const dbPasswordSecretVersion = new gcp.secretmanager.SecretVersion(
 	},
 );
 
-const jwtSecret_ = new gcp.secretmanager.Secret('jwt-secret', {
-	secretId: `jwt-secret-${stack}`,
-	replication: {auto: {}},
-});
+const jwtSecret_ = new gcp.secretmanager.Secret(
+	'jwt-secret',
+	{secretId: `jwt-secret-${stack}`, replication: {auto: {}}},
+	afterApis,
+);
 const jwtSecretVersion = new gcp.secretmanager.SecretVersion(
 	'jwt-secret-version',
 	{
@@ -41,10 +73,8 @@ const jwtSecretVersion = new gcp.secretmanager.SecretVersion(
 
 const refreshTokenSecret_ = new gcp.secretmanager.Secret(
 	'refresh-token-secret',
-	{
-		secretId: `refresh-token-secret-${stack}`,
-		replication: {auto: {}},
-	},
+	{secretId: `refresh-token-secret-${stack}`, replication: {auto: {}}},
+	afterApis,
 );
 const refreshTokenSecretVersion = new gcp.secretmanager.SecretVersion(
 	'refresh-token-secret-version',
@@ -64,54 +94,140 @@ const turnEnabled = config.getBoolean('turnEnabled') ?? false;
 const turnServer = turnEnabled
 	? createTurnServer({
 			stack,
-			region: 'europe-west2',
-			zone: 'europe-west2-a',
+			region,
+			zone,
 			turnSecret: config.requireSecret('turnSecret'),
 		})
 	: undefined;
 
-// Voneo Frontend - Google Cloud V2 Run Service
+// Container images //
 
-const frontendImageTag = config.get('frontendImageTag') ?? 'latest';
+// Pulumi builds both prod images and pushes them here, so one `pulumi up`
+// creates the registry before pushing, and pushes before Cloud Run needs the
+// image. Cloud Run is given each image's digest, so a code change always
+// rolls out a new revision.
+const registry = new gcp.artifactregistry.Repository(
+	'images',
+	{location: region, repositoryId: 'voneo', format: 'DOCKER'},
+	afterApis,
+);
+const registryHost = `${region}-docker.pkg.dev`;
+const registryAuth = {
+	address: registryHost,
+	username: 'oauth2accesstoken',
+	password: gcp.organizations.getClientConfigOutput().accessToken,
+};
 
-const voneoFrontend = new gcp.cloudrunv2.Service('default', {
-	name: `voneo-frontend-${stack}`,
-	location: 'europe-west2',
-	deletionProtection: false,
-	ingress: 'INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER',
-	scaling: {
-		minInstanceCount: 0,
-		maxInstanceCount: 1,
-	},
-	template: {
-		containers: [
-			{
-				image: `europe-west2-docker.pkg.dev/signalling-api/voneo/voneo-frontend:${frontendImageTag}`,
-			},
+// Paths are relative to infra/, where Pulumi runs.
+const backendImage = new dockerBuild.Image(
+	'backend-image',
+	{
+		context: {location: '../web-socket-api/src'},
+		dockerfile: {location: '../web-socket-api/src/Dockerfile.prod'},
+		platforms: ['linux/amd64'],
+		push: true,
+		registries: [registryAuth],
+		tags: [
+			pulumi.interpolate`${registryHost}/${project}/${registry.repositoryId}/voneo-backend:${stack}`,
 		],
 	},
-	traffics: [
-		{
-			type: 'TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST',
-			percent: 100,
+	{dependsOn: [registry]},
+);
+const frontendImage = new dockerBuild.Image(
+	'frontend-image',
+	{
+		context: {
+			location: '../web-server/src',
+			// Dockerfile.prod copies the shared colors.json from the repo root.
+			named: {root: {location: '..'}},
 		},
-	],
+		dockerfile: {location: '../web-server/src/Dockerfile.prod'},
+		platforms: ['linux/amd64'],
+		push: true,
+		registries: [registryAuth],
+		tags: [
+			pulumi.interpolate`${registryHost}/${project}/${registry.repositoryId}/voneo-frontend:${stack}`,
+		],
+	},
+	{dependsOn: [registry]},
+);
+
+// Service accounts //
+
+// One identity per Cloud Run service, holding only the access it needs,
+// instead of the project-wide default compute service account.
+const backendServiceAccount = new gcp.serviceaccount.Account(
+	'backend-sa',
+	{
+		accountId: `voneo-backend-${stack}`,
+		displayName: `Voneo signalling API (${stack})`,
+	},
+	afterApis,
+);
+const frontendServiceAccount = new gcp.serviceaccount.Account(
+	'frontend-sa',
+	{
+		accountId: `voneo-frontend-${stack}`,
+		displayName: `Voneo frontend (${stack})`,
+	},
+	afterApis,
+);
+const backendMember = pulumi.interpolate`serviceAccount:${backendServiceAccount.email}`;
+
+const secretAccess = [
+	{name: 'db-password-secret-access', secret: dbPasswordSecret},
+	{name: 'jwt-secret-access', secret: jwtSecret_},
+	{name: 'refresh-token-secret-access', secret: refreshTokenSecret_},
+	...(turnServer
+		? [{name: 'turn-secret-access', secret: turnServer.secret}]
+		: []),
+].map(
+	({name, secret}) =>
+		new gcp.secretmanager.SecretIamMember(name, {
+			secretId: secret.id,
+			role: 'roles/secretmanager.secretAccessor',
+			member: backendMember,
+		}),
+);
+
+// Lets the backend open connections through the Cloud SQL connector.
+const cloudSqlClient = new gcp.projects.IAMMember('backend-cloudsql-client', {
+	project,
+	role: 'roles/cloudsql.client',
+	member: backendMember,
 });
 
-// Voneo Backend - Google Cloud V2 Run Service
+// Database //
 
-const dbInstance = new gcp.sql.DatabaseInstance('instance', {
-	name: `voneo-db-${stack}`,
-	region: 'europe-west2',
-	databaseVersion: 'MYSQL_8_4',
-	settings: {
-		tier: 'db-f1-micro',
-		availabilityType: 'ZONAL',
-		ipConfiguration: {
-			ipv4Enabled: false,
+const dbInstance = new gcp.sql.DatabaseInstance(
+	'instance',
+	{
+		name: `voneo-db-${stack}`,
+		region,
+		databaseVersion: 'MYSQL_8_4',
+		settings: {
+			// New MySQL 8.4 instances default to Enterprise Plus, which has no
+			// shared-core tiers like db-f1-micro.
+			edition: 'ENTERPRISE',
+			tier: 'db-f1-micro',
+			availabilityType: 'ZONAL',
+			// A public IP with no authorized networks: nothing can connect
+			// directly, only through the Cloud SQL connector, which checks the
+			// caller's IAM access (roles/cloudsql.client above). Cloud Run's
+			// Cloud SQL volume uses that connector.
+			ipConfiguration: {
+				ipv4Enabled: true,
+				sslMode: 'ENCRYPTED_ONLY',
+			},
 		},
+		deletionProtection: true,
 	},
-	deletionProtection: true,
+	afterApis,
+);
+
+const database = new gcp.sql.Database('db', {
+	instance: dbInstance.name,
+	name: 'voneo',
 });
 
 // MySQL user with password from Pulumi encrypted config
@@ -121,47 +237,54 @@ const dbUser = new gcp.sql.User('db-user', {
 	password: dbPassword,
 });
 
-const project = gcp.organizations.getProject({});
+// Cloud Run services //
 
-// Grant Cloud Run's default compute SA access to all three secrets
-const secretIds = [
-	{name: 'db-password-secret-access', secret: dbPasswordSecret},
-	{name: 'jwt-secret-access', secret: jwtSecret_},
-	{name: 'refresh-token-secret-access', secret: refreshTokenSecret_},
-	...(turnServer
-		? [{name: 'turn-secret-access', secret: turnServer.secret}]
-		: []),
-];
-const _secretIamMembers = secretIds.map(
-	({name, secret}) =>
-		new gcp.secretmanager.SecretIamMember(
-			name,
-			{
-				secretId: secret.id,
-				role: 'roles/secretmanager.secretAccessor',
-				member: project.then(
-					(p) =>
-						`serviceAccount:${p.number}-compute@developer.gserviceaccount.com`,
-				),
-			},
-			{dependsOn: [secret]},
-		),
-);
-
-const backendImageTag = config.get('backendImageTag') ?? 'latest';
-
-const voneoBackend = new gcp.cloudrunv2.Service(
-	'default',
+const voneoFrontend = new gcp.cloudrunv2.Service(
+	'frontend',
 	{
-		name: `voneo-backend-${stack}`,
-		location: 'europe-west2',
+		name: `voneo-frontend-${stack}`,
+		location: region,
 		deletionProtection: false,
+		// Reachable only through the load balancer below, not its run.app URL.
 		ingress: 'INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER',
+		// No IAM check on requests: the load balancer forwards anonymous users.
+		invokerIamDisabled: true,
 		scaling: {
 			minInstanceCount: 0,
 			maxInstanceCount: 1,
 		},
 		template: {
+			serviceAccount: frontendServiceAccount.email,
+			containers: [{image: frontendImage.ref}],
+		},
+		traffics: [
+			{
+				type: 'TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST',
+				percent: 100,
+			},
+		],
+	},
+	afterApis,
+);
+
+const voneoBackend = new gcp.cloudrunv2.Service(
+	'backend',
+	{
+		name: `voneo-backend-${stack}`,
+		location: region,
+		deletionProtection: false,
+		ingress: 'INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER',
+		invokerIamDisabled: true,
+		// Calls live in this instance's memory (session-store.js), so there
+		// must only ever be one.
+		scaling: {
+			minInstanceCount: 0,
+			maxInstanceCount: 1,
+		},
+		template: {
+			serviceAccount: backendServiceAccount.email,
+			// Cloud Run closes a request, including a WebSocket, after this.
+			timeout: '3600s',
 			volumes: [
 				{
 					name: 'cloudsql',
@@ -172,15 +295,18 @@ const voneoBackend = new gcp.cloudrunv2.Service(
 			],
 			containers: [
 				{
-					image: `europe-west2-docker.pkg.dev/signalling-api/voneo/voneo-backend:${backendImageTag}`,
+					image: backendImage.ref,
+					ports: {containerPort: 3000},
 					envs: [
 						{name: 'NODE_ENV', value: 'production'},
-						{name: 'DB_NAME', value: `voneo-db-${stack}`},
+						{name: 'ALLOWED_ORIGIN', value: `https://${domain}`},
+						{name: 'DB_NAME', value: database.name},
+						{name: 'DB_USER', value: dbUser.name},
+						// A Unix socket path; database.js passes it as socketPath.
 						{
 							name: 'DB_HOST',
 							value: pulumi.interpolate`/cloudsql/${dbInstance.connectionName}`,
 						},
-						{name: 'DB_PORT', value: '3306'},
 						{
 							name: 'DB_PASSWORD',
 							valueSource: {
@@ -237,21 +363,20 @@ const voneoBackend = new gcp.cloudrunv2.Service(
 		],
 	},
 	{
+		// A revision fails to start if it can't read its secrets.
 		dependsOn: [
+			...apis,
 			dbPasswordSecretVersion,
 			jwtSecretVersion,
 			refreshTokenSecretVersion,
 			...(turnServer ? [turnServer.secretVersion] : []),
+			...secretAccess,
+			cloudSqlClient,
 		],
 	},
 );
 
 // Regional External ALB //
-
-const region = 'europe-west2';
-// TODO: set per-stack via `pulumi config set domain <host> --stack <dev|prod>`
-// once real dev/prod domains exist (see CLAUDE.md "Known incomplete areas").
-const domain = config.get('domain') ?? 'yourdomain.com';
 
 // Regional IP
 const ip = new gcp.compute.Address('lb-ip', {
