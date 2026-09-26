@@ -1,6 +1,8 @@
+import {execFileSync} from 'node:child_process';
 import * as pulumi from '@pulumi/pulumi';
 import * as gcp from '@pulumi/gcp';
 import * as dockerBuild from '@pulumi/docker-build';
+import * as tls from '@pulumi/tls';
 import {createTurnServer} from './turn-server.js';
 
 const config = new pulumi.Config();
@@ -18,6 +20,36 @@ const zone = `${region}-a`;
 // record must point at the `lbIp` output, and the `certDnsRecords` output must
 // be added as a CNAME before the TLS certificate can be issued.
 const domain = config.require('domain');
+
+// Ephemeral stacks (dev, prod-preview) exist only for one e2e run and are
+// destroyed straight after it (scripts/gcp-e2e.mjs), so they have no deletion
+// protection, a unique Cloud SQL name, and a self-signed certificate for a
+// placeholder `domain` instead of a DNS-validated one.
+const ephemeral = config.getBoolean('ephemeral') ?? false;
+
+// The commit being deployed, labelled onto the database, Cloud Run services
+// and TURN VM so the console shows which repo state a deployment came from.
+// `gitSha` config overrides detection (the snapshot test pins it).
+function detectGitState() {
+	try {
+		const sha = execFileSync('git', ['rev-parse', 'HEAD'], {encoding: 'utf8'});
+		const status = execFileSync('git', ['status', '--porcelain'], {
+			encoding: 'utf8',
+		});
+		return {sha: sha.trim(), dirty: status.trim() !== ''};
+	} catch {
+		return {sha: 'unknown', dirty: false};
+	}
+}
+
+const gitState = config.get('gitSha')
+	? {sha: config.require('gitSha'), dirty: false}
+	: detectGitState();
+const deploymentLabels = {
+	'git-sha': gitState.sha,
+	// Uncommitted changes were deployed, so git-sha alone doesn't describe it.
+	'git-dirty': String(gitState.dirty),
+};
 
 // Sensitive values — store with: pulumi config set --secret <key> <value> --stack <dev|prod>
 const dbPassword = config.requireSecret('dbPassword');
@@ -125,6 +157,7 @@ const turnServer = turnEnabled
 			network: network.id,
 			subnetwork: subnet.id,
 			turnSecret: config.requireSecret('turnSecret'),
+			labels: deploymentLabels,
 			dependsOn: apis,
 		})
 	: undefined;
@@ -137,7 +170,8 @@ const turnServer = turnEnabled
 // rolls out a new revision.
 const registry = new gcp.artifactregistry.Repository(
 	'images',
-	{location: region, repositoryId: 'voneo', format: 'DOCKER'},
+	// Stack-suffixed: prod-preview shares the prod stack's GCP project.
+	{location: region, repositoryId: `voneo-${stack}`, format: 'DOCKER'},
 	afterApis,
 );
 const registryHost = `${region}-docker.pkg.dev`;
@@ -229,9 +263,12 @@ const cloudSqlClient = new gcp.projects.IAMMember('backend-cloudsql-client', {
 // Database //
 
 const dbInstance = new gcp.sql.DatabaseInstance(
-	'instance',
+	ephemeral ? `voneo-db-${stack}` : 'instance',
 	{
-		name: `voneo-db-${stack}`,
+		// GCP reserves a deleted instance's name for about a week, so an
+		// ephemeral stack's instance is left unnamed for Pulumi to name: the
+		// resource name above plus a random suffix, e.g. voneo-db-dev-4f9c2e1.
+		name: ephemeral ? undefined : `voneo-db-${stack}`,
 		region,
 		databaseVersion: 'MYSQL_8_4',
 		settings: {
@@ -240,6 +277,7 @@ const dbInstance = new gcp.sql.DatabaseInstance(
 			edition: 'ENTERPRISE',
 			tier: 'db-f1-micro',
 			availabilityType: 'ZONAL',
+			userLabels: deploymentLabels,
 			// A public IP with no authorized networks: nothing can connect
 			// directly, only through the Cloud SQL connector, which checks the
 			// caller's IAM access (roles/cloudsql.client above). Cloud Run's
@@ -249,7 +287,7 @@ const dbInstance = new gcp.sql.DatabaseInstance(
 				sslMode: 'ENCRYPTED_ONLY',
 			},
 		},
-		deletionProtection: true,
+		deletionProtection: !ephemeral,
 	},
 	afterApis,
 );
@@ -273,6 +311,7 @@ const voneoFrontend = new gcp.cloudrunv2.Service(
 	{
 		name: `voneo-frontend-${stack}`,
 		location: region,
+		labels: deploymentLabels,
 		deletionProtection: false,
 		// Reachable only through the load balancer below, not its run.app URL.
 		ingress: 'INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER',
@@ -301,6 +340,7 @@ const voneoBackend = new gcp.cloudrunv2.Service(
 	{
 		name: `voneo-backend-${stack}`,
 		location: region,
+		labels: deploymentLabels,
 		deletionProtection: false,
 		ingress: 'INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER',
 		invokerIamDisabled: true,
@@ -467,32 +507,68 @@ const urlMap = new gcp.compute.RegionUrlMap('lb-url-map', {
 	],
 });
 
-// Google-managed TLS certificate. Regional certificates can only be
-// validated through DNS, via the CNAME in the `certDnsRecords` output.
-const certDnsAuthorization = new gcp.certificatemanager.DnsAuthorization(
-	'lb-cert-dns-auth',
-	{
-		name: `voneo-${stack}`,
+// Long-lived stacks: a Google-managed TLS certificate. Regional certificates
+// can only be validated through DNS, via the CNAME in the `certDnsRecords`
+// output.
+function createManagedCertificate() {
+	const dnsAuthorization = new gcp.certificatemanager.DnsAuthorization(
+		'lb-cert-dns-auth',
+		{
+			name: `voneo-${stack}`,
+			location: region,
+			domain,
+			type: 'PER_PROJECT_RECORD',
+		},
+		afterApis,
+	);
+	const cert = new gcp.certificatemanager.Certificate('lb-cert', {
 		location: region,
-		domain,
-		type: 'PER_PROJECT_RECORD',
-	},
-	afterApis,
-);
-const cert = new gcp.certificatemanager.Certificate('lb-cert', {
-	location: region,
-	managed: {
-		domains: [domain],
-		dnsAuthorizations: [certDnsAuthorization.id],
-	},
-});
+		managed: {
+			domains: [domain],
+			dnsAuthorizations: [dnsAuthorization.id],
+		},
+	});
+	return {dnsAuthorization, cert};
+}
+
+// Ephemeral stacks: a self-signed certificate for the placeholder `domain`,
+// which needs no DNS. The e2e browser maps `domain` to `lbIp` itself
+// (--host-resolver-rules) and ignores certificate errors.
+function createSelfSignedCertificate() {
+	const key = new tls.PrivateKey('lb-tls-key', {
+		algorithm: 'RSA',
+		rsaBits: 2048,
+	});
+	const cert = new tls.SelfSignedCert('lb-tls-cert', {
+		privateKeyPem: key.privateKeyPem,
+		subject: {commonName: domain},
+		dnsNames: [domain],
+		validityPeriodHours: 24 * 30,
+		allowedUses: ['key_encipherment', 'digital_signature', 'server_auth'],
+	});
+	return new gcp.compute.RegionSslCertificate(
+		'lb-ssl-cert',
+		{region, certificate: cert.certPem, privateKey: key.privateKeyPem},
+		afterApis,
+	);
+}
+
+const managedCertificate = ephemeral ? undefined : createManagedCertificate();
+const selfSignedCertificate = ephemeral
+	? createSelfSignedCertificate()
+	: undefined;
 
 const httpsProxy = new gcp.compute.RegionTargetHttpsProxy('lb-https-proxy', {
 	region,
 	urlMap: urlMap.id,
-	certificateManagerCertificates: [
-		pulumi.interpolate`//certificatemanager.googleapis.com/${cert.id}`,
-	],
+	...(managedCertificate && {
+		certificateManagerCertificates: [
+			pulumi.interpolate`//certificatemanager.googleapis.com/${managedCertificate.cert.id}`,
+		],
+	}),
+	...(selfSignedCertificate && {
+		sslCertificates: [selfSignedCertificate.selfLink],
+	}),
 });
 
 const _httpsForwardingRule = new gcp.compute.ForwardingRule(
@@ -533,5 +609,8 @@ const _httpForwardingRule = new gcp.compute.ForwardingRule(
 );
 
 export const lbIp = ip.address;
-export const certDnsRecords = certDnsAuthorization.dnsResourceRecords;
+export const appHost = domain;
+export const gitSha = gitState.sha;
+export const certDnsRecords =
+	managedCertificate?.dnsAuthorization.dnsResourceRecords;
 export const turnIp = turnServer?.ip.address;

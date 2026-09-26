@@ -1,0 +1,19 @@
+config:
+  # Pre-merge preview of prod for PRs into main (pr-main.yml): prod's
+  # settings (TURN VM on), deployed into the prod stack's GCP project with
+  # stack-suffixed resource names, then destroyed after its e2e run.
+  # TODO: set the same GCP project as the prod stack:
+  #   pulumi config set gcp:project YOUR_PROD_PROJECT_ID --stack prod-preview
+  gcp:project: TODO-prod-project-id
+  gcp:region: europe-west2
+  # Ephemeral, like dev: see Pulumi.dev.yaml.
+  voneo-video-chat:ephemeral: true
+  voneo-video-chat:domain: preview.voneo.test
+  voneo-video-chat:turnEnabled: true
+  # Secrets — set locally once a Pulumi backend/passphrase is configured.
+  # Use different values from prod's, so the preview can't mint prod tokens
+  # or TURN credentials:
+  #   pulumi config set --secret dbPassword <value> --stack prod-preview
+  #   pulumi config set --secret jwtSecret <value> --stack prod-preview
+  #   pulumi config set --secret refreshTokenSecret <value> --stack prod-preview
+  #   pulumi config set --secret turnSecret <value> --stack prod-preview

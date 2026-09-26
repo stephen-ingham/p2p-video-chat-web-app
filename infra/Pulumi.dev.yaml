@@ -3,8 +3,12 @@ config:
   #   pulumi config set gcp:project YOUR_DEV_PROJECT_ID --stack dev
   gcp:project: TODO-dev-project-id
   gcp:region: europe-west2
-  # TODO: the public hostname the app is served on (see infra/README.md):
-  #   pulumi config set domain <host> --stack dev
+  # Ephemeral: created for one e2e run and destroyed after it (see
+  # scripts/gcp-e2e.mjs). No deletion protection, an auto-named Cloud SQL
+  # instance, and a self-signed cert for `domain`, a placeholder host that
+  # needs no DNS: the e2e browser maps it to the `lbIp` output itself.
+  voneo-video-chat:ephemeral: true
+  voneo-video-chat:domain: dev.voneo.test
   # Secrets — set locally once a Pulumi backend/passphrase is configured:
   #   pulumi config set --secret dbPassword <value> --stack dev
   #   pulumi config set --secret jwtSecret <value> --stack dev

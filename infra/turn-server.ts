@@ -40,6 +40,7 @@ type TurnServerArguments = {
 	network: pulumi.Input<string>;
 	subnetwork: pulumi.Input<string>;
 	turnSecret: pulumi.Output<string>;
+	labels: Record<string, string>;
 	// The GCP APIs these resources need (see index.ts).
 	dependsOn: pulumi.Resource[];
 };
@@ -51,6 +52,7 @@ export function createTurnServer({
 	network,
 	subnetwork,
 	turnSecret,
+	labels,
 	dependsOn,
 }: TurnServerArguments) {
 	const secret = new gcp.secretmanager.Secret(
@@ -144,6 +146,7 @@ docker run -d --name coturn --restart unless-stopped --network host \\
 			zone,
 			machineType: 'e2-micro',
 			tags: [networkTag],
+			labels,
 			bootDisk: {
 				initializeParams: {
 					image: 'cos-cloud/cos-stable',
