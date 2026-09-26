@@ -15,6 +15,7 @@
     "files": [
         "index.ts",
         "tests/snapshot.ts",
-        "tests/prod.test.ts"
+        "tests/prod.test.ts",
+        "tests/ephemeral.test.ts"
     ]
 }
