@@ -53,6 +53,7 @@ Voneo is a peer-to-peer video chat application built with an Astro/React fronten
 - [Mobile app (Expo, Android)](#mobile-app-expo-android)
 - [End-to-end tests (Playwright)](#end-to-end-tests-playwright)
   - [NAT traversal suite (STUN/TURN)](#nat-traversal-suite-stunturn)
+  - [Against a GCP deployment](#against-a-gcp-deployment)
 - [Gotchas & Experimentation](#gotchas--experimentation)
 
 ## Overview
@@ -137,7 +138,8 @@ video-chat-application/
 │   ├── halt-dev.sh / halt-dev.ps1
 │   ├── test-e2e.sh / test-e2e.ps1
 │   ├── test-e2e-nat.sh / test-e2e-nat.ps1
-│   └── test-maestro.sh / test-maestro.ps1
+│   ├── test-maestro.sh / test-maestro.ps1
+│   └── gcp-e2e.mjs              # Deploys, e2e-tests and destroys an ephemeral GCP stack (dev, prod-preview)
 ├── e2e/                         # End-to-end tests (Playwright)
 │   ├── compose.nat.yaml         # NAT-traversal overlay: coturn + browsers on isolated Docker networks
 │   └── nat/                     # Same-network vs cross-network (TURN relay) call tests
@@ -434,7 +436,7 @@ In production, Pulumi provisions coturn (`infra/turn-server.ts`) and sets both v
 
 The VM uses the shared base config `infra/coturn/turnserver.conf` plus two production-only additions: its external IP mapping, and a block on relaying into private/metadata IP ranges.
 
-Only the `prod` stack enables TURN (`voneo-video-chat:turnEnabled: true`). The dev stack uses Google STUN.
+Only the `prod` stack and its pre-merge preview, `prod-preview`, enable TURN (`voneo-video-chat:turnEnabled: true`). The dev stack uses Google STUN.
 
 To try TURN locally, run coturn yourself (e.g. the `coturn` service in `e2e/compose.nat.yaml`) and point these variables at it.
 
@@ -475,7 +477,7 @@ None of these steps happen automatically. Until they're done, merges to `main` w
   }
   JSON
   ```
-  `integration_id` 15368 is GitHub Actions, so only an Actions job can satisfy the check. Add more `{"context": ...}` entries for the other `pr-main.yml` jobs (`lint`, `api-tests`, `component-tests`, `infra-tests`, `e2e-full-suite`) to require those as well.
+  `integration_id` 15368 is GitHub Actions, so only an Actions job can satisfy the check. Add more `{"context": ...}` entries for the other `pr-main.yml` jobs (`lint`, `api-tests`, `component-tests`, `infra-tests`, `e2e-full-suite`, `e2e-gcp-prod-preview`) to require those as well.
 
 #### Runtime changes when `NODE_ENV=production`
 
@@ -582,7 +584,7 @@ Created for local development and syncs local file changes into the container au
 
 Produces a production-optimised image. The e2e stack also uses it.
 
-For GCP deployments, `pulumi up` builds this image and pushes it to the stack's Artifact Registry repo, as `europe-west2-docker.pkg.dev/<project>/voneo/voneo-frontend:<stack>`. The Cloud Run service then runs it by digest. The signalling API's `Dockerfile.prod` is handled the same way.
+For GCP deployments, `pulumi up` builds this image and pushes it to the stack's Artifact Registry repo, as `europe-west2-docker.pkg.dev/<project>/voneo-<stack>/voneo-frontend:<stack>`. The Cloud Run service then runs it by digest. The signalling API's `Dockerfile.prod` is handled the same way.
 
 ---
 
@@ -672,6 +674,24 @@ The two tests in `e2e/nat/nat-traversal.spec.ts` check:
 - **Different networks (`lan-a` ↔ `lan-b`):** both peers send media through their TURN allocations (`relay` local candidates), and video still plays on both sides.
 
 This suite needs no `voneo.test` hosts entry and no local Playwright browsers, because the browsers run in containers. It uses the same host ports as `npm run test:e2e`, so don't run the two at the same time. In CI the coturn container differs from production in two ways: it doesn't block private IP ranges (the simulated LANs are private Docker networks), and it doesn't need an external IP mapping.
+
+### Against a GCP deployment
+
+PRs also run the e2e suite (not the NAT one) against a real, short-lived GCP deployment of the PR. The deployment is created, tested, then always destroyed:
+
+- **PRs into `dev`:** the `e2e-gcp-dev` job in `pr-dev.yml` uses the `dev` stack.
+- **PRs into `main`:** the `e2e-gcp-prod-preview` job in `pr-main.yml` uses `prod-preview`, which has prod's settings (TURN VM included) and deploys into prod's GCP project. Real prod isn't touched until the PR merges.
+
+These stacks use a placeholder hostname (`dev.voneo.test`, `preview.voneo.test`) with a self-signed certificate, so they need no domain or DNS. `scripts/gcp-e2e.mjs` passes the hostname and the load balancer's IP to Playwright (`E2E_BASE_URL`, `E2E_RESOLVE_IP`), and Chromium resolves the hostname to that IP itself. To do the same from your machine:
+
+```bash
+npm run gcp-e2e-dev        # deploy, test, and always destroy
+npm run gcp-deploy-dev     # or one step at a time
+npm run test:e2e:gcp-dev
+npm run gcp-destroy-dev
+```
+
+The `prod-preview` equivalents are `gcp-e2e-prod-preview`, `gcp-deploy-prod-preview`, `test:e2e:gcp-prod-preview` and `gcp-destroy-prod-preview`. A run costs a few cents. None of this works until the GCP projects, Pulumi stacks and GitHub secrets exist: see [`infra/README.md`](infra/README.md), which also covers how the ephemeral stacks work.
 
 ---
 

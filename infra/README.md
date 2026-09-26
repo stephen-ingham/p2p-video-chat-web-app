@@ -1,6 +1,14 @@
 # Voneo infrastructure (Pulumi on GCP)
 
-`index.ts` and `turn-server.ts` declare everything the app needs on Google Cloud. One `pulumi up` builds and pushes both Docker images and creates or updates every resource. There's a `dev` and a `prod` stack, and each deploys into **its own GCP project**.
+`index.ts` and `turn-server.ts` declare everything the app needs on Google Cloud. One `pulumi up` builds and pushes both Docker images and creates or updates every resource. There are three stacks:
+
+| Stack          | GCP project | Lifetime                                                                                           |
+| -------------- | ----------- | -------------------------------------------------------------------------------------------------- |
+| `dev`          | dev's own   | Ephemeral: deployed for one e2e run on a PR into `dev`, then destroyed                             |
+| `prod-preview` | prod's      | Ephemeral: prod's settings (TURN on), deployed for one e2e run on a PR into `main`, then destroyed |
+| `prod`         | prod's own  | Long-lived, deployed by `deploy-prod.yml` on merge to `main`                                       |
+
+`dev` and `prod` each need **their own GCP project**: the load balancer's proxy-only subnet can only exist once per region per network. `prod-preview` shares prod's project, with every resource name suffixed by its stack name so the two don't collide. See [Ephemeral stacks](#ephemeral-stacks-dev-prod-preview) for how those work.
 
 ## What gets created
 
@@ -10,15 +18,15 @@
 | `gcp.projects.Service` (×7)                                                                                               | Turns on each GCP API the stack uses. APIs start off in a new project                                                             | No equivalent (AWS services are always on) |
 | VPC `voneo-<stack>` + subnet `10.10.0.0/24`                                                                               | Network for the TURN VM                                                                                                           | VPC + subnet                               |
 | Proxy-only subnet `10.10.2.0/23`                                                                                          | Where the load balancer's managed proxies run. Required for a regional ALB                                                        | No equivalent (ALBs pick their own ENIs)   |
-| Artifact Registry repo `voneo`                                                                                            | Holds the `voneo-backend` / `voneo-frontend` images                                                                               | ECR repository                             |
+| Artifact Registry repo `voneo-<stack>`                                                                                    | Holds the `voneo-backend` / `voneo-frontend` images                                                                               | ECR repository                             |
 | `docker-build` images (×2)                                                                                                | Pulumi builds the prod Dockerfiles and pushes them, then deploys by digest                                                        | `docker build` + `docker push` in CI       |
 | Cloud Run `voneo-frontend-<stack>` / `voneo-backend-<stack>`                                                              | Serverless containers. Scale to zero, max 1 instance (calls are held in memory)                                                   | App Runner / ECS on Fargate                |
 | Service accounts `voneo-backend-`, `voneo-frontend-`, `voneo-turn-<stack>`                                                | The identity each workload runs as                                                                                                | IAM roles for tasks/instances              |
-| Cloud SQL `voneo-db-<stack>` (MySQL 8.4, `db-f1-micro`) + database + user `voneo`                                         | The app database                                                                                                                  | RDS for MySQL                              |
+| Cloud SQL `voneo-db-<stack>` (MySQL 8.4, `db-f1-micro`) + database + user `voneo`                                         | The app database. Ephemeral stacks add a random suffix to the name, e.g. `voneo-db-dev-4f9c2e1`                                   | RDS for MySQL                              |
 | Secret Manager secrets (DB password, JWT secrets, TURN secret)                                                            | Injected into Cloud Run as env vars                                                                                               | Secrets Manager                            |
 | Regional external Application Load Balancer (IP, NEGs, backend services, URL map, HTTPS + HTTP proxies, forwarding rules) | Public entry point. `/auth/*`, `/call/*` and `/wss/*` go to the backend, everything else to the frontend. HTTP redirects to HTTPS | ALB with listener rules and target groups  |
-| Certificate Manager certificate + DNS authorization                                                                       | Google-managed TLS certificate for your domain                                                                                    | ACM certificate with DNS validation        |
-| coturn VM `voneo-turn-<stack>` (only when `turnEnabled`, i.e. prod)                                                       | STUN/TURN relay, with a static IP and firewall rule                                                                               | EC2 instance + Elastic IP + security group |
+| Certificate Manager certificate + DNS authorization (prod); self-signed regional SSL certificate (ephemeral stacks)       | TLS certificate for the domain. Ephemeral stacks use a placeholder domain with no DNS                                             | ACM certificate with DNS validation        |
+| coturn VM `voneo-turn-<stack>` (only when `turnEnabled`: prod and prod-preview)                                           | STUN/TURN relay, with a static IP and firewall rule                                                                               | EC2 instance + Elastic IP + security group |
 
 A few GCP concepts that work differently from AWS:
 
@@ -30,7 +38,7 @@ A few GCP concepts that work differently from AWS:
 
 ## One-time setup (per stack)
 
-Do everything below once for `dev` and once for `prod`, each with its own project. You'll need the [gcloud CLI](https://cloud.google.com/sdk/docs/install) (`gcloud auth login` first), the [Pulumi CLI](https://www.pulumi.com/docs/install/) (`pulumi login`), a billing account, and a domain you can add DNS records to.
+Do steps 1–2 once for `dev` and once for `prod`, each with its own project. Do steps 3–4 for all three stacks: `prod-preview` reuses prod's project and deploy identity. Step 5 is for `prod` only. You'll need the [gcloud CLI](https://cloud.google.com/sdk/docs/install) (`gcloud auth login` first), the [Pulumi CLI](https://www.pulumi.com/docs/install/) (`pulumi login`), a billing account, and, for prod, a domain you can add DNS records to.
 
 ### 1. Create the project
 
@@ -87,7 +95,7 @@ echo "projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/github/pro
 
 ### 3. Add the GitHub secrets
 
-Each stack has its own project, so set these as **environment** secrets on the `dev` / `prod` GitHub environments (Settings → Environments). The deploy workflows already run in those environments.
+Set these as **environment** secrets on the `dev`, `prod-preview` and `prod` GitHub environments (Settings → Environments). The workflows already run in those environments: `pr-dev.yml`'s `e2e-gcp-dev` job in `dev`, `pr-main.yml`'s `e2e-gcp-prod-preview` job in `prod-preview`, and `deploy-prod.yml` in `prod`. `prod-preview` gets the same values as `prod`, since it deploys into prod's project.
 
 | Secret                           | Value                                                                                          |
 | -------------------------------- | ---------------------------------------------------------------------------------------------- |
@@ -101,7 +109,7 @@ gh secret set GCP_DEPLOY_SERVICE_ACCOUNT --env $STACK --body "$DEPLOY_SA"
 gh secret set PULUMI_ACCESS_TOKEN --env $STACK
 ```
 
-You can also require a manual approval on the `prod` environment, so each deploy waits for you.
+You can also require a manual approval on the `prod` environment, so each deploy waits for you. Leave `dev` and `prod-preview` without one, or every PR's GCP e2e job waits for you too.
 
 ### 4. Create the Pulumi stack and its config
 
@@ -109,19 +117,19 @@ From `infra/`:
 
 ```bash
 pulumi stack init $STACK
-pulumi config set gcp:project $PROJECT_ID --stack $STACK
-pulumi config set domain <app hostname, e.g. voneo.example.com> --stack $STACK
+pulumi config set gcp:project $PROJECT_ID --stack $STACK  # prod-preview: prod's project
+pulumi config set domain <app hostname, e.g. voneo.example.com> --stack $STACK  # prod only
 pulumi config set --secret dbPassword "$(openssl rand -hex 24)" --stack $STACK
 pulumi config set --secret jwtSecret "$(openssl rand -hex 32)" --stack $STACK
 pulumi config set --secret refreshTokenSecret "$(openssl rand -hex 32)" --stack $STACK
-pulumi config set --secret turnSecret "$(openssl rand -hex 32)" --stack $STACK  # prod (turnEnabled) only
+pulumi config set --secret turnSecret "$(openssl rand -hex 32)" --stack $STACK  # prod and prod-preview (turnEnabled) only
 ```
 
-This writes to `Pulumi.<stack>.yaml`. The secret values are encrypted by Pulumi Cloud, so the file is safe to commit.
+This writes to `Pulumi.<stack>.yaml`. The secret values are encrypted by Pulumi Cloud, so the file is safe to commit. Give `prod-preview` its own values rather than prod's, so a preview deployment can't mint tokens or TURN credentials that prod accepts. The ephemeral stacks' `domain` is already set in their YAML files.
 
-### 5. First deploy and DNS
+### 5. First deploy and DNS (prod only)
 
-Run the first deploy locally so you can watch it (`gcloud auth application-default login` gives Pulumi your credentials), or merge to `dev`/`main` to let the workflow run it:
+Run the first deploy locally so you can watch it (`gcloud auth application-default login` gives Pulumi your credentials), or merge to `main` to let the workflow run it:
 
 ```bash
 pulumi up --stack $STACK
@@ -136,17 +144,44 @@ At your DNS provider, add:
 
 The certificate usually becomes active within 15–60 minutes of the records resolving. Until then, HTTPS requests fail with a TLS error. Check its status with `gcloud certificate-manager certificates list --location europe-west2 --project $PROJECT_ID`.
 
+## Ephemeral stacks (dev, prod-preview)
+
+`voneo-video-chat:ephemeral: true` in a stack's YAML makes it disposable:
+
+- **No deletion protection** on Cloud SQL, so `pulumi destroy` removes everything.
+- **An auto-named Cloud SQL instance.** GCP reserves a deleted instance's name for about a week, so a fixed name would block the next run. Pulumi adds a random suffix when it creates the instance and keeps it in the stack's state.
+- **A self-signed certificate** for a placeholder `domain` (`dev.voneo.test`, `preview.voneo.test`) instead of a Google-managed one. Nothing needs DNS: the e2e browser maps the placeholder to the `lbIp` output itself (Chromium's `--host-resolver-rules`) and ignores the certificate error.
+
+Every stack labels its Cloud SQL instance, Cloud Run services and TURN VM with the commit it was deployed from (`git-sha`), and whether there were uncommitted changes (`git-dirty`). The commit is also the `gitSha` stack output.
+
+`scripts/gcp-e2e.mjs` drives them, from the repo root:
+
+| Command                    | What it does                                                                        |
+| -------------------------- | ----------------------------------------------------------------------------------- |
+| `npm run gcp-deploy-dev`   | `pulumi up`, non-interactive                                                        |
+| `npm run test:e2e:gcp-dev` | Waits until the stack serves, then runs the e2e suite against it                    |
+| `npm run gcp-destroy-dev`  | `pulumi destroy`, non-interactive: removes every resource the stack created         |
+| `npm run gcp-e2e-dev`      | All three. Destroys the stack even if the deploy or tests fail, or you press Ctrl+C |
+
+The same four exist for `prod-preview` (`gcp-deploy-prod-preview`, and so on). Pass Playwright arguments after `--`, e.g. `npm run test:e2e:gcp-dev -- --grep @happy-path`. Locally, run `gcloud auth application-default login` first.
+
+The NAT-traversal suite (`e2e/nat/`) isn't run against these stacks. It needs browsers on separate simulated LANs, which only the local Docker overlay provides.
+
+In CI, `e2e-gcp-dev` (`pr-dev.yml`) and `e2e-gcp-prod-preview` (`pr-main.yml`) run the deploy, test and destroy as separate steps, with the destroy step on `if: always()`. Each stack is shared, so runs queue one at a time (a `concurrency` group). If a newer run starts queueing while one is already waiting, GitHub cancels the waiting one. Fork PRs don't get GCP credentials, so the jobs skip them. The jobs deploy the PR's head commit rather than GitHub's merge commit, so `git-sha` is a commit you can find.
+
+If a teardown ever fails, the stack keeps billing until you run `npm run gcp-destroy-dev` (or `gcp-destroy-prod-preview`). `pulumi stack --stack dev` lists what's left.
+
 ## Costs
 
-Rough monthly cost per stack, while idle:
+Ephemeral stacks cost cents per run: each exists for about 30–45 minutes, and the load balancer and Cloud SQL are billed by the second or hour. Rough monthly cost of a long-lived stack, while idle:
 
 - **Regional load balancer** (about $18): the forwarding rules are billed hourly.
 - **Cloud SQL `db-f1-micro`** (about $8–10).
 - **coturn VM and static IP** (a few dollars, prod only).
 - **Everything else** (Cloud Run, Artifact Registry, Secret Manager) costs very little at this scale.
 
-`pulumi destroy --stack <stack>` removes everything except the Cloud SQL instance, which has deletion protection. Turn that off in `index.ts` first if you really mean to delete it.
+On `prod`, `pulumi destroy --stack prod` removes everything except the Cloud SQL instance, which has deletion protection. Turn that off in `index.ts` first if you really mean to delete it.
 
 ## Tests
 
-`npm test` (run in CI by `pr-main.yml`) checks the program against a snapshot of the resources it declares, with GCP mocked (`tests/pulumi-snapshot.test.ts`). After an intentional change, regenerate the snapshot with `UPDATE_SNAPSHOT=1 npm test`.
+`npm test` (run in CI by `pr-main.yml`) checks the program against a snapshot of the resources it declares, with GCP mocked: `tests/prod.test.ts` with prod's config, and `tests/ephemeral.test.ts` with the ephemeral stacks' config (shared code in `tests/snapshot.ts`). After an intentional change, regenerate the snapshot with `UPDATE_SNAPSHOT=1 npm test`.
