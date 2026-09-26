@@ -10,7 +10,18 @@ import {defineConfig, devices} from '@playwright/test';
  * or C:\Windows\System32\drivers\etc\hosts locally; CI does this in the
  * workflow). Run via `npm run test:e2e`, which brings the stack up and
  * down for you.
+ *
+ * E2E_BASE_URL/E2E_RESOLVE_IP point it at an ephemeral GCP deployment instead
+ * (set by scripts/gcp-e2e.mjs): the placeholder host has no DNS record, so
+ * Chromium resolves it to the load balancer's IP itself.
  */
+const baseUrl = process.env.E2E_BASE_URL ?? 'https://voneo.test';
+const resolverArgs = process.env.E2E_RESOLVE_IP
+	? [
+			`--host-resolver-rules=MAP ${new URL(baseUrl).hostname} ${process.env.E2E_RESOLVE_IP}`,
+		]
+	: [];
+
 export default defineConfig({
 	testDir: './e2e',
 	globalSetup: './e2e/global-setup.ts',
@@ -27,8 +38,9 @@ export default defineConfig({
 	/* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
 	use: {
 		// eslint-disable-next-line @typescript-eslint/naming-convention -- Playwright API property
-		baseURL: 'https://voneo.test',
-		/* Caddy's `tls internal` cert is self-signed, not from a public CA. */
+		baseURL: baseUrl,
+		/* Caddy's `tls internal` cert and the ephemeral GCP stacks' cert are
+		 * self-signed, not from a public CA. */
 		// eslint-disable-next-line @typescript-eslint/naming-convention -- Playwright API property
 		ignoreHTTPSErrors: true,
 		permissions: ['camera', 'microphone'],
@@ -36,6 +48,7 @@ export default defineConfig({
 			args: [
 				'--use-fake-device-for-media-stream',
 				'--use-fake-ui-for-media-stream',
+				...resolverArgs,
 			],
 		},
 		/* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */

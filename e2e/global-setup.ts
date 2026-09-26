@@ -1,3 +1,4 @@
+import process from 'node:process';
 import mysql from 'mysql2/promise';
 
 const tables = ['refreshTokens', 'callParticipants', 'calls', 'users'];
@@ -28,6 +29,10 @@ async function waitForTables(connection: mysql.Connection, timeoutMs = 60_000) {
 }
 
 export default async function globalSetup() {
+	// A GCP deployment (scripts/gcp-e2e.mjs) is ephemeral, so its database
+	// starts empty, and it's only reachable through the Cloud SQL connector.
+	if (process.env.E2E_BASE_URL) return;
+
 	const connection = await mysql.createConnection({
 		host: 'localhost',
 		port: 3306,
