@@ -44,3 +44,66 @@ jobs:
           name: playwright-report-happy-path
           path: playwright-report/
           retention-days: 14
+
+  # Full e2e suite against a real GCP deployment of the PR: the ephemeral dev
+  # stack (infra/Pulumi.dev.yaml) is deployed, tested and always destroyed.
+  # Fork PRs get no GCP credentials, so it only runs for this repo's branches.
+  e2e-gcp-dev:
+    needs: lint
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    # Every run shares the one dev stack, so one at a time. Never cancel a
+    # run in progress: that could skip its teardown.
+    concurrency:
+      group: gcp-dev-stack
+      cancel-in-progress: false
+    # Up to ~25 min deploy + tests, with time left for the teardown.
+    timeout-minutes: 75
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write # GCP Workload Identity Federation
+    env:
+      PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+    steps:
+      # The PR's head commit rather than the merge commit, so the deployment's
+      # git-sha label is a commit that exists on GitHub.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Install dependencies
+        run: npm ci
+      - name: Install infra dependencies
+        run: npm ci
+        working-directory: infra
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+      - name: Authenticate to GCP (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      # With no command, this only installs the Pulumi CLI.
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v6
+      - name: Deploy ephemeral dev stack
+        timeout-minutes: 35
+        run: node scripts/gcp-e2e.mjs up dev
+      - name: Run e2e suite against it
+        timeout-minutes: 25
+        run: node scripts/gcp-e2e.mjs test dev
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report-gcp-dev
+          path: playwright-report/
+          retention-days: 14
+      # Runs even if an earlier step failed or the job was cancelled, so a
+      # half-created stack doesn't keep billing.
+      - name: Destroy ephemeral dev stack
+        if: always()
+        timeout-minutes: 20
+        run: node scripts/gcp-e2e.mjs down dev
