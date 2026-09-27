@@ -1,13 +1,13 @@
 config:
   # TODO: set the target GCP project for the dev environment:
   #   pulumi config set gcp:project YOUR_DEV_PROJECT_ID --stack dev
-  gcp:project: TODO-dev-project-id
+  gcp:project: voneo-dev-gb2828
   gcp:region: europe-west2
   # Ephemeral: created for one e2e run and destroyed after it (see
   # scripts/gcp-e2e.mjs). No deletion protection, an auto-named Cloud SQL
   # instance, and a self-signed cert for `domain`, a placeholder host that
   # needs no DNS: the e2e browser maps it to the `lbIp` output itself.
-  voneo-video-chat:ephemeral: true
+  voneo-video-chat:ephemeral: "true"
   voneo-video-chat:domain: dev.voneo.test
   # Secrets — set locally once a Pulumi backend/passphrase is configured:
   #   pulumi config set --secret dbPassword <value> --stack dev
@@ -16,4 +16,10 @@ config:
   # Self-hosted coturn STUN/TURN VM (infra/turn-server.ts) — off for dev, so
   # the API falls back to Google's public STUN servers. If enabled, needs:
   #   pulumi config set --secret turnSecret <value> --stack dev
-  voneo-video-chat:turnEnabled: false
+  voneo-video-chat:turnEnabled: "false"
+  voneo-video-chat:dbPassword:
+    secure: AAABAPSHVvkM/pVl4Owkmi4KJt3CB57gY1SbgFNgxTRQcTMMRWR6YCmi/XFnTH0=
+  voneo-video-chat:jwtSecret:
+    secure: AAABAMtRre+pKHMCxJuGInh4Rh02jYwSF1zjRE4Da2+h7nPh7G0lIQ9keAqVeuLjDaTcJg==
+  voneo-video-chat:refreshTokenSecret:
+    secure: AAABANgV0aZl4A92ids0vAKoXHs0F8Cp1TQNT6ZiVFjqytg+W/n8PNnCvpfhWg==
