@@ -593,11 +593,14 @@ const _httpsForwardingRule = new gcp.compute.ForwardingRule(
 	{dependsOn: [proxySubnet]},
 );
 
-// Plain HTTP on the same IP only redirects to HTTPS.
-const httpRedirectUrlMap = new gcp.compute.RegionUrlMap('lb-http-redirect', {
-	region,
-	defaultUrlRedirect: {httpsRedirect: true, stripQuery: false},
-});
+const httpRedirectUrlMap = new gcp.compute.RegionUrlMap(
+	'lb-http-redirect',
+	{
+		region,
+		defaultUrlRedirect: {httpsRedirect: true, stripQuery: false},
+	},
+	afterApis,
+);
 const httpProxy = new gcp.compute.RegionTargetHttpProxy('lb-http-proxy', {
 	region,
 	urlMap: httpRedirectUrlMap.id,
