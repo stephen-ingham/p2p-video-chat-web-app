@@ -321,9 +321,11 @@ const voneoBackend = new gcp.cloudrunv2.Service(
 		location: region,
 		labels: deploymentLabels,
 		deletionProtection: false,
+		// Reachable from the internet, but Cloud Run only lets through requests
+		// with an ID token from an identity holding roles/run.invoker: just the
+		// frontend (backendInvoker below), which proxies every browser request.
 		ingress: 'INGRESS_TRAFFIC_ALL',
-		// No IAM check on requests: the frontend proxies anonymous users.
-		invokerIamDisabled: true,
+		invokerIamDisabled: false,
 		// Calls live in this instance's memory (session-store.js), so there
 		// must only ever be one.
 		scaling: {
@@ -425,6 +427,15 @@ const voneoBackend = new gcp.cloudrunv2.Service(
 	},
 );
 
+// The only identity allowed to call the backend. The frontend's proxy sends
+// an ID token for it (API_PROXY_ID_TOKEN, web-server/src/server.mjs).
+const backendInvoker = new gcp.cloudrunv2.ServiceIamMember('backend-invoker', {
+	name: voneoBackend.name,
+	location: region,
+	role: 'roles/run.invoker',
+	member: pulumi.interpolate`serviceAccount:${frontendServiceAccount.email}`,
+});
+
 const voneoFrontend = new gcp.cloudrunv2.Service(
 	'frontend',
 	{
@@ -446,7 +457,10 @@ const voneoFrontend = new gcp.cloudrunv2.Service(
 			containers: [
 				{
 					image: frontendImage.ref,
-					envs: [{name: 'API_PROXY_TARGET', value: voneoBackend.uri}],
+					envs: [
+						{name: 'API_PROXY_TARGET', value: voneoBackend.uri},
+						{name: 'API_PROXY_ID_TOKEN', value: 'true'},
+					],
 				},
 			],
 		},
@@ -457,7 +471,8 @@ const voneoFrontend = new gcp.cloudrunv2.Service(
 			},
 		],
 	},
-	afterApis,
+	// Without the grant, its proxied requests would be refused.
+	{dependsOn: [...apis, backendInvoker]},
 );
 
 export {appUrl};

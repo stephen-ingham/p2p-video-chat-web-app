@@ -76,7 +76,7 @@
       "inputs": {
         "deletionProtection": false,
         "ingress": "INGRESS_TRAFFIC_ALL",
-        "invokerIamDisabled": true,
+        "invokerIamDisabled": false,
         "labels": {
           "git-dirty": "false",
           "git-sha": "snapshot-test-sha"
@@ -194,6 +194,10 @@
                 {
                   "name": "API_PROXY_TARGET",
                   "value": "https://backend.run.app"
+                },
+                {
+                  "name": "API_PROXY_ID_TOKEN",
+                  "value": "true"
                 }
               ]
             }
@@ -206,6 +210,16 @@
             "type": "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
           }
         ]
+      }
+    },
+    {
+      "type": "gcp:cloudrunv2/serviceIamMember:ServiceIamMember",
+      "name": "backend-invoker",
+      "inputs": {
+        "location": "europe-west2",
+        "member": "serviceAccount:undefined",
+        "name": "voneo-backend-snapshot-test",
+        "role": "roles/run.invoker"
       }
     },
     {
