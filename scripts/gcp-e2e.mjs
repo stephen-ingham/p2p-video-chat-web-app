@@ -122,7 +122,17 @@ async function test() {
 	});
 }
 
-const up = () => pulumi('up', '--yes', '--skip-preview');
+// Retried once: a docker-build image push that takes over about a minute
+// fails with DeadlineExceeded. Artifact Registry keeps the layers already
+// uploaded, and the resources already created are left alone, so the retry
+// only finishes the push and whatever the failure stopped.
+function up() {
+	const status = pulumi('up', '--yes', '--skip-preview');
+	if (status === 0) return status;
+	console.log('pulumi up failed, retrying once.');
+	return pulumi('up', '--yes', '--skip-preview');
+}
+
 const down = () => pulumi('destroy', '--yes', '--skip-preview');
 
 switch (command) {
