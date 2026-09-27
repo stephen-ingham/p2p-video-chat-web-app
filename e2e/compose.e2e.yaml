@@ -22,6 +22,7 @@ services:
         root: .
     environment:
       - NODE_ENV=production
+      - API_PROXY_TARGET=http://signalling-server-prod:3000
 
   mysql-db:
     environment:

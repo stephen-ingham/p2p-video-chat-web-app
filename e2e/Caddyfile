@@ -1,8 +1,7 @@
 voneo.test {
 	tls internal
 
-	@api path /auth* /call* /wss*
-	reverse_proxy @api signalling-server-prod:3000
-
+	# TLS only: the frontend forwards /auth, /call and /wss to the API itself
+	# (web-server/src/server.mjs), as it does on Cloud Run.
 	reverse_proxy web-server-prod:8080
 }
