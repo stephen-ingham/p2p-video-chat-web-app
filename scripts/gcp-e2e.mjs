@@ -65,19 +65,13 @@ function stackOutputs() {
 	return JSON.parse(result.stdout);
 }
 
-// Status code of a GET to the load balancer, sent with the placeholder host
-// (it has no DNS record). Undefined if the connection itself fails.
-async function probe(lbIp, host, urlPath) {
+// Status code of a GET to the app's URL. Undefined if the connection itself
+// fails.
+async function probe(appUrl, urlPath) {
 	return new Promise((resolve) => {
 		const request = https.request(
-			{
-				host: lbIp,
-				servername: host,
-				headers: {host},
-				path: urlPath,
-				rejectUnauthorized: false, // Self-signed cert.
-				timeout: 15_000,
-			},
+			new URL(urlPath, appUrl),
+			{timeout: 15_000},
 			(response) => {
 				response.resume();
 				resolve(response.statusCode);
@@ -89,27 +83,25 @@ async function probe(lbIp, host, urlPath) {
 	});
 }
 
-// A new load balancer takes a few minutes to start serving, and both Cloud
-// Run services scale from zero, so wait until the frontend returns 200 and
-// the API returns 401 (it's up, and wants a token) before testing.
-async function waitUntilServing(lbIp, host, timeoutMs = 15 * 60_000) {
+// Both Cloud Run services scale from zero, so wait until the frontend returns
+// 200 and the API, through the frontend's proxy, returns 401 (it's up, and
+// wants a token) before testing.
+async function waitUntilServing(appUrl, timeoutMs = 15 * 60_000) {
 	const deadline = Date.now() + timeoutMs;
 	for (;;) {
 		// eslint-disable-next-line no-await-in-loop -- deliberate poll loop
 		const [frontend, api] = await Promise.all([
-			probe(lbIp, host, '/'),
-			probe(lbIp, host, '/call/ice-servers'),
+			probe(appUrl, '/'),
+			probe(appUrl, '/call/ice-servers'),
 		]);
 		if (frontend === 200 && api === 401) return;
 		if (Date.now() > deadline) {
 			throw new Error(
-				`https://${host} (${lbIp}) not serving yet: frontend ${frontend}, API ${api}`,
+				`${appUrl} not serving yet: frontend ${frontend}, API ${api}`,
 			);
 		}
 
-		console.log(
-			`Waiting for https://${host} (${lbIp}): frontend ${frontend}, API ${api}`,
-		);
+		console.log(`Waiting for ${appUrl}: frontend ${frontend}, API ${api}`);
 		// eslint-disable-next-line no-await-in-loop -- deliberate poll loop
 		await new Promise((resolve) => {
 			setTimeout(resolve, 15_000);
@@ -118,17 +110,14 @@ async function waitUntilServing(lbIp, host, timeoutMs = 15 * 60_000) {
 }
 
 async function test() {
-	const {lbIp, appHost, gitSha} = stackOutputs();
-	console.log(
-		`Testing ${stack} stack at https://${appHost} (${lbIp}), commit ${gitSha}`,
-	);
-	await waitUntilServing(lbIp, appHost);
+	const {appUrl, gitSha} = stackOutputs();
+	console.log(`Testing ${stack} stack at ${appUrl}, commit ${gitSha}`);
+	await waitUntilServing(appUrl);
 	return run('npx', ['playwright', 'test', ...playwrightArgs], {
 		cwd: repoRoot,
 		env: {
 			...process.env,
-			E2E_BASE_URL: `https://${appHost}`,
-			E2E_RESOLVE_IP: lbIp,
+			E2E_BASE_URL: appUrl,
 		},
 	});
 }

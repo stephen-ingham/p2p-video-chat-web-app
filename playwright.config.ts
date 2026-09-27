@@ -11,16 +11,10 @@ import {defineConfig, devices} from '@playwright/test';
  * workflow). Run via `npm run test:e2e`, which brings the stack up and
  * down for you.
  *
- * E2E_BASE_URL/E2E_RESOLVE_IP point it at an ephemeral GCP deployment instead
- * (set by scripts/gcp-e2e.mjs): the placeholder host has no DNS record, so
- * Chromium resolves it to the load balancer's IP itself.
+ * E2E_BASE_URL points it at an ephemeral GCP deployment's run.app URL instead
+ * (set by scripts/gcp-e2e.mjs).
  */
 const baseUrl = process.env.E2E_BASE_URL ?? 'https://voneo.test';
-const resolverArgs = process.env.E2E_RESOLVE_IP
-	? [
-			`--host-resolver-rules=MAP ${new URL(baseUrl).hostname} ${process.env.E2E_RESOLVE_IP}`,
-		]
-	: [];
 
 export default defineConfig({
 	testDir: './e2e',
@@ -39,8 +33,7 @@ export default defineConfig({
 	use: {
 		// eslint-disable-next-line @typescript-eslint/naming-convention -- Playwright API property
 		baseURL: baseUrl,
-		/* Caddy's `tls internal` cert and the ephemeral GCP stacks' cert are
-		 * self-signed, not from a public CA. */
+		/* Caddy's `tls internal` cert is self-signed, not from a public CA. */
 		// eslint-disable-next-line @typescript-eslint/naming-convention -- Playwright API property
 		ignoreHTTPSErrors: true,
 		permissions: ['camera', 'microphone'],
@@ -48,7 +41,6 @@ export default defineConfig({
 			args: [
 				'--use-fake-device-for-media-stream',
 				'--use-fake-ui-for-media-stream',
-				...resolverArgs,
 			],
 		},
 		/* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */

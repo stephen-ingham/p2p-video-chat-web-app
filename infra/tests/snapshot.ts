@@ -106,7 +106,7 @@ export async function runSnapshotTest(
 	}
 
 	await test(`GCP resource declarations match the ${snapshotName} snapshot`, async () => {
-		// Stack outputs like `lbIp` are provider-computed fields with no
+		// Stack outputs like `appUrl` are provider-computed fields with no
 		// meaningful value under mocks (the mock only echoes back create-time
 		// inputs) — resource declarations below are the actual signal.
 		await import('../index.js');
