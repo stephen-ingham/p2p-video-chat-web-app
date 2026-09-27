@@ -2,6 +2,9 @@
 # Needs the app's dev-client build installed, and the LOCAL=true dev stack
 # (NODE_ENV=dev, so the seeded users exist) reachable at 10.0.2.2:3000.
 appId: com.voneo.app
+# The mobile happy path: the only flow mobile-e2e.yml runs on PRs into dev.
+tags:
+  - happy-path
 ---
 - runFlow: subflows/launch.yaml
 - tapOn:

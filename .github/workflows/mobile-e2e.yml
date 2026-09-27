@@ -1,8 +1,9 @@
 name: Mobile E2E (Maestro)
 
-# Heavier e2e check for mobile-app/, deliberately kept out of the fast PR
-# path (same split as this repo's Playwright e2e vs. lint/unit tests): runs
-# on a schedule and on manual dispatch rather than on every push.
+# Heavier e2e check for mobile-app/, split like this repo's Playwright e2e:
+# PRs into dev run only the happy-path flow (tagged `happy-path`), PRs into
+# main and the scheduled/manual runs run every flow. PRs only trigger it when
+# they touch the app, the API it talks to, or this workflow.
 #
 # Builds a release APK on the runner with the app's JS bundled in (no Metro
 # in CI) via `expo prebuild` + Gradle, so no EXPO_TOKEN/EAS account is
@@ -13,6 +14,15 @@ name: Mobile E2E (Maestro)
 # test users the flows log in as exist.
 
 on:
+  pull_request:
+    branches: [dev, main]
+    paths:
+      - "mobile-app/**"
+      # Shared palette, read by the app (src/theme/theme.ts)
+      - "colors.json"
+      # The signalling API the flows log in and create calls against
+      - "web-socket-api/**"
+      - ".github/workflows/mobile-e2e.yml"
   schedule:
     - cron: "0 6 * * 1-5" # weekdays, 06:00 UTC
   workflow_dispatch:
@@ -63,13 +73,16 @@ jobs:
 
       - name: Run Maestro flows on Android emulator
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          # Happy path only on PRs into dev; every flow otherwise.
+          MAESTRO_TAGS: ${{ github.event_name == 'pull_request' && github.base_ref == 'dev' && '--include-tags=happy-path' || '' }}
         with:
           api-level: 34
           arch: x86_64
           script: |
             adb install mobile-app/android/app/build/outputs/apk/release/app-release.apk
             curl -Ls "https://get.maestro.mobile.dev" | bash
-            $HOME/.maestro/bin/maestro test mobile-app/.maestro/ --format junit --output maestro-report.xml --debug-output maestro-debug
+            $HOME/.maestro/bin/maestro test mobile-app/.maestro/ $MAESTRO_TAGS --format junit --output maestro-report.xml --debug-output maestro-debug
 
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
