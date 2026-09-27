@@ -171,6 +171,26 @@ In CI, `e2e-gcp-dev` (`pr-dev.yml`) and `e2e-gcp-prod-preview` (`pr-main.yml`) r
 
 If a teardown ever fails, the stack keeps billing until you run `npm run gcp-destroy-dev` (or `gcp-destroy-prod-preview`). `pulumi stack --stack dev` lists what's left.
 
+## Stack README and outputs
+
+Each stack's page in Pulumi Cloud shows a stack README: its app URL, load balancer IP, deployed commit, GCP console links (Cloud Run metrics and logs, Cloud SQL, load balancer, TURN VM, billing) and operating commands. The template is `Pulumi.README.md`. `index.ts` exports it as the `readme` stack output, which is the name Pulumi Cloud looks for, and Pulumi Cloud fills in its `${outputs.<name>}` placeholders. Pulumi has no conditionals, so `index.ts` first drops sections wrapped in `<!-- ephemeral -->`, `<!-- prod -->` or `<!-- turn -->` markers that don't apply to the stack.
+
+Stack outputs, also readable with `pulumi stack output <name> --stack <stack>`:
+
+| Output                                       | Value                                                           |
+| -------------------------------------------- | --------------------------------------------------------------- |
+| `appHost`                                    | The stack's `domain`                                            |
+| `lbIp`                                       | The load balancer's public IP                                   |
+| `gitSha`                                     | The commit deployed                                             |
+| `certDnsRecords`                             | The certificate's DNS authorization record (prod only)          |
+| `turnIp` / `turnVm`                          | The TURN VM's static IP and name (only when `turnEnabled`)      |
+| `project` / `region`                         | The GCP project and region deployed into                        |
+| `backendServiceName` / `frontendServiceName` | The Cloud Run service names                                     |
+| `dbInstanceName`                             | The Cloud SQL instance name (random suffix on ephemeral stacks) |
+| `readme`                                     | The rendered stack README                                       |
+
+`package.json` sets `"type": "module"`, which Pulumi's built-in TypeScript support (ts-node) can't load. So `Pulumi.yaml` turns that off (`typescript: false`) and runs `index.ts` through `tsx` instead (`nodeargs: --import tsx`), as the tests do.
+
 ## Costs
 
 Ephemeral stacks cost cents per run: each exists for about 30–45 minutes, and the load balancer and Cloud SQL are billed by the second or hour. Rough monthly cost of a long-lived stack, while idle:

@@ -129,6 +129,7 @@ video-chat-application/
 ├── infra/                       # Pulumi (TypeScript) IaC — GCP deployment (Cloud Run, Cloud SQL, load balancer, Artifact Registry, secrets); see infra/README.md for setup
 │   ├── index.ts                 # Everything except the TURN VM; also builds and pushes the prod images
 │   ├── turn-server.ts           # Self-hosted coturn STUN/TURN VM (prod stack only)
+│   ├── Pulumi.README.md         # Stack README template shown on each stack's Pulumi Cloud page
 │   └── coturn/turnserver.conf   # Base coturn config shared by the prod VM and the CI NAT e2e stack
 ├── scripts/                     # OS-specific scripts backing root npm run commands (setup, nuke, dev, halt-dev)
 │   ├── dispatch.mjs             # Detects the host OS and runs the matching .ps1/.sh script
@@ -174,7 +175,7 @@ video-chat-application/
 
 ```bash
 # Clones the repo
-git clone https://github.com/cyprste2717218/p2p-video-chat-web-app
+git clone https://github.com/stephen-ingham/p2p-video-chat-web-app
 
 # Auto installs the npm dependencies and builds the development docker images
 npm run setup
