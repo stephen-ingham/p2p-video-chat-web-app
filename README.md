@@ -567,7 +567,7 @@ The web and mobile apps share one colour palette, `colors.json` in the repo root
 - **Web:** `src/styles/colors-plugin.mjs` adds each entry as a Tailwind colour, so components use classes like `bg-surface` and `text-ink-muted` rather than raw `zinc-*` classes.
 - **Mobile:** `mobile-app/src/theme/theme.ts` imports the same file.
 
-The file sits outside `web-server/src`, which is the web images' Docker build context. So the Dockerfiles copy it in from a second build context named `root` (the repo root), set in `compose.yaml` and `e2e/compose.e2e.yaml` (`additional_contexts`) and in the setup scripts (`--build-context root=.`). The images use `/voneo/web-server/src` as their working directory, so the plugin finds `colors.json` at the same relative path as in the repo. `npm run dev` restarts the web container when `colors.json` changes.
+The file sits outside `web-server/src`, which is the web images' Docker build context. So the Dockerfiles copy it in from a second build context named `root` (the repo root), set in `compose.yaml` and `e2e/compose.e2e.yaml` (`additional_contexts`) and in the setup scripts (`--build-context root=.`). Pulumi's GCP image build is the exception. It copies `colors.json` into `infra/.root-context/` (gitignored) and uses that folder as `root`, because `@pulumi/docker-build` reads and hashes every file in a build context, and hashing the whole repo made each preview take minutes. The images use `/voneo/web-server/src` as their working directory, so the plugin finds `colors.json` at the same relative path as in the repo. `npm run dev` restarts the web container when `colors.json` changes.
 
 ### CSP middleware (`src/middleware.ts`)
 
