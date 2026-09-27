@@ -1,5 +1,6 @@
 import {randomUUID} from 'node:crypto';
 import {expect, type BrowserContext, type Page} from '@playwright/test';
+import {openApp} from './app.ts';
 
 declare global {
 	var voneoPeerConnections: RTCPeerConnection[] | undefined;
@@ -25,7 +26,7 @@ export function uniqueUser(label: string) {
 export type TestUser = ReturnType<typeof uniqueUser>;
 
 export async function signUp(page: Page, user: TestUser) {
-	await page.goto('/');
+	await openApp(page);
 	await page.getByRole('tab', {name: 'Register'}).click();
 	await page.getByTestId('register-username').fill(user.username);
 	await page.getByTestId('register-email').fill(user.email);

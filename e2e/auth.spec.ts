@@ -1,5 +1,6 @@
 import {randomUUID} from 'node:crypto';
 import {test, expect, type Page} from '@playwright/test';
+import {openApp} from './support/app.ts';
 
 function uniqueUser() {
 	const suffix = randomUUID();
@@ -11,7 +12,7 @@ function uniqueUser() {
 }
 
 async function signUp(page: Page, user: ReturnType<typeof uniqueUser>) {
-	await page.goto('/');
+	await openApp(page);
 	await page.getByRole('tab', {name: 'Register'}).click();
 	await page.getByTestId('register-username').fill(user.username);
 	await page.getByTestId('register-email').fill(user.email);
@@ -44,7 +45,7 @@ test('login with valid credentials reaches the call screen', async ({page}) => {
 });
 
 test('login with invalid credentials shows an error', async ({page}) => {
-	await page.goto('/');
+	await openApp(page);
 	await page.getByTestId('login-email').fill('nobody@example.com');
 	await page.getByTestId('login-password').fill('wrong-password');
 	await page.getByTestId('login-submit').click();
