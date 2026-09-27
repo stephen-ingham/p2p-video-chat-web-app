@@ -585,7 +585,7 @@ Created for local development and syncs local file changes into the container au
 
 - `Dockerfile.prod`:
 
-Produces a production-optimised image. The e2e stack also uses it. It runs `server.mjs`, which serves the built app through `@astrojs/node`'s handler and, when `API_PROXY_TARGET` is set, forwards `/auth/`, `/call/` and `/wss/` (including WebSocket upgrades) to the signalling API. This is the production version of the Vite dev proxy in `astro.config.mjs`: browsers only talk to the frontend's origin, so there's no need for a load balancer to route paths, and the `SameSite=Strict` refresh cookie stays first-party.
+Produces a production-optimised image. The e2e stack also uses it. It runs `server.mjs`, which serves the built app through `@astrojs/node`'s handler and, when `API_PROXY_TARGET` is set, forwards `/auth/`, `/call/` and `/wss/` (including WebSocket upgrades) to the signalling API. On Cloud Run it also attaches an ID token for the frontend's service account (`API_PROXY_ID_TOKEN=true`), the only identity allowed to call the API. This is the production version of the Vite dev proxy in `astro.config.mjs`: browsers only talk to the frontend's origin, so there's no need for a load balancer to route paths, and the `SameSite=Strict` refresh cookie stays first-party.
 
 For GCP deployments, `pulumi up` builds this image and pushes it to the stack's Artifact Registry repo, as `europe-west2-docker.pkg.dev/<project>/voneo-<stack>/voneo-frontend:<stack>`. The Cloud Run service then runs it by digest. The signalling API's `Dockerfile.prod` is handled the same way.
 
