@@ -151,7 +151,7 @@ Expo (React Native) Android app, see `mobile-app/CLAUDE.md` for Expo-specific ru
 Pulumi (TypeScript) provisions GCP resources. `infra/README.md` lists each one with its AWS equivalent and has the one-time setup steps per stack. The resources:
 - the GCP APIs the stack uses (enabled from code)
 - a VPC with a proxy-only subnet
-- an Artifact Registry repo, with both prod images built and pushed by Pulumi itself (`@pulumi/docker-build`) and deployed to Cloud Run by digest
+- an Artifact Registry repo, with both prod images built and pushed by Pulumi itself (`@pulumi/docker-build`) and deployed to Cloud Run by digest. The images set `exec: true`, so the provider runs the host's `docker buildx` (which must be installed) instead of its embedded v0.12 client, whose registry auth timed out on pushes lasting about a minute
 - frontend and backend Cloud Run services, each with its own service account
 - Cloud SQL MySQL 8.4 (Enterprise edition), reached only through the Cloud SQL connector socket, which `common/database.js` uses as `socketPath` when `DB_HOST` is a path
 - Secret Manager secrets
