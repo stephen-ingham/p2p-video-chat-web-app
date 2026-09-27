@@ -4,11 +4,9 @@ config:
   gcp:project: voneo-dev-gb2828
   gcp:region: europe-west2
   # Ephemeral: created for one e2e run and destroyed after it (see
-  # scripts/gcp-e2e.mjs). No deletion protection, an auto-named Cloud SQL
-  # instance, and a self-signed cert for `domain`, a placeholder host that
-  # needs no DNS: the e2e browser maps it to the `lbIp` output itself.
+  # scripts/gcp-e2e.mjs). No deletion protection and an auto-named Cloud SQL
+  # instance.
   voneo-video-chat:ephemeral: "true"
-  voneo-video-chat:domain: dev.voneo.test
   # Secrets — set locally once a Pulumi backend/passphrase is configured:
   #   pulumi config set --secret dbPassword <value> --stack dev
   #   pulumi config set --secret jwtSecret <value> --stack dev
