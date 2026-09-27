@@ -253,8 +253,7 @@
         ],
         "loadBalancingScheme": "EXTERNAL_MANAGED",
         "protocol": "HTTP",
-        "region": "europe-west2",
-        "timeoutSec": 3600
+        "region": "europe-west2"
       }
     },
     {
@@ -270,8 +269,7 @@
         ],
         "loadBalancingScheme": "EXTERNAL_MANAGED",
         "protocol": "HTTP",
-        "region": "europe-west2",
-        "timeoutSec": 30
+        "region": "europe-west2"
       }
     },
     {

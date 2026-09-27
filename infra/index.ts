@@ -479,12 +479,12 @@ const frontendNeg = new gcp.compute.RegionNetworkEndpointGroup('frontend-neg', {
 	cloudRun: {service: voneoFrontend.name},
 });
 
+// No timeoutSec: GCP rejects it for serverless NEGs. The Cloud Run service's
+// own `timeout` is the request (and WebSocket connection) limit instead.
 const backendService = new gcp.compute.RegionBackendService('lb-backend', {
 	region,
 	protocol: 'HTTP',
 	loadBalancingScheme: 'EXTERNAL_MANAGED',
-	// Also the WebSocket connection limit, matching the Cloud Run timeout.
-	timeoutSec: 3600,
 	backends: [
 		{group: backendNeg.id, balancingMode: 'UTILIZATION', capacityScaler: 1},
 	],
@@ -493,7 +493,6 @@ const frontendService = new gcp.compute.RegionBackendService('lb-frontend', {
 	region,
 	protocol: 'HTTP',
 	loadBalancingScheme: 'EXTERNAL_MANAGED',
-	timeoutSec: 30,
 	backends: [
 		{group: frontendNeg.id, balancingMode: 'UTILIZATION', capacityScaler: 1},
 	],
