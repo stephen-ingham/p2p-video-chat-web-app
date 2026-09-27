@@ -183,11 +183,16 @@ const registryAuth = {
 };
 
 // Paths are relative to infra/, where Pulumi runs.
+//
+// `exec: true` runs the host's docker buildx rather than the provider's
+// embedded v0.12 client, whose registry auth timed out (DeadlineExceeded)
+// on pushes lasting about a minute, when plain `docker push` succeeded.
 const backendImage = new dockerBuild.Image(
 	'backend-image',
 	{
 		context: {location: '../web-socket-api/src'},
 		dockerfile: {location: '../web-socket-api/src/Dockerfile.prod'},
+		exec: true,
 		platforms: ['linux/amd64'],
 		push: true,
 		registries: [registryAuth],
@@ -213,6 +218,7 @@ const frontendImage = new dockerBuild.Image(
 			named: {root: {location: rootContext}},
 		},
 		dockerfile: {location: '../web-server/src/Dockerfile.prod'},
+		exec: true,
 		platforms: ['linux/amd64'],
 		push: true,
 		registries: [registryAuth],
