@@ -10,9 +10,7 @@ const config = new pulumi.Config();
 const gcpConfig = new pulumi.Config('gcp');
 
 // Stack name ("dev"/"prod") suffixes resource names. Each stack is meant to
-// deploy into its own GCP project (see infra/README.md): some resources here,
-// like the load balancer's proxy-only subnet, can only exist once per region
-// per network.
+// deploy into its own GCP project (see infra/README.md).
 const stack = pulumi.getStack();
 const project = gcpConfig.require('project');
 const region = gcpConfig.get('region') ?? 'europe-west2';
@@ -24,8 +22,7 @@ const domain = config.require('domain');
 
 // Ephemeral stacks (dev, prod-preview) exist only for one e2e run and are
 // destroyed straight after it (scripts/gcp-e2e.mjs), so they have no deletion
-// protection, a unique Cloud SQL name, and a self-signed certificate for a
-// placeholder `domain` instead of a DNS-validated one.
+// protection and a unique Cloud SQL name.
 const ephemeral = config.getBoolean('ephemeral') ?? false;
 
 // The commit being deployed, labelled onto the database, Cloud Run services
@@ -320,34 +317,18 @@ const dbUser = new gcp.sql.User('db-user', {
 
 // Cloud Run services //
 
-const voneoFrontend = new gcp.cloudrunv2.Service(
-	'frontend',
-	{
-		name: `voneo-frontend-${stack}`,
-		location: region,
-		labels: deploymentLabels,
-		deletionProtection: false,
-		// Reachable only through the load balancer below, not its run.app URL.
-		ingress: 'INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER',
-		// No IAM check on requests: the load balancer forwards anonymous users.
-		invokerIamDisabled: true,
-		scaling: {
-			minInstanceCount: 0,
-			maxInstanceCount: 1,
-		},
-		template: {
-			serviceAccount: frontendServiceAccount.email,
-			containers: [{image: frontendImage.ref}],
-		},
-		traffics: [
-			{
-				type: 'TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST',
-				percent: 100,
-			},
-		],
-	},
-	afterApis,
-);
+// Both services are public at their run.app URLs, with no load balancer.
+// Browsers only use the frontend's: it forwards /auth, /call and /wss to the
+// backend itself (web-server/src/server.mjs), so the app has one origin and
+// the SameSite=Strict refresh cookie stays first-party. The backend's
+// ALLOWED_ORIGIN needs the frontend's URL and the frontend needs the
+// backend's, so the frontend's is built from Cloud Run's deterministic
+// https://<service>-<project number>.<region>.run.app format.
+const frontendName = `voneo-frontend-${stack}`;
+const projectNumber = gcp.organizations.getProjectOutput({
+	projectId: project,
+}).number;
+const appUrl = pulumi.interpolate`https://${frontendName}-${projectNumber}.${region}.run.app`;
 
 const voneoBackend = new gcp.cloudrunv2.Service(
 	'backend',
@@ -356,7 +337,8 @@ const voneoBackend = new gcp.cloudrunv2.Service(
 		location: region,
 		labels: deploymentLabels,
 		deletionProtection: false,
-		ingress: 'INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER',
+		ingress: 'INGRESS_TRAFFIC_ALL',
+		// No IAM check on requests: the frontend proxies anonymous users.
 		invokerIamDisabled: true,
 		// Calls live in this instance's memory (session-store.js), so there
 		// must only ever be one.
@@ -382,7 +364,7 @@ const voneoBackend = new gcp.cloudrunv2.Service(
 					ports: {containerPort: 3000},
 					envs: [
 						{name: 'NODE_ENV', value: 'production'},
-						{name: 'ALLOWED_ORIGIN', value: `https://${domain}`},
+						{name: 'ALLOWED_ORIGIN', value: appUrl},
 						{name: 'DB_NAME', value: database.name},
 						{name: 'DB_USER', value: dbUser.name},
 						// A Unix socket path; database.js passes it as socketPath.
@@ -457,6 +439,41 @@ const voneoBackend = new gcp.cloudrunv2.Service(
 			cloudSqlClient,
 		],
 	},
+);
+
+const voneoFrontend = new gcp.cloudrunv2.Service(
+	'frontend',
+	{
+		name: frontendName,
+		location: region,
+		labels: deploymentLabels,
+		deletionProtection: false,
+		ingress: 'INGRESS_TRAFFIC_ALL',
+		// No IAM check on requests: anyone can open the app.
+		invokerIamDisabled: true,
+		scaling: {
+			minInstanceCount: 0,
+			maxInstanceCount: 1,
+		},
+		template: {
+			serviceAccount: frontendServiceAccount.email,
+			// Matches the backend's: signalling WebSockets pass through here too.
+			timeout: '3600s',
+			containers: [
+				{
+					image: frontendImage.ref,
+					envs: [{name: 'API_PROXY_TARGET', value: voneoBackend.uri}],
+				},
+			],
+		},
+		traffics: [
+			{
+				type: 'TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST',
+				percent: 100,
+			},
+		],
+	},
+	afterApis,
 );
 
 // Regional External Application Load Balancer //
@@ -626,6 +643,7 @@ const _httpForwardingRule = new gcp.compute.ForwardingRule(
 
 export const lbIp = ip.address;
 export const appHost = domain;
+export {appUrl};
 export const gitSha = gitState.sha;
 export const certDnsRecords =
 	managedCertificate?.dnsAuthorization.dnsResourceRecords;

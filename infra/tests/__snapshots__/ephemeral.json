@@ -75,7 +75,7 @@
       "name": "backend",
       "inputs": {
         "deletionProtection": false,
-        "ingress": "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER",
+        "ingress": "INGRESS_TRAFFIC_ALL",
         "invokerIamDisabled": true,
         "labels": {
           "git-dirty": "false",
@@ -97,7 +97,7 @@
                 },
                 {
                   "name": "ALLOWED_ORIGIN",
-                  "value": "https://dev.voneo.test"
+                  "value": "https://voneo-frontend-snapshot-test-123456789.europe-west2.run.app"
                 },
                 {
                   "name": "DB_NAME",
@@ -175,7 +175,7 @@
       "name": "frontend",
       "inputs": {
         "deletionProtection": false,
-        "ingress": "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER",
+        "ingress": "INGRESS_TRAFFIC_ALL",
         "invokerIamDisabled": true,
         "labels": {
           "git-dirty": "false",
@@ -189,8 +189,16 @@
         },
         "template": {
           "containers": [
-            {}
-          ]
+            {
+              "envs": [
+                {
+                  "name": "API_PROXY_TARGET",
+                  "value": "https://backend.run.app"
+                }
+              ]
+            }
+          ],
+          "timeout": "3600s"
         },
         "traffics": [
           {

@@ -48,10 +48,23 @@ export async function runSnapshotTest(
 					name: arguments_.name,
 					inputs: arguments_.inputs as ResourceInputs,
 				});
-				return {id: `${arguments_.name}_id`, state: arguments_.inputs};
+				return {
+					id: `${arguments_.name}_id`,
+					state: {
+						...arguments_.inputs,
+						// Read by the frontend's API_PROXY_TARGET.
+						...(arguments_.type === 'gcp:cloudrunv2/service:Service' && {
+							uri: `https://${arguments_.name}.run.app`,
+						}),
+					},
+				};
 			},
 			call(arguments_) {
-				return arguments_.inputs as ResourceInputs;
+				return {
+					...(arguments_.inputs as ResourceInputs),
+					// Only getProject's is read, to build the frontend's URL.
+					number: '123456789',
+				};
 			},
 		},
 		'voneo-video-chat',
