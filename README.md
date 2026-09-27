@@ -8,6 +8,7 @@
 [![Express](https://img.shields.io/badge/Express-000000?logo=express&logoColor=white)](https://expressjs.com/)
 [![WebSocket](https://img.shields.io/badge/WebSocket-010101?logo=websocket&logoColor=white)](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API)
 [![WebRTC](https://img.shields.io/badge/WebRTC-333333?logo=webrtc&logoColor=white)](https://webrtc.org/)
+[![http-proxy-3](https://img.shields.io/badge/http--proxy--3-4B5563?logo=&logoColor=white)](https://github.com/sagemathinc/http-proxy-3#readme)
 [![coturn](https://img.shields.io/badge/coturn-2C3E50?logo=&logoColor=white)](https://github.com/coturn/coturn/wiki)
 [![MySQL](https://img.shields.io/badge/MySQL-4479A1?logo=mysql&logoColor=white)](https://www.mysql.com/)
 [![Sequelize](https://img.shields.io/badge/Sequelize-52B0E7?logo=sequelize&logoColor=white)](https://sequelize.org/)

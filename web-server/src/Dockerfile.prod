@@ -24,10 +24,11 @@ RUN npm run build
 FROM base AS runtime
 COPY --from=prod-deps /voneo/web-server/src/node_modules ./node_modules
 COPY --from=build /voneo/web-server/src/dist ./dist
+COPY server.mjs ./
 
 ENV HOST=0.0.0.0
 ENV PORT=8080
 EXPOSE 8080
-CMD ["node", "./dist/server/entry.mjs"]
+CMD ["node", "server.mjs"]
 
 
