@@ -8,37 +8,36 @@
 | `prod-preview` | prod's      | Ephemeral: prod's settings (TURN on), deployed for one e2e run on a PR into `main`, then destroyed |
 | `prod`         | prod's own  | Long-lived, deployed by `deploy-prod.yml` on merge to `main`                                       |
 
-`dev` and `prod` each need **their own GCP project**: the load balancer's proxy-only subnet can only exist once per region per network. `prod-preview` shares prod's project, with every resource name suffixed by its stack name so the two don't collide. See [Ephemeral stacks](#ephemeral-stacks-dev-prod-preview) for how those work.
+`dev` and `prod` each use **their own GCP project**, so dev deployments never touch prod's data, quotas or IAM. `prod-preview` shares prod's project, with every resource name suffixed by its stack name so the two don't collide. See [Ephemeral stacks](#ephemeral-stacks-dev-prod-preview) for how those work.
 
 ## What gets created
 
 | Resource                                                                                                                  | What it's for                                                                                                                     | Closest AWS equivalent                     |
 | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
 | GCP project (created by hand, see below)                                                                                  | Boundary for billing, IAM and resources                                                                                           | An AWS account                             |
-| `gcp.projects.Service` (×7)                                                                                               | Turns on each GCP API the stack uses. APIs start off in a new project                                                             | No equivalent (AWS services are always on) |
+| `gcp.projects.Service` (×6)                                                                                               | Turns on each GCP API the stack uses. APIs start off in a new project                                                             | No equivalent (AWS services are always on) |
 | VPC `voneo-<stack>` + subnet `10.10.0.0/24`                                                                               | Network for the TURN VM                                                                                                           | VPC + subnet                               |
-| Proxy-only subnet `10.10.2.0/23`                                                                                          | Where the load balancer's managed proxies run. Required for a regional ALB                                                        | No equivalent (ALBs pick their own ENIs)   |
 | Artifact Registry repo `voneo-<stack>`                                                                                    | Holds the `voneo-backend` / `voneo-frontend` images                                                                               | ECR repository                             |
 | `docker-build` images (×2)                                                                                                | Pulumi builds the prod Dockerfiles and pushes them, then deploys by digest                                                        | `docker build` + `docker push` in CI       |
-| Cloud Run `voneo-frontend-<stack>` / `voneo-backend-<stack>`                                                              | Serverless containers. Scale to zero, max 1 instance (calls are held in memory)                                                   | App Runner / ECS on Fargate                |
+| Cloud Run `voneo-frontend-<stack>` / `voneo-backend-<stack>`                                                              | Serverless containers. Scale to zero, max 1 instance (calls are held in memory). Public at their `run.app` URLs, see below        | App Runner / ECS on Fargate                |
 | Service accounts `voneo-backend-`, `voneo-frontend-`, `voneo-turn-<stack>`                                                | The identity each workload runs as                                                                                                | IAM roles for tasks/instances              |
 | Cloud SQL `voneo-db-<stack>` (MySQL 8.4, `db-f1-micro`) + database + user `voneo`                                         | The app database. Ephemeral stacks add a random suffix to the name, e.g. `voneo-db-dev-4f9c2e1`                                   | RDS for MySQL                              |
 | Secret Manager secrets (DB password, JWT secrets, TURN secret)                                                            | Injected into Cloud Run as env vars                                                                                               | Secrets Manager                            |
-| Regional external Application Load Balancer (IP, NEGs, backend services, URL map, HTTPS + HTTP proxies, forwarding rules) | Public entry point. `/auth/*`, `/call/*` and `/wss/*` go to the backend, everything else to the frontend. HTTP redirects to HTTPS | ALB with listener rules and target groups  |
-| Certificate Manager certificate + DNS authorization (prod); self-signed regional SSL certificate (ephemeral stacks)       | TLS certificate for the domain. Ephemeral stacks use a placeholder domain with no DNS                                             | ACM certificate with DNS validation        |
 | coturn VM `voneo-turn-<stack>` (only when `turnEnabled`: prod and prod-preview)                                           | STUN/TURN relay, with a static IP and firewall rule                                                                               | EC2 instance + Elastic IP + security group |
+
+There's no load balancer. Users open the frontend's URL, `https://voneo-frontend-<stack>-<project number>.europe-west2.run.app` (the `appUrl` output). The frontend's Node server (`web-server/src/server.mjs`) forwards `/auth/*`, `/call/*` and `/wss/*`, WebSocket upgrades included, to the backend's own `run.app` URL, so browsers only ever see one origin. That keeps the `SameSite=Strict` refresh-token cookie working, and the backend's `ALLOWED_ORIGIN` is `appUrl`. The backend is public too, since the frontend reaches it like any other client, but requests from browsers on any other origin fail its CORS and WebSocket origin checks. `index.ts` builds `appUrl` from the service name and project number rather than reading the frontend's URL, which would make the two services depend on each other.
 
 A few GCP concepts that work differently from AWS:
 
 - **IAM is attached to resources, not identities.** Rather than writing a policy document for a role, you grant a _role_ (a predefined bundle of permissions, e.g. `roles/cloudsql.client`) to a _member_ (e.g. a service account) on a resource or project. `SecretIamMember` and `projects.IAMMember` in `index.ts` do exactly this.
 - **Service accounts are like IAM roles for workloads.** Each Cloud Run service and the VM runs as its own service account and gets credentials automatically from the metadata server, so there are no keys to manage.
 - **Cloud SQL connector.** The database has a public IP but no allowed networks, so nothing can connect to it directly. Cloud Run mounts a Unix socket at `/cloudsql/<connection name>` that tunnels through Google's connector, which checks the service account has `roles/cloudsql.client`. It does the same job as RDS IAM authentication plus RDS Proxy, without the VPC setup.
-- **Serverless NEGs** point the load balancer at a Cloud Run service. They're the equivalent of a target group whose target is a Lambda or Fargate service.
+- **Every Cloud Run service gets an HTTPS URL** on `run.app`, with a Google-managed certificate, so the app needs no load balancer, domain or certificate of its own. It's like an App Runner service's default domain.
 - **Workload Identity Federation** lets GitHub Actions deploy without a stored key. It works like an AWS IAM OIDC identity provider plus `AssumeRoleWithWebIdentity`.
 
 ## One-time setup (per stack)
 
-Do steps 1–2 once for `dev` and once for `prod`, each with its own project. Do steps 3–4 for all three stacks: `prod-preview` reuses prod's project and deploy identity. Step 5 is for `prod` only. You'll need the [gcloud CLI](https://cloud.google.com/sdk/docs/install) (`gcloud auth login` first), the [Pulumi CLI](https://www.pulumi.com/docs/install/) (`pulumi login`), a billing account, and, for prod, a domain you can add DNS records to.
+Do steps 1–2 once for `dev` and once for `prod`, each with its own project. Do steps 3–4 for all three stacks: `prod-preview` reuses prod's project and deploy identity. Step 5 is for `prod` only. You'll need the [gcloud CLI](https://cloud.google.com/sdk/docs/install) (`gcloud auth login` first), the [Pulumi CLI](https://www.pulumi.com/docs/install/) (`pulumi login`) and a billing account.
 
 ### 1. Create the project
 
@@ -66,7 +65,7 @@ DEPLOY_SA=github-deploy@$PROJECT_ID.iam.gserviceaccount.com
 gcloud iam service-accounts create github-deploy --project $PROJECT_ID
 
 for role in roles/run.admin roles/cloudsql.admin roles/secretmanager.admin \
-  roles/compute.admin roles/certificatemanager.owner roles/artifactregistry.admin \
+  roles/compute.admin roles/artifactregistry.admin \
   roles/iam.serviceAccountAdmin roles/iam.serviceAccountUser \
   roles/resourcemanager.projectIamAdmin roles/serviceusage.serviceUsageAdmin; do
   gcloud projects add-iam-policy-binding $PROJECT_ID \
@@ -118,31 +117,24 @@ From `infra/`:
 ```bash
 pulumi stack init $STACK
 pulumi config set gcp:project $PROJECT_ID --stack $STACK  # prod-preview: prod's project
-pulumi config set domain <app hostname, e.g. voneo.example.com> --stack $STACK  # prod only
 pulumi config set --secret dbPassword "$(openssl rand -hex 24)" --stack $STACK
 pulumi config set --secret jwtSecret "$(openssl rand -hex 32)" --stack $STACK
 pulumi config set --secret refreshTokenSecret "$(openssl rand -hex 32)" --stack $STACK
 pulumi config set --secret turnSecret "$(openssl rand -hex 32)" --stack $STACK  # prod and prod-preview (turnEnabled) only
 ```
 
-This writes to `Pulumi.<stack>.yaml`. The secret values are encrypted by Pulumi Cloud, so the file is safe to commit. Give `prod-preview` its own values rather than prod's, so a preview deployment can't mint tokens or TURN credentials that prod accepts. The ephemeral stacks' `domain` is already set in their YAML files.
+This writes to `Pulumi.<stack>.yaml`. The secret values are encrypted by Pulumi Cloud, so the file is safe to commit. Give `prod-preview` its own values rather than prod's, so a preview deployment can't mint tokens or TURN credentials that prod accepts.
 
-### 5. First deploy and DNS (prod only)
+### 5. First deploy (prod only)
 
 Run the first deploy locally so you can watch it (`gcloud auth application-default login` gives Pulumi your credentials), or merge to `main` to let the workflow run it:
 
 ```bash
 pulumi up --stack $STACK
-pulumi stack output lbIp --stack $STACK
-pulumi stack output certDnsRecords --stack $STACK
+pulumi stack output appUrl --stack $STACK
 ```
 
-At your DNS provider, add:
-
-- an `A` record for your domain pointing at `lbIp`
-- the `CNAME` from `certDnsRecords` (it proves you own the domain, so Google can issue the TLS certificate)
-
-The certificate usually becomes active within 15–60 minutes of the records resolving. Until then, HTTPS requests fail with a TLS error. Check its status with `gcloud certificate-manager certificates list --location europe-west2 --project $PROJECT_ID`.
+`appUrl` is where the app is served. It works as soon as the deploy finishes: there's no DNS or certificate to set up.
 
 ## Ephemeral stacks (dev, prod-preview)
 
@@ -150,7 +142,6 @@ The certificate usually becomes active within 15–60 minutes of the records res
 
 - **No deletion protection** on Cloud SQL, so `pulumi destroy` removes everything.
 - **An auto-named Cloud SQL instance.** GCP reserves a deleted instance's name for about a week, so a fixed name would block the next run. Pulumi adds a random suffix when it creates the instance and keeps it in the stack's state.
-- **A self-signed certificate** for a placeholder `domain` (`dev.voneo.test`, `preview.voneo.test`) instead of a Google-managed one. Nothing needs DNS: the e2e browser maps the placeholder to the `lbIp` output itself (Chromium's `--host-resolver-rules`) and ignores the certificate error.
 
 Every stack labels its Cloud SQL instance, Cloud Run services and TURN VM with the commit it was deployed from (`git-sha`), and whether there were uncommitted changes (`git-dirty`). The commit is also the `gitSha` stack output.
 
@@ -159,7 +150,7 @@ Every stack labels its Cloud SQL instance, Cloud Run services and TURN VM with t
 | Command                    | What it does                                                                        |
 | -------------------------- | ----------------------------------------------------------------------------------- |
 | `npm run gcp-deploy-dev`   | `pulumi up`, non-interactive                                                        |
-| `npm run test:e2e:gcp-dev` | Waits until the stack serves, then runs the e2e suite against it                    |
+| `npm run test:e2e:gcp-dev` | Waits until `appUrl` serves, then runs the e2e suite against it                     |
 | `npm run gcp-destroy-dev`  | `pulumi destroy`, non-interactive: removes every resource the stack created         |
 | `npm run gcp-e2e-dev`      | All three. Destroys the stack even if the deploy or tests fail, or you press Ctrl+C |
 
@@ -173,16 +164,14 @@ If a teardown ever fails, the stack keeps billing until you run `npm run gcp-des
 
 ## Stack README and outputs
 
-Each stack's page in Pulumi Cloud shows a stack README: its app URL, load balancer IP, deployed commit, GCP console links (Cloud Run metrics and logs, Cloud SQL, load balancer, TURN VM, billing) and operating commands. The template is `Pulumi.README.md`. `index.ts` exports it as the `readme` stack output, which is the name Pulumi Cloud looks for, and Pulumi Cloud fills in its `${outputs.<name>}` placeholders. Pulumi has no conditionals, so `index.ts` first drops sections wrapped in `<!-- ephemeral -->`, `<!-- prod -->` or `<!-- turn -->` markers that don't apply to the stack.
+Each stack's page in Pulumi Cloud shows a stack README: its app URL, deployed commit, GCP console links (Cloud Run metrics and logs, Cloud SQL, TURN VM, billing) and operating commands. The template is `Pulumi.README.md`. `index.ts` exports it as the `readme` stack output, which is the name Pulumi Cloud looks for, and Pulumi Cloud fills in its `${outputs.<name>}` placeholders. Pulumi has no conditionals, so `index.ts` first drops sections wrapped in `<!-- ephemeral -->`, `<!-- prod -->` or `<!-- turn -->` markers that don't apply to the stack.
 
 Stack outputs, also readable with `pulumi stack output <name> --stack <stack>`:
 
 | Output                                       | Value                                                           |
 | -------------------------------------------- | --------------------------------------------------------------- |
-| `appHost`                                    | The stack's `domain`                                            |
-| `lbIp`                                       | The load balancer's public IP                                   |
+| `appUrl`                                     | The app's URL: the frontend's `run.app` URL                     |
 | `gitSha`                                     | The commit deployed                                             |
-| `certDnsRecords`                             | The certificate's DNS authorization record (prod only)          |
 | `turnIp` / `turnVm`                          | The TURN VM's static IP and name (only when `turnEnabled`)      |
 | `project` / `region`                         | The GCP project and region deployed into                        |
 | `backendServiceName` / `frontendServiceName` | The Cloud Run service names                                     |
@@ -193,12 +182,13 @@ Stack outputs, also readable with `pulumi stack output <name> --stack <stack>`:
 
 ## Costs
 
-Ephemeral stacks cost cents per run: each exists for about 30–45 minutes, and the load balancer and Cloud SQL are billed by the second or hour. Rough monthly cost of a long-lived stack, while idle:
+Ephemeral stacks cost cents per run: each exists for about 30–45 minutes, and Cloud SQL is billed by the second. Rough monthly cost of a long-lived stack, while idle:
 
-- **Regional load balancer** (about $18): the forwarding rules are billed hourly.
 - **Cloud SQL `db-f1-micro`** (about $8–10).
 - **coturn VM and static IP** (a few dollars, prod only).
 - **Everything else** (Cloud Run, Artifact Registry, Secret Manager) costs very little at this scale.
+
+Cloud Run bills a service while it has a request open, WebSockets included, so both services are billed for as long as a call lasts: about $0.13/hour each at 1 vCPU and 512 MiB in `europe-west2` (list price). The Cloud Run free tier covers the first ~$5 a month across the billing account. There's no load balancer, which would add about $22 a month for its forwarding rule alone.
 
 On `prod`, `pulumi destroy --stack prod` removes everything except the Cloud SQL instance, which has deletion protection. Turn that off in `index.ts` first if you really mean to delete it.
 

@@ -64,7 +64,7 @@ This project demonstrates a classic WebRTC architecture: an HTTP API and WebSock
 Typical flow:
 
 1. A user opens the app, authenticates (login or register), then creates a call or joins one with a call ID.
-2. The Express API spins up a dedicated WebSocket server for that call and returns its URL.
+2. The Express API spins up a dedicated WebSocket server for that call and returns the call's ID. The client builds the WebSocket URL from that ID itself.
 3. The client connects to that WebSocket server and exchanges signalling messages (participants, offers, chat).
 4. WebRTC negotiation runs in the browser (`rtc-utils.ts`) to establish P2P video/audio where implemented, using the STUN/TURN servers returned by `GET /call/ice-servers` (see [STUN/TURN](#stunturn-nat-traversal)).
 
@@ -103,6 +103,7 @@ video-chat-application/
 │       ├── CLAUDE.md            # Astro dev-server guidance for Claude Code
 │       ├── AGENTS.md            # Astro dev-server guidance for other coding agents
 │       ├── Dockerfile.prod      # Production Docker image — serving the built Astro SSR app
+│       ├── server.mjs           # Production entry point: serves the app, proxies /auth, /call, /wss to the API
 │       ├── Dockerfile.dev       # Astro SSR Dev image — mounts source and watches for changes
 │       ├── compose.yaml         # Docker Compose services (prod + dev)
 │       ├── public/
@@ -127,7 +128,7 @@ video-chat-application/
 │           │   └── colors-plugin.mjs # Adds the shared colors.json palette as Tailwind colours
 │           └── middleware.ts    # CSP header (nonce-based, skipped in dev mode)
 ├── mobile-app/                  # Expo (React Native) Android app — react-native-webrtc for calling, talks to web-socket-api directly (shares only colors.json with web-server)
-├── infra/                       # Pulumi (TypeScript) IaC — GCP deployment (Cloud Run, Cloud SQL, load balancer, Artifact Registry, secrets); see infra/README.md for setup
+├── infra/                       # Pulumi (TypeScript) IaC — GCP deployment (Cloud Run, Cloud SQL, Artifact Registry, secrets); see infra/README.md for setup
 │   ├── index.ts                 # Everything except the TURN VM; also builds and pushes the prod images
 │   ├── turn-server.ts           # Self-hosted coturn STUN/TURN VM (prod stack only)
 │   ├── Pulumi.README.md         # Stack README template shown on each stack's Pulumi Cloud page
@@ -484,7 +485,7 @@ None of these steps happen automatically. Until they're done, merges to `main` w
 #### Runtime changes when `NODE_ENV=production`
 
 - **Refresh Token CookieL:** Setting `production` ensures the refresh token cookie can only be sent over secure `HTTPS` connections (sets `Secure` property to `true`).
-- **CORS:** the API checks `Origin` against a single `ALLOWED_ORIGIN` env var in both dev and production (dev also accepts `LOCAL`/`NGROK_HOST`-derived origins) — `ALLOWED_ORIGIN` must be set to the deployed frontend domain before a production deployment will accept any cross-origin request (`web-socket-api/src/app.js`).
+- **CORS:** the API checks `Origin` against a single `ALLOWED_ORIGIN` env var in both dev and production (dev also accepts `LOCAL`/`NGROK_HOST`-derived origins) — `ALLOWED_ORIGIN` must be set to the deployed frontend's origin before a production deployment will accept any cross-origin request (`web-socket-api/src/app.js`). On GCP, Pulumi sets it to the frontend's `run.app` URL (the stack's `appUrl` output).
 - **WebSocket server port:** every call's WebSocket server shares the app's single listening port (`3000`) in both dev and production — there is no per-call port. This is a deliberate constraint so the API stays deployable on Cloud Run, which only exposes one port per service; see the TODO in [Gotchas & Experimentation](#gotchas--experimentation) below.
 - **WebSocket URL construction:** the API only returns a `callID`; clients build the URL themselves (see [WebSocket signalling](#websocket-signalling-per-call)). The path is `/wss/:callID` in production, the same as in ngrok dev mode.
 - **WebSocket origin verification:** `verifyClient` rejects any WebSocket upgrade whose `Origin` header is present but doesn't match `ALLOWED_ORIGIN` (`web-socket-api/src/call/utils/misc.js`). Upgrades with no `Origin` header are allowed, like the CORS check: browsers always send one, so a missing header means a non-browser client. React Native on Android sends a default `Origin` built from the socket URL (`wss://host` → `https://host`), so the mobile app's socket host must match `ALLOWED_ORIGIN`, or the app must set an explicit `origin` header. In dev, `verifyClient` allows every origin.
@@ -584,7 +585,7 @@ Created for local development and syncs local file changes into the container au
 
 - `Dockerfile.prod`:
 
-Produces a production-optimised image. The e2e stack also uses it.
+Produces a production-optimised image. The e2e stack also uses it. It runs `server.mjs`, which serves the built app through `@astrojs/node`'s handler and, when `API_PROXY_TARGET` is set, forwards `/auth/`, `/call/` and `/wss/` (including WebSocket upgrades) to the signalling API. This is the production version of the Vite dev proxy in `astro.config.mjs`: browsers only talk to the frontend's origin, so there's no need for a load balancer to route paths, and the `SameSite=Strict` refresh cookie stays first-party.
 
 For GCP deployments, `pulumi up` builds this image and pushes it to the stack's Artifact Registry repo, as `europe-west2-docker.pkg.dev/<project>/voneo-<stack>/voneo-frontend:<stack>`. The Cloud Run service then runs it by digest. The signalling API's `Dockerfile.prod` is handled the same way.
 
@@ -631,7 +632,7 @@ A physical phone can't reach `10.0.2.2`. Point `EXPO_PUBLIC_API_URL` at your mac
 
 ## End-to-end tests (Playwright)
 
-E2e tests (`e2e/*.spec.ts`) run against a **prod-mode simulation** of the app rather than the local dev containers or a real deployed environment: the existing `signalling-server-prod`/`web-server-prod`/`mysql-db` compose services, run with `NODE_ENV=production` and an isolated `test-db`, behind a local [Caddy](https://caddyserver.com/) reverse proxy that terminates TLS at `https://voneo.test`. This lets the suite exercise real production-only behavior (`Secure` cookies, the `ALLOWED_ORIGIN` CORS/WS-origin allowlist) without needing a deployed GCP environment or incurring any cloud cost — see `e2e/compose.e2e.yaml` and `e2e/Caddyfile`.
+E2e tests (`e2e/*.spec.ts`) run against a **prod-mode simulation** of the app rather than the local dev containers or a real deployed environment: the existing `signalling-server-prod`/`web-server-prod`/`mysql-db` compose services, run with `NODE_ENV=production` and an isolated `test-db`, behind a local [Caddy](https://caddyserver.com/) reverse proxy that terminates TLS at `https://voneo.test`. Caddy forwards everything to the frontend, which proxies the API and WebSocket routes itself (`web-server/src/server.mjs`), as it does on Cloud Run. This lets the suite exercise real production-only behavior (`Secure` cookies, the `ALLOWED_ORIGIN` CORS/WS-origin allowlist) without needing a deployed GCP environment or incurring any cloud cost — see `e2e/compose.e2e.yaml` and `e2e/Caddyfile`.
 
 **One-time local setup:** add a hosts file entry pointing `voneo.test` at `127.0.0.1`:
 
@@ -684,7 +685,7 @@ PRs also run the e2e suite (not the NAT one) against a real, short-lived GCP dep
 - **PRs into `dev`:** the `e2e-gcp-dev` job in `pr-dev.yml` uses the `dev` stack.
 - **PRs into `main`:** the `e2e-gcp-prod-preview` job in `pr-main.yml` uses `prod-preview`, which has prod's settings (TURN VM included) and deploys into prod's GCP project. Real prod isn't touched until the PR merges.
 
-These stacks use a placeholder hostname (`dev.voneo.test`, `preview.voneo.test`) with a self-signed certificate, so they need no domain or DNS. `scripts/gcp-e2e.mjs` passes the hostname and the load balancer's IP to Playwright (`E2E_BASE_URL`, `E2E_RESOLVE_IP`), and Chromium resolves the hostname to that IP itself. To do the same from your machine:
+The app is served from the frontend Cloud Run service's own `run.app` URL (the stack's `appUrl` output), which has real DNS and a Google-managed certificate, so no domain, hosts entry or certificate workaround is needed. You can open it on any device, including a phone. `scripts/gcp-e2e.mjs` passes it to Playwright as `E2E_BASE_URL`. To do the same from your machine:
 
 ```bash
 npm run gcp-e2e-dev        # deploy, test, and always destroy
@@ -702,4 +703,4 @@ The `prod-preview` equivalents are `gcp-e2e-prod-preview`, `gcp-deploy-prod-prev
 1. **Leaving a call requires an active WebSocket connection first** — `DELETE /call/:callID/leave` returns `400 "Call is not active"` until a participant has actually connected to the call's WebSocket server at least once (that's what flips `Call.activeCall` to `true` — see `call/utils/misc.js`). Joining via `PUT /call/:callID/join` alone isn't enough; the [Leave a call](#api-examples) curl example below will 400 unless you connect a WebSocket client to the call first.
 2. **In-memory calls** — Restarting the API clears all active calls and WebSocket servers. No persistence of web socket calls to persistent storage at current.
 3. **TODO: per-call WebSocket ports** — call WebSocket servers used to each get a randomly assigned port (`setRandomPort()`) in production. This was dropped in favour of a single shared port (`3000`, path-routed by call ID) so the API stays deployable on Cloud Run, which only exposes one port per service; multiple simultaneous calls are already supported under this shared-port design, each isolated by its own `callID`-routed `WebSocketServer` instance. If a future deployment target supports multiple exposed ports and there's a need to isolate or independently scale calls at the process/connection level, consider re-adding per-call ports.
-4. **TODO: try a smaller frontend runtime base image** — every stage of `web-server/src/Dockerfile.prod` uses `dhi.io/node:26-alpine-dev`, including the runtime stage. The `-dev` variant includes a shell and npm, which the running server doesn't need. Switching the runtime stage to the non-`-dev` `dhi.io/node:26-alpine` should make the image smaller (it's about 412 MB, most of it the `node_modules` that `astro` pulls in) and give it less attack surface. Check that `node ./dist/server/entry.mjs` still starts without a shell, then run the e2e suite.
+4. **TODO: try a smaller frontend runtime base image** — every stage of `web-server/src/Dockerfile.prod` uses `dhi.io/node:26-alpine-dev`, including the runtime stage. The `-dev` variant includes a shell and npm, which the running server doesn't need. Switching the runtime stage to the non-`-dev` `dhi.io/node:26-alpine` should make the image smaller (it's about 412 MB, most of it the `node_modules` that `astro` pulls in) and give it less attack surface. Check that `node server.mjs` still starts without a shell, then run the e2e suite.

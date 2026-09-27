@@ -1,6 +1,6 @@
 # Voneo on GCP
 
-Voneo is a peer-to-peer video chat app. This stack runs its Astro frontend and Express signalling API on Cloud Run, behind a regional load balancer, with a Cloud SQL MySQL database. Setup and architecture: [`infra/README.md`](https://github.com/stephen-ingham/p2p-video-chat-web-app/blob/main/infra/README.md).
+Voneo is a peer-to-peer video chat app. This stack runs its Astro frontend and Express signalling API on Cloud Run, with a Cloud SQL MySQL database. The frontend serves the app and forwards API and WebSocket requests to the backend. Setup and architecture: [`infra/README.md`](https://github.com/stephen-ingham/p2p-video-chat-web-app/blob/main/infra/README.md).
 
 <!-- ephemeral -->
 
@@ -17,45 +17,20 @@ Voneo is a peer-to-peer video chat app. This stack runs its Astro frontend and E
 
 |                      |                                                                                                          |
 | -------------------- | -------------------------------------------------------------------------------------------------------- |
-| App                  | `https://${outputs.appHost}`                                                                             |
-| Load balancer IP     | `${outputs.lbIp}`                                                                                        |
+| App                  | ${outputs.appUrl}                                                                                        |
 | Deployed commit      | [`${outputs.gitSha}`](https://github.com/stephen-ingham/p2p-video-chat-web-app/commit/${outputs.gitSha}) |
 | GCP project / region | `${outputs.project}` / `${outputs.region}`                                                               |
-
-<!-- ephemeral -->
-
-`${outputs.appHost}` is a placeholder with no DNS record, and the certificate is self-signed. To open the app in a browser, map the name to the load balancer IP, e.g. launch Chrome with `--host-resolver-rules="MAP ${outputs.appHost} ${outputs.lbIp}"`, then accept the certificate warning.
-
-<!-- /ephemeral -->
 
 ## Console links
 
 - Backend (Cloud Run): [metrics](https://console.cloud.google.com/run/detail/${outputs.region}/${outputs.backendServiceName}/metrics?project=${outputs.project}), [logs](https://console.cloud.google.com/run/detail/${outputs.region}/${outputs.backendServiceName}/logs?project=${outputs.project})
 - Frontend (Cloud Run): [metrics](https://console.cloud.google.com/run/detail/${outputs.region}/${outputs.frontendServiceName}/metrics?project=${outputs.project}), [logs](https://console.cloud.google.com/run/detail/${outputs.region}/${outputs.frontendServiceName}/logs?project=${outputs.project})
 - [Cloud SQL instance `${outputs.dbInstanceName}`](https://console.cloud.google.com/sql/instances/${outputs.dbInstanceName}/overview?project=${outputs.project})
-- [Load balancers](https://console.cloud.google.com/net-services/loadbalancing/list/loadBalancers?project=${outputs.project})
 - [Secret Manager](https://console.cloud.google.com/security/secret-manager?project=${outputs.project})
 <!-- turn -->
 - [TURN VM `${outputs.turnVm}`](https://console.cloud.google.com/compute/instancesDetail/zones/${outputs.region}-a/instances/${outputs.turnVm}?project=${outputs.project})
 <!-- /turn -->
 - [Billing](https://console.cloud.google.com/billing/linkedaccount?project=${outputs.project})
-
-<!-- prod -->
-
-## DNS and TLS
-
-The domain needs two records at the DNS provider:
-
-- `A` record: `${outputs.appHost}` → `${outputs.lbIp}`
-- The `CNAME` from the `certDnsRecords` output (`pulumi stack output certDnsRecords --stack prod`). It proves domain ownership so Google can issue the certificate.
-
-Check the certificate's status (it usually goes active 15–60 minutes after the records resolve):
-
-```bash
-gcloud certificate-manager certificates list --location ${outputs.region} --project ${outputs.project}
-```
-
-<!-- /prod -->
 
 <!-- turn -->
 
