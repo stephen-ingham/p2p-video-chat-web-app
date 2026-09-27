@@ -36,7 +36,7 @@
           "location": "../web-server/src",
           "named": {
             "root": {
-              "location": ".."
+              "location": ".root-context"
             }
           }
         },

@@ -197,13 +197,20 @@ const backendImage = new dockerBuild.Image(
 	},
 	{dependsOn: [registry]},
 );
+// Dockerfile.prod copies the shared colors.json from a `root` build context.
+// docker-build hashes every file in each context, ignoring .dockerignore for
+// named ones, so the repo root (every node_modules folder) made each preview
+// take minutes. The context is a folder holding just a copy of colors.json.
+const rootContext = '.root-context';
+fs.mkdirSync(rootContext, {recursive: true});
+fs.copyFileSync('../colors.json', `${rootContext}/colors.json`);
+
 const frontendImage = new dockerBuild.Image(
 	'frontend-image',
 	{
 		context: {
 			location: '../web-server/src',
-			// Dockerfile.prod copies the shared colors.json from the repo root.
-			named: {root: {location: '..'}},
+			named: {root: {location: rootContext}},
 		},
 		dockerfile: {location: '../web-server/src/Dockerfile.prod'},
 		platforms: ['linux/amd64'],
