@@ -3,7 +3,6 @@ import fs from 'node:fs';
 import * as pulumi from '@pulumi/pulumi';
 import * as gcp from '@pulumi/gcp';
 import * as dockerBuild from '@pulumi/docker-build';
-import * as tls from '@pulumi/tls';
 import {createTurnServer} from './turn-server.js';
 
 const config = new pulumi.Config();
@@ -15,10 +14,6 @@ const stack = pulumi.getStack();
 const project = gcpConfig.require('project');
 const region = gcpConfig.get('region') ?? 'europe-west2';
 const zone = `${region}-a`;
-// Public hostname the app is served on, e.g. voneo.example.com. Its DNS A
-// record must point at the `lbIp` output, and the `certDnsRecords` output must
-// be added as a CNAME before the TLS certificate can be issued.
-const domain = config.require('domain');
 
 // Ephemeral stacks (dev, prod-preview) exist only for one e2e run and are
 // destroyed straight after it (scripts/gcp-e2e.mjs), so they have no deletion
@@ -58,7 +53,6 @@ const refreshTokenSecret = config.requireSecret('refreshTokenSecret');
 // needs one of them.
 const apis = [
 	'artifactregistry',
-	'certificatemanager',
 	'compute',
 	'iam',
 	'run',
@@ -87,16 +81,6 @@ const subnet = new gcp.compute.Subnetwork('vpc-subnet', {
 	region,
 	network: network.id,
 	ipCidrRange: '10.10.0.0/24',
-});
-// Regional external Application Load Balancers run their proxies in this
-// subnet; one is required per region and network before one can be created.
-const proxySubnet = new gcp.compute.Subnetwork('lb-proxy-subnet', {
-	name: `voneo-lb-proxy-${stack}`,
-	region,
-	network: network.id,
-	ipCidrRange: '10.10.2.0/23',
-	purpose: 'REGIONAL_MANAGED_PROXY',
-	role: 'ACTIVE',
 });
 
 // Secret Manager secrets //
@@ -476,177 +460,8 @@ const voneoFrontend = new gcp.cloudrunv2.Service(
 	afterApis,
 );
 
-// Regional External Application Load Balancer //
-
-const ip = new gcp.compute.Address(
-	'lb-ip',
-	{region, networkTier: 'STANDARD'},
-	afterApis,
-);
-
-// Serverless NEGs point the load balancer at each Cloud Run service
-const backendNeg = new gcp.compute.RegionNetworkEndpointGroup('backend-neg', {
-	region,
-	networkEndpointType: 'SERVERLESS',
-	cloudRun: {service: voneoBackend.name},
-});
-const frontendNeg = new gcp.compute.RegionNetworkEndpointGroup('frontend-neg', {
-	region,
-	networkEndpointType: 'SERVERLESS',
-	cloudRun: {service: voneoFrontend.name},
-});
-
-// No timeoutSec: GCP rejects it for serverless NEGs. The Cloud Run service's
-// own `timeout` is the request (and WebSocket connection) limit instead.
-const backendService = new gcp.compute.RegionBackendService('lb-backend', {
-	region,
-	protocol: 'HTTP',
-	loadBalancingScheme: 'EXTERNAL_MANAGED',
-	backends: [
-		{group: backendNeg.id, balancingMode: 'UTILIZATION', capacityScaler: 1},
-	],
-});
-const frontendService = new gcp.compute.RegionBackendService('lb-frontend', {
-	region,
-	protocol: 'HTTP',
-	loadBalancingScheme: 'EXTERNAL_MANAGED',
-	backends: [
-		{group: frontendNeg.id, balancingMode: 'UTILIZATION', capacityScaler: 1},
-	],
-});
-
-// Path-based routing: API, call and WebSocket routes → backend, everything
-// else → frontend. Same origin for both, so the web app needs no API URL.
-const urlMap = new gcp.compute.RegionUrlMap('lb-url-map', {
-	region,
-	defaultService: frontendService.id,
-	hostRules: [
-		{
-			hosts: [domain],
-			pathMatcher: 'voneo-paths',
-		},
-	],
-	pathMatchers: [
-		{
-			name: 'voneo-paths',
-			defaultService: frontendService.id,
-			pathRules: [
-				{paths: ['/auth/*', '/call/*', '/wss/*'], service: backendService.id},
-			],
-		},
-	],
-});
-
-// Long-lived stacks: a Google-managed TLS certificate. Regional certificates
-// can only be validated through DNS, via the CNAME in the `certDnsRecords`
-// output.
-function createManagedCertificate() {
-	const dnsAuthorization = new gcp.certificatemanager.DnsAuthorization(
-		'lb-cert-dns-auth',
-		{
-			name: `voneo-${stack}`,
-			location: region,
-			domain,
-			type: 'PER_PROJECT_RECORD',
-		},
-		afterApis,
-	);
-	const cert = new gcp.certificatemanager.Certificate('lb-cert', {
-		location: region,
-		managed: {
-			domains: [domain],
-			dnsAuthorizations: [dnsAuthorization.id],
-		},
-	});
-	return {dnsAuthorization, cert};
-}
-
-// Ephemeral stacks: a self-signed certificate for the placeholder `domain`,
-// which needs no DNS. The e2e browser maps `domain` to `lbIp` itself
-// (--host-resolver-rules) and ignores certificate errors.
-function createSelfSignedCertificate() {
-	const key = new tls.PrivateKey('lb-tls-key', {
-		algorithm: 'RSA',
-		rsaBits: 2048,
-	});
-	const cert = new tls.SelfSignedCert('lb-tls-cert', {
-		privateKeyPem: key.privateKeyPem,
-		subject: {commonName: domain},
-		dnsNames: [domain],
-		validityPeriodHours: 24 * 30,
-		allowedUses: ['key_encipherment', 'digital_signature', 'server_auth'],
-	});
-	return new gcp.compute.RegionSslCertificate(
-		'lb-ssl-cert',
-		{region, certificate: cert.certPem, privateKey: key.privateKeyPem},
-		afterApis,
-	);
-}
-
-const managedCertificate = ephemeral ? undefined : createManagedCertificate();
-const selfSignedCertificate = ephemeral
-	? createSelfSignedCertificate()
-	: undefined;
-
-const httpsProxy = new gcp.compute.RegionTargetHttpsProxy('lb-https-proxy', {
-	region,
-	urlMap: urlMap.id,
-	...(managedCertificate && {
-		certificateManagerCertificates: [
-			pulumi.interpolate`//certificatemanager.googleapis.com/${managedCertificate.cert.id}`,
-		],
-	}),
-	...(selfSignedCertificate && {
-		sslCertificates: [selfSignedCertificate.selfLink],
-	}),
-});
-
-const _httpsForwardingRule = new gcp.compute.ForwardingRule(
-	'lb-forwarding-rule',
-	{
-		region,
-		target: httpsProxy.id,
-		portRange: '443',
-		loadBalancingScheme: 'EXTERNAL_MANAGED',
-		ipAddress: ip.address,
-		network: network.id,
-		networkTier: 'STANDARD',
-	},
-	{dependsOn: [proxySubnet]},
-);
-
-const httpRedirectUrlMap = new gcp.compute.RegionUrlMap(
-	'lb-http-redirect',
-	{
-		region,
-		defaultUrlRedirect: {httpsRedirect: true, stripQuery: false},
-	},
-	afterApis,
-);
-const httpProxy = new gcp.compute.RegionTargetHttpProxy('lb-http-proxy', {
-	region,
-	urlMap: httpRedirectUrlMap.id,
-});
-const _httpForwardingRule = new gcp.compute.ForwardingRule(
-	'lb-http-forwarding-rule',
-	{
-		region,
-		target: httpProxy.id,
-		portRange: '80',
-		loadBalancingScheme: 'EXTERNAL_MANAGED',
-		ipAddress: ip.address,
-		network: network.id,
-		networkTier: 'STANDARD',
-	},
-	{dependsOn: [proxySubnet]},
-);
-
-export const lbIp = ip.address;
-export const appHost = domain;
 export {appUrl};
 export const gitSha = gitState.sha;
-export const certDnsRecords =
-	managedCertificate?.dnsAuthorization.dnsResourceRecords;
 export const turnIp = turnServer?.ip.address;
 export const turnVm = turnServer ? `voneo-turn-${stack}` : undefined;
 export {project, region};

@@ -209,186 +209,11 @@
       }
     },
     {
-      "type": "gcp:compute/address:Address",
-      "name": "lb-ip",
-      "inputs": {
-        "networkTier": "STANDARD",
-        "region": "europe-west2"
-      }
-    },
-    {
-      "type": "gcp:compute/forwardingRule:ForwardingRule",
-      "name": "lb-forwarding-rule",
-      "inputs": {
-        "loadBalancingScheme": "EXTERNAL_MANAGED",
-        "network": "vpc_id",
-        "networkTier": "STANDARD",
-        "portRange": "443",
-        "region": "europe-west2",
-        "target": "lb-https-proxy_id"
-      }
-    },
-    {
-      "type": "gcp:compute/forwardingRule:ForwardingRule",
-      "name": "lb-http-forwarding-rule",
-      "inputs": {
-        "loadBalancingScheme": "EXTERNAL_MANAGED",
-        "network": "vpc_id",
-        "networkTier": "STANDARD",
-        "portRange": "80",
-        "region": "europe-west2",
-        "target": "lb-http-proxy_id"
-      }
-    },
-    {
       "type": "gcp:compute/network:Network",
       "name": "vpc",
       "inputs": {
         "autoCreateSubnetworks": false,
         "name": "voneo-snapshot-test"
-      }
-    },
-    {
-      "type": "gcp:compute/regionBackendService:RegionBackendService",
-      "name": "lb-backend",
-      "inputs": {
-        "backends": [
-          {
-            "balancingMode": "UTILIZATION",
-            "capacityScaler": 1,
-            "group": "backend-neg_id"
-          }
-        ],
-        "loadBalancingScheme": "EXTERNAL_MANAGED",
-        "protocol": "HTTP",
-        "region": "europe-west2"
-      }
-    },
-    {
-      "type": "gcp:compute/regionBackendService:RegionBackendService",
-      "name": "lb-frontend",
-      "inputs": {
-        "backends": [
-          {
-            "balancingMode": "UTILIZATION",
-            "capacityScaler": 1,
-            "group": "frontend-neg_id"
-          }
-        ],
-        "loadBalancingScheme": "EXTERNAL_MANAGED",
-        "protocol": "HTTP",
-        "region": "europe-west2"
-      }
-    },
-    {
-      "type": "gcp:compute/regionNetworkEndpointGroup:RegionNetworkEndpointGroup",
-      "name": "backend-neg",
-      "inputs": {
-        "cloudRun": {
-          "service": "voneo-backend-snapshot-test"
-        },
-        "networkEndpointType": "SERVERLESS",
-        "region": "europe-west2"
-      }
-    },
-    {
-      "type": "gcp:compute/regionNetworkEndpointGroup:RegionNetworkEndpointGroup",
-      "name": "frontend-neg",
-      "inputs": {
-        "cloudRun": {
-          "service": "voneo-frontend-snapshot-test"
-        },
-        "networkEndpointType": "SERVERLESS",
-        "region": "europe-west2"
-      }
-    },
-    {
-      "type": "gcp:compute/regionSslCertificate:RegionSslCertificate",
-      "name": "lb-ssl-cert",
-      "inputs": {
-        "certificate": {
-          "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
-          "value": null
-        },
-        "privateKey": {
-          "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
-          "value": null
-        },
-        "region": "europe-west2"
-      }
-    },
-    {
-      "type": "gcp:compute/regionTargetHttpProxy:RegionTargetHttpProxy",
-      "name": "lb-http-proxy",
-      "inputs": {
-        "region": "europe-west2",
-        "urlMap": "lb-http-redirect_id"
-      }
-    },
-    {
-      "type": "gcp:compute/regionTargetHttpsProxy:RegionTargetHttpsProxy",
-      "name": "lb-https-proxy",
-      "inputs": {
-        "region": "europe-west2",
-        "sslCertificates": [
-          null
-        ],
-        "urlMap": "lb-url-map_id"
-      }
-    },
-    {
-      "type": "gcp:compute/regionUrlMap:RegionUrlMap",
-      "name": "lb-http-redirect",
-      "inputs": {
-        "defaultUrlRedirect": {
-          "httpsRedirect": true,
-          "stripQuery": false
-        },
-        "region": "europe-west2"
-      }
-    },
-    {
-      "type": "gcp:compute/regionUrlMap:RegionUrlMap",
-      "name": "lb-url-map",
-      "inputs": {
-        "defaultService": "lb-frontend_id",
-        "hostRules": [
-          {
-            "hosts": [
-              "dev.voneo.test"
-            ],
-            "pathMatcher": "voneo-paths"
-          }
-        ],
-        "pathMatchers": [
-          {
-            "defaultService": "lb-frontend_id",
-            "name": "voneo-paths",
-            "pathRules": [
-              {
-                "paths": [
-                  "/auth/*",
-                  "/call/*",
-                  "/wss/*"
-                ],
-                "service": "lb-backend_id"
-              }
-            ]
-          }
-        ],
-        "region": "europe-west2"
-      }
-    },
-    {
-      "type": "gcp:compute/subnetwork:Subnetwork",
-      "name": "lb-proxy-subnet",
-      "inputs": {
-        "ipCidrRange": "10.10.2.0/23",
-        "name": "voneo-lb-proxy-snapshot-test",
-        "network": "vpc_id",
-        "purpose": "REGIONAL_MANAGED_PROXY",
-        "region": "europe-west2",
-        "role": "ACTIVE"
       }
     },
     {
@@ -416,14 +241,6 @@
       "inputs": {
         "disableOnDestroy": false,
         "service": "artifactregistry.googleapis.com"
-      }
-    },
-    {
-      "type": "gcp:projects/service:Service",
-      "name": "certificatemanager-api",
-      "inputs": {
-        "disableOnDestroy": false,
-        "service": "certificatemanager.googleapis.com"
       }
     },
     {
@@ -607,36 +424,6 @@
           "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
           "value": "snapshot-test-password"
         }
-      }
-    },
-    {
-      "type": "tls:index/privateKey:PrivateKey",
-      "name": "lb-tls-key",
-      "inputs": {
-        "algorithm": "RSA",
-        "rsaBits": 2048
-      }
-    },
-    {
-      "type": "tls:index/selfSignedCert:SelfSignedCert",
-      "name": "lb-tls-cert",
-      "inputs": {
-        "allowedUses": [
-          "key_encipherment",
-          "digital_signature",
-          "server_auth"
-        ],
-        "dnsNames": [
-          "dev.voneo.test"
-        ],
-        "privateKeyPem": {
-          "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
-          "value": null
-        },
-        "subject": {
-          "commonName": "dev.voneo.test"
-        },
-        "validityPeriodHours": 720
       }
     }
   ]

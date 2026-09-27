@@ -71,31 +71,6 @@
       }
     },
     {
-      "type": "gcp:certificatemanager/certificate:Certificate",
-      "name": "lb-cert",
-      "inputs": {
-        "location": "europe-west2",
-        "managed": {
-          "dnsAuthorizations": [
-            "lb-cert-dns-auth_id"
-          ],
-          "domains": [
-            "snapshot.example.com"
-          ]
-        }
-      }
-    },
-    {
-      "type": "gcp:certificatemanager/dnsAuthorization:DnsAuthorization",
-      "name": "lb-cert-dns-auth",
-      "inputs": {
-        "domain": "snapshot.example.com",
-        "location": "europe-west2",
-        "name": "voneo-snapshot-test",
-        "type": "PER_PROJECT_RECORD"
-      }
-    },
-    {
       "type": "gcp:cloudrunv2/service:Service",
       "name": "backend",
       "inputs": {
@@ -248,14 +223,6 @@
     },
     {
       "type": "gcp:compute/address:Address",
-      "name": "lb-ip",
-      "inputs": {
-        "networkTier": "STANDARD",
-        "region": "europe-west2"
-      }
-    },
-    {
-      "type": "gcp:compute/address:Address",
       "name": "turn-ip",
       "inputs": {
         "networkTier": "STANDARD",
@@ -289,30 +256,6 @@
         "targetTags": [
           "voneo-turn-snapshot-test"
         ]
-      }
-    },
-    {
-      "type": "gcp:compute/forwardingRule:ForwardingRule",
-      "name": "lb-forwarding-rule",
-      "inputs": {
-        "loadBalancingScheme": "EXTERNAL_MANAGED",
-        "network": "vpc_id",
-        "networkTier": "STANDARD",
-        "portRange": "443",
-        "region": "europe-west2",
-        "target": "lb-https-proxy_id"
-      }
-    },
-    {
-      "type": "gcp:compute/forwardingRule:ForwardingRule",
-      "name": "lb-http-forwarding-rule",
-      "inputs": {
-        "loadBalancingScheme": "EXTERNAL_MANAGED",
-        "network": "vpc_id",
-        "networkTier": "STANDARD",
-        "portRange": "80",
-        "region": "europe-west2",
-        "target": "lb-http-proxy_id"
       }
     },
     {
@@ -364,134 +307,6 @@
       }
     },
     {
-      "type": "gcp:compute/regionBackendService:RegionBackendService",
-      "name": "lb-backend",
-      "inputs": {
-        "backends": [
-          {
-            "balancingMode": "UTILIZATION",
-            "capacityScaler": 1,
-            "group": "backend-neg_id"
-          }
-        ],
-        "loadBalancingScheme": "EXTERNAL_MANAGED",
-        "protocol": "HTTP",
-        "region": "europe-west2"
-      }
-    },
-    {
-      "type": "gcp:compute/regionBackendService:RegionBackendService",
-      "name": "lb-frontend",
-      "inputs": {
-        "backends": [
-          {
-            "balancingMode": "UTILIZATION",
-            "capacityScaler": 1,
-            "group": "frontend-neg_id"
-          }
-        ],
-        "loadBalancingScheme": "EXTERNAL_MANAGED",
-        "protocol": "HTTP",
-        "region": "europe-west2"
-      }
-    },
-    {
-      "type": "gcp:compute/regionNetworkEndpointGroup:RegionNetworkEndpointGroup",
-      "name": "backend-neg",
-      "inputs": {
-        "cloudRun": {
-          "service": "voneo-backend-snapshot-test"
-        },
-        "networkEndpointType": "SERVERLESS",
-        "region": "europe-west2"
-      }
-    },
-    {
-      "type": "gcp:compute/regionNetworkEndpointGroup:RegionNetworkEndpointGroup",
-      "name": "frontend-neg",
-      "inputs": {
-        "cloudRun": {
-          "service": "voneo-frontend-snapshot-test"
-        },
-        "networkEndpointType": "SERVERLESS",
-        "region": "europe-west2"
-      }
-    },
-    {
-      "type": "gcp:compute/regionTargetHttpProxy:RegionTargetHttpProxy",
-      "name": "lb-http-proxy",
-      "inputs": {
-        "region": "europe-west2",
-        "urlMap": "lb-http-redirect_id"
-      }
-    },
-    {
-      "type": "gcp:compute/regionTargetHttpsProxy:RegionTargetHttpsProxy",
-      "name": "lb-https-proxy",
-      "inputs": {
-        "certificateManagerCertificates": [
-          "//certificatemanager.googleapis.com/lb-cert_id"
-        ],
-        "region": "europe-west2",
-        "urlMap": "lb-url-map_id"
-      }
-    },
-    {
-      "type": "gcp:compute/regionUrlMap:RegionUrlMap",
-      "name": "lb-http-redirect",
-      "inputs": {
-        "defaultUrlRedirect": {
-          "httpsRedirect": true,
-          "stripQuery": false
-        },
-        "region": "europe-west2"
-      }
-    },
-    {
-      "type": "gcp:compute/regionUrlMap:RegionUrlMap",
-      "name": "lb-url-map",
-      "inputs": {
-        "defaultService": "lb-frontend_id",
-        "hostRules": [
-          {
-            "hosts": [
-              "snapshot.example.com"
-            ],
-            "pathMatcher": "voneo-paths"
-          }
-        ],
-        "pathMatchers": [
-          {
-            "defaultService": "lb-frontend_id",
-            "name": "voneo-paths",
-            "pathRules": [
-              {
-                "paths": [
-                  "/auth/*",
-                  "/call/*",
-                  "/wss/*"
-                ],
-                "service": "lb-backend_id"
-              }
-            ]
-          }
-        ],
-        "region": "europe-west2"
-      }
-    },
-    {
-      "type": "gcp:compute/subnetwork:Subnetwork",
-      "name": "lb-proxy-subnet",
-      "inputs": {
-        "ipCidrRange": "10.10.2.0/23",
-        "name": "voneo-lb-proxy-snapshot-test",
-        "network": "vpc_id",
-        "purpose": "REGIONAL_MANAGED_PROXY",
-        "region": "europe-west2",
-        "role": "ACTIVE"
-      }
-    },
-    {
       "type": "gcp:compute/subnetwork:Subnetwork",
       "name": "vpc-subnet",
       "inputs": {
@@ -516,14 +331,6 @@
       "inputs": {
         "disableOnDestroy": false,
         "service": "artifactregistry.googleapis.com"
-      }
-    },
-    {
-      "type": "gcp:projects/service:Service",
-      "name": "certificatemanager-api",
-      "inputs": {
-        "disableOnDestroy": false,
-        "service": "certificatemanager.googleapis.com"
       }
     },
     {
