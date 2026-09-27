@@ -1,4 +1,5 @@
 import {execFileSync} from 'node:child_process';
+import fs from 'node:fs';
 import * as pulumi from '@pulumi/pulumi';
 import * as gcp from '@pulumi/gcp';
 import * as dockerBuild from '@pulumi/docker-build';
@@ -614,3 +615,35 @@ export const gitSha = gitState.sha;
 export const certDnsRecords =
 	managedCertificate?.dnsAuthorization.dnsResourceRecords;
 export const turnIp = turnServer?.ip.address;
+export const turnVm = turnServer ? `voneo-turn-${stack}` : undefined;
+export {project, region};
+export const backendServiceName = voneoBackend.name;
+export const frontendServiceName = voneoFrontend.name;
+export const dbInstanceName = dbInstance.name;
+
+// Stack README shown on the stack's Pulumi Cloud page, which fills in its
+// ${outputs.*} placeholders. Pulumi has no conditionals, so sections wrapped
+// in <!-- name --> ... <!-- /name --> are kept or dropped here per stack.
+function stackReadme(sections: Record<string, boolean>): string {
+	let text = fs.readFileSync(
+		new URL('Pulumi.README.md', import.meta.url),
+		'utf8',
+	);
+	for (const [name, keep] of Object.entries(sections)) {
+		text = text.replaceAll(
+			new RegExp(
+				String.raw`<!-- ${name} -->\r?\n([\s\S]*?)<!-- /${name} -->\r?\n`,
+				'gv',
+			),
+			keep ? '$1' : '',
+		);
+	}
+
+	return text;
+}
+
+export const readme = stackReadme({
+	ephemeral,
+	prod: !ephemeral,
+	turn: turnEnabled,
+});
