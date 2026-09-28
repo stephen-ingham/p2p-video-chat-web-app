@@ -6,6 +6,7 @@
 
 [![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![Express](https://img.shields.io/badge/Express-000000?logo=express&logoColor=white)](https://expressjs.com/)
+[![express-rate-limit](https://img.shields.io/badge/express--rate--limit-4B5563?logo=&logoColor=white)](https://express-rate-limit.mintlify.app/)
 [![WebSocket](https://img.shields.io/badge/WebSocket-010101?logo=websocket&logoColor=white)](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API)
 [![WebRTC](https://img.shields.io/badge/WebRTC-333333?logo=webrtc&logoColor=white)](https://webrtc.org/)
 [![http-proxy-3](https://img.shields.io/badge/http--proxy--3-4B5563?logo=&logoColor=white)](https://github.com/sagemathinc/http-proxy-3#readme)
@@ -281,6 +282,7 @@ The Express.js API in `web-socket-api/src/` handles sign-up and login, and each 
 - **Authentication:** logging in returns a JWT access token, sent as `Authorization: Bearer <token>`, and sets a refresh token cookie used to get new access tokens.
 - **Calls:** creating a call starts a WebSocket server for it, which shares the API's port and is routed by call ID (`/wss/:callID`, or `/ws/:callID` with `LOCAL=true`). Clients exchange participant updates, WebRTC offers and chat messages over it. Active calls are held in memory only.
 - **NAT traversal:** `GET /call/ice-servers` gives clients their STUN/TURN servers: Google's public STUN servers in local dev, and a self-hosted coturn server (STUN and TURN relay) in production.
+- **Rate limits:** signups are capped at 50 an hour across all clients, and `GET /call/ice-servers` at 60 an hour per user, so nobody can mint TURN credentials in bulk.
 - **Dev users:** with `NODE_ENV=dev`, two test users are seeded into the database.
 - **Production:** with `NODE_ENV=production`, the refresh cookie is `Secure`, and CORS and WebSocket upgrades only accept the `ALLOWED_ORIGIN` origin.
 
