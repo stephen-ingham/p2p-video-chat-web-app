@@ -108,6 +108,11 @@ export default function AuthScreen({
 							setError('');
 						}}
 					/>
+					{/* Uncontrolled fields (defaultValue, not value): with a controlled
+					    TextInput a busy JS thread can echo stale text back to the native
+					    input mid-typing, duplicating characters (seen with Maestro on a
+					    slow emulator). defaultValue restores the username when the
+					    Register tab remounts its field. */}
 					<View style={styles.form}>
 						{mode === 'register' && (
 							<TextField
@@ -116,7 +121,7 @@ export default function AuthScreen({
 								placeholder="At least 3 characters"
 								autoCapitalize="none"
 								autoComplete="username-new"
-								value={username}
+								defaultValue={username}
 								onChangeText={setUsername}
 							/>
 						)}
@@ -127,7 +132,7 @@ export default function AuthScreen({
 							autoCapitalize="none"
 							autoComplete="email"
 							keyboardType="email-address"
-							value={email}
+							defaultValue={email}
 							onChangeText={setEmail}
 						/>
 						<TextField
@@ -138,7 +143,7 @@ export default function AuthScreen({
 							autoComplete={
 								mode === 'register' ? 'new-password' : 'current-password'
 							}
-							value={password}
+							defaultValue={password}
 							onChangeText={setPassword}
 						/>
 						{error ? (

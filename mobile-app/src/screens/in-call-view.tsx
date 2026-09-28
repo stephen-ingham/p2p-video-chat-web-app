@@ -104,8 +104,12 @@ export default function InCallView({
 				</Text>
 			</View>
 
+			{/* The test ID sits on this accessible wrapper, not the RTCView:
+			    `accessible` merges its children into one accessibility node, so
+			    Maestro (which reads that tree) can't see an ID on the child. */}
 			<View
 				accessible
+				testID={localStreamUrl && cameraOn ? 'local-video' : undefined}
 				accessibilityLabel={cameraOn ? 'Your video' : 'Your camera is off'}
 				style={[
 					styles.local,
@@ -115,7 +119,6 @@ export default function InCallView({
 				{localStreamUrl && cameraOn ? (
 					<RTCView
 						mirror
-						testID="local-video"
 						streamURL={localStreamUrl}
 						objectFit="cover"
 						style={styles.fill}
