@@ -17,6 +17,17 @@ Run from this folder (`mobile-app/`).
 
 `open` and `test:e2e` both need the dev-client build installed on the emulator. Build it with `eas build --profile development --platform android` and install the APK. If EAS's queue is long, the `mobile-dev-client.yml` GitHub workflow builds the same thing on a runner: run `gh workflow run mobile-dev-client.yml`, download the `voneo-dev-client` artifact from the run, then `adb uninstall com.voneo.app` (it's signed with a different key from an EAS build) and `adb install app-debug.apk`. The dev client loads the app's JavaScript from Metro, so you only need a new build after changing native packages or native config in `app.json`.
 
+### Emulator
+
+Test on a low-end Android 16 phone, the same one CI emulates (`.github/actions/maestro-e2e`). Android 16 is the OS the app targets (`targetSdk` 36, Google Play's minimum), and 4 GB of RAM is Android 16 Go edition hardware. Create it once in Android Studio's Device Manager, or with the SDK command-line tools:
+
+```bash
+sdkmanager "system-images;android-36;google_apis;x86_64"
+avdmanager create avd -n Low_End_API_36 -k "system-images;android-36;google_apis;x86_64" -d small_phone
+```
+
+On Windows the tools are `.bat` files, and `cmd` splits arguments at `;`. So put the package name in a file and pass `--package_file=<file>` to `sdkmanager`, and run `avdmanager` from PowerShell with the `-k` value quoted. Then set `hw.ramSize=4096` and `hw.cpu.ncore=2` in `~/.android/avd/Low_End_API_36.avd/config.ini`. `open` and `test:e2e` boot the first AVD, so either keep this as your only one or set `VONEO_AVD=Low_End_API_36`.
+
 ### Maestro flows (`npm run test:e2e`)
 
 This needs [Maestro](https://docs.maestro.dev/getting-started/installing-maestro) installed. It:
