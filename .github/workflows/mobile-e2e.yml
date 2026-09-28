@@ -10,9 +10,17 @@ name: Mobile E2E (Maestro)
 # http://10.0.2.2:3000 (the emulator's alias for the runner), started from
 # the same compose service as `npm run dev`, with LOCAL=true and
 # NODE_ENV=dev so the seeded test users the flows log in as exist.
+#
+# Or set the api_url input to a deployed stack's appUrl (e.g. prod's) to run
+# against that instead: no local API, and the user the flows log in as is
+# signed up first, since deployed stacks run with NODE_ENV=production.
 
 on:
   workflow_dispatch:
+    inputs:
+      api_url:
+        description: A deployed stack's appUrl to run against. Leave empty for a local dev API on the runner
+        default: ""
 
 jobs:
   e2e:
@@ -25,6 +33,7 @@ jobs:
           node-version: lts/*
 
       - name: Start the dev signalling API (LOCAL=true)
+        if: inputs.api_url == ''
         run: |
           cp .env.example .env
           sed -i -e 's/^LOCAL=.*/LOCAL=true/' -e 's/^NGROK_HOST=.*/NGROK_HOST=/' .env
@@ -36,7 +45,24 @@ jobs:
           docker compose --env-file .env -f web-socket-api/src/compose.yaml logs
           exit 1
 
+      # As in pr-dev.yml/pr-main.yml's GCP jobs. Signing up fails harmlessly
+      # if the user exists; the login check must pass.
+      - name: Check the stack and sign up the flows' user
+        if: inputs.api_url != ''
+        env:
+          APP_URL: ${{ inputs.api_url }}
+        run: |
+          APP_URL=${APP_URL%/}
+          until [ "$(curl -s -o /dev/null -w '%{http_code}' "$APP_URL/call/ice-servers")" = "401" ]; do
+            echo "Waiting for $APP_URL to serve the API"
+            sleep 15
+          done
+          curl -s -o /dev/null -X POST "$APP_URL/auth/signup" -H 'Content-Type: application/json' \
+            -d '{"username":"john2739","email":"john.smith@gmail.com","password":"ExamplePassword123"}'
+          curl -fsS -o /dev/null -X POST "$APP_URL/auth/login" -H 'Content-Type: application/json' \
+            -d '{"email":"john.smith@gmail.com","password":"ExamplePassword123"}'
+
       - name: Build the APK and run the Maestro flows
         uses: ./.github/actions/maestro-e2e
         with:
-          api_url: http://10.0.2.2:3000
+          api_url: ${{ inputs.api_url || 'http://10.0.2.2:3000' }}
