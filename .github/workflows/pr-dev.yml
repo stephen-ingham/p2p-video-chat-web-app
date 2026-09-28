@@ -51,6 +51,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Lint (xo + prettier)
+        run: npm run lint
+
   e2e-happy-path:
     needs: [lint, changes]
     if: needs.changes.outputs.web_e2e == 'true'
