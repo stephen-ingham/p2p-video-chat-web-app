@@ -3,3 +3,7 @@
 *.pem
 .env
 /.root-context/
+# TEMPORARY: a local PNG export of the prod diagram, for personal use only
+# (infra/README.md shows the SVG). When you're done with it, delete
+# infra/gcp-prod.png locally and remove this comment and the line below.
+/gcp-prod.png
