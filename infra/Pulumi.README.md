@@ -28,7 +28,7 @@ Voneo is a peer-to-peer video chat app. This stack runs its Astro frontend and E
 - [Cloud SQL instance `${outputs.dbInstanceName}`](https://console.cloud.google.com/sql/instances/${outputs.dbInstanceName}/overview?project=${outputs.project})
 - [Secret Manager](https://console.cloud.google.com/security/secret-manager?project=${outputs.project})
 <!-- turn -->
-- [TURN VM `${outputs.turnVm}`](https://console.cloud.google.com/compute/instancesDetail/zones/${outputs.region}-a/instances/${outputs.turnVm}?project=${outputs.project})
+- [TURN VM `${outputs.turnVm}`](https://console.cloud.google.com/compute/instancesDetail/zones/${outputs.zone}/instances/${outputs.turnVm}?project=${outputs.project})
 <!-- /turn -->
 - [Billing](https://console.cloud.google.com/billing/linkedaccount?project=${outputs.project})
 
@@ -41,7 +41,7 @@ Voneo is a peer-to-peer video chat app. This stack runs its Astro frontend and E
 - **After rotating `turnSecret`**, reset the VM so coturn picks up the new secret:
 
   ```bash
-  gcloud compute instances reset ${outputs.turnVm} --zone ${outputs.region}-a --project ${outputs.project}
+  gcloud compute instances reset ${outputs.turnVm} --zone ${outputs.zone} --project ${outputs.project}
   ```
 
   <!-- /turn -->

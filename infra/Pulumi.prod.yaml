@@ -1,6 +1,8 @@
 config:
   gcp:project: voneo-prod-u6p3sp
   gcp:region: europe-west2
+  # TURN VM zone: europe-west2-a had no e2-micro capacity on 2026-09-28.
+  gcp:zone: europe-west2-b
   # Secrets — set locally once a Pulumi backend/passphrase is configured:
   #   pulumi config set --secret dbPassword <value> --stack prod
   #   pulumi config set --secret jwtSecret <value> --stack prod

@@ -13,7 +13,9 @@ const gcpConfig = new pulumi.Config('gcp');
 const stack = pulumi.getStack();
 const project = gcpConfig.require('project');
 const region = gcpConfig.get('region') ?? 'europe-west2';
-const zone = `${region}-a`;
+// Zone for the TURN VM. `gcp:zone` moves it off the default when a zone runs
+// out of e2-micro capacity; changing it on a deployed stack replaces the VM.
+const zone = gcpConfig.get('zone') ?? `${region}-a`;
 
 // Ephemeral stacks (dev, prod-preview) exist only for one e2e run and are
 // destroyed straight after it (scripts/gcp-e2e.mjs), so they have no deletion
@@ -479,7 +481,7 @@ export {appUrl};
 export const gitSha = gitState.sha;
 export const turnIp = turnServer?.ip.address;
 export const turnVm = turnServer ? `voneo-turn-${stack}` : undefined;
-export {project, region};
+export {project, region, zone};
 export const backendServiceName = voneoBackend.name;
 export const frontendServiceName = voneoFrontend.name;
 export const dbInstanceName = dbInstance.name;
