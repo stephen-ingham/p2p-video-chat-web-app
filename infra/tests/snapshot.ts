@@ -32,6 +32,19 @@ type Snapshot = {
 // backend from the deploy workflows is actually wired up.
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// Archives (the kill switch's source) reach the mock with their contents
+// still unresolved Promises, which can't be compared. Their object names
+// carry a content hash, so replacing them loses nothing.
+function withoutArchiveContents(inputs: ResourceInputs): ResourceInputs {
+	return JSON.parse(
+		JSON.stringify(inputs, (_key, value: unknown) =>
+			(value as {__pulumiArchive?: boolean} | undefined)?.__pulumiArchive
+				? '<archive>'
+				: value,
+		),
+	) as ResourceInputs;
+}
+
 // Each *.test.ts file runs in its own process (node --test), so each one
 // can call this once with its own stack config.
 export async function runSnapshotTest(
@@ -46,7 +59,7 @@ export async function runSnapshotTest(
 				registrations.push({
 					type: arguments_.type,
 					name: arguments_.name,
-					inputs: arguments_.inputs as ResourceInputs,
+					inputs: withoutArchiveContents(arguments_.inputs as ResourceInputs),
 				});
 				return {
 					id: `${arguments_.name}_id`,
