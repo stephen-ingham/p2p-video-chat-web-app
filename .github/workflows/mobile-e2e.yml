@@ -1,9 +1,11 @@
 name: Mobile E2E (Maestro)
 
 # Heavier e2e check for mobile-app/, split like this repo's Playwright e2e:
-# PRs into dev run only the happy-path flow (tagged `happy-path`), PRs into
-# main and the scheduled/manual runs run every flow. PRs only trigger it when
-# they touch the app, the API it talks to, or this workflow.
+# PRs into dev run only the happy-path flow (tagged `happy-path`), via
+# pr-dev.yml's mobile-e2e-happy-path job calling this workflow with
+# happy_path_only. PRs into main and the scheduled/manual runs run every
+# flow. PRs only run it when they touch the app, the API it talks to, or
+# the workflows.
 #
 # Builds a release APK on the runner with the app's JS bundled in (no Metro
 # in CI) via `expo prebuild` + Gradle, so no EXPO_TOKEN/EAS account is
@@ -14,8 +16,15 @@ name: Mobile E2E (Maestro)
 # test users the flows log in as exist.
 
 on:
+  # PRs into dev call this from pr-dev.yml instead.
+  workflow_call:
+    inputs:
+      happy_path_only:
+        description: Run only the flows tagged happy-path
+        type: boolean
+        default: false
   pull_request:
-    branches: [dev, main]
+    branches: [main]
     paths:
       - "mobile-app/**"
       # Shared palette, read by the app (src/theme/theme.ts)
@@ -74,8 +83,9 @@ jobs:
       - name: Run Maestro flows on Android emulator
         uses: reactivecircus/android-emulator-runner@v2
         env:
-          # Happy path only on PRs into dev; every flow otherwise.
-          MAESTRO_TAGS: ${{ github.event_name == 'pull_request' && github.base_ref == 'dev' && '--include-tags=happy-path' || '' }}
+          # Happy path only when called with happy_path_only (PRs into dev);
+          # every flow otherwise.
+          MAESTRO_TAGS: ${{ inputs.happy_path_only && '--include-tags=happy-path' || '' }}
         with:
           api-level: 34
           arch: x86_64

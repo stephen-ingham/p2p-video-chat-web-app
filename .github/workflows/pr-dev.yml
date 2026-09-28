@@ -17,6 +17,7 @@ jobs:
     outputs:
       web_e2e: ${{ github.event_name != 'pull_request' || steps.filter.outputs.web_e2e == 'true' }}
       gcp: ${{ github.event_name != 'pull_request' || steps.filter.outputs.gcp == 'true' }}
+      mobile_e2e: ${{ github.event_name != 'pull_request' || steps.filter.outputs.mobile_e2e == 'true' }}
     steps:
       - uses: dorny/paths-filter@v3
         id: filter
@@ -39,6 +40,15 @@ jobs:
               - *web_e2e
               - "infra/**"
               - "scripts/gcp-e2e.mjs"
+            mobile_e2e:
+              - ".env.example"
+              - ".github/workflows/pr-dev.yml"
+              - ".github/workflows/mobile-e2e.yml"
+              - "mobile-app/**"
+              # Shared palette, read by the app (src/theme/theme.ts)
+              - "colors.json"
+              # The signalling API the flows log in and create calls against
+              - "web-socket-api/**"
 
   lint:
     timeout-minutes: 10
@@ -64,6 +74,15 @@ jobs:
         working-directory: web-server/src
       - name: Lint (xo + prettier)
         run: npm run lint
+
+  # Mobile happy path (Maestro, Android emulator): mobile-e2e.yml with only
+  # the flows tagged happy-path. PRs into main run every flow from there.
+  mobile-e2e-happy-path:
+    needs: [lint, changes]
+    if: needs.changes.outputs.mobile_e2e == 'true'
+    uses: ./.github/workflows/mobile-e2e.yml
+    with:
+      happy_path_only: true
 
   e2e-happy-path:
     needs: [lint, changes]
