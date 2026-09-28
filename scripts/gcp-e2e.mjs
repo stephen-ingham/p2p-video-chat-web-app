@@ -10,7 +10,7 @@
 //   run   up, test, then down whatever happened
 //
 // Only the ephemeral stacks are accepted: prod keeps its interactive
-// `npm run gcp-deploy-prod` / `gcp-destroy-prod`.
+// `npm run deploy:prod` / `destroy:prod` (in infra/).
 import {spawnSync} from 'node:child_process';
 import https from 'node:https';
 import path from 'node:path';

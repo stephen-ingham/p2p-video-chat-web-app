@@ -10,6 +10,17 @@
 
 `dev` and `prod` each use **their own GCP project**, so dev deployments never touch prod's data, quotas or IAM. `prod-preview` shares prod's project, with every resource name suffixed by its stack name so the two don't collide. See [Ephemeral stacks](#ephemeral-stacks-dev-prod-preview) for how those work.
 
+## Commands
+
+Run from this folder (`infra/`):
+
+| Command                                                | What it does                                                                                                       |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `npm test`                                             | Snapshot tests of the declared resources, with GCP mocked (see [Tests](#tests))                                    |
+| `npm run deploy-test-destroy:dev` (or `:prod-preview`) | Deploys the ephemeral stack, runs the e2e suite against it, then destroys it                                       |
+| `npm run deploy:dev`, `test:e2e:dev`, `destroy:dev`    | The same steps one at a time (see [Ephemeral stacks](#ephemeral-stacks-dev-prod-preview)), also for `prod-preview` |
+| `npm run deploy:prod` / `destroy:prod`                 | Interactive `pulumi up` / `pulumi destroy` on the long-lived `prod` stack                                          |
+
 ## What gets created
 
 | Resource                                                                                                                  | What it's for                                                                                                                     | Closest AWS equivalent                     |
@@ -145,22 +156,22 @@ pulumi stack output appUrl --stack $STACK
 
 Every stack labels its Cloud SQL instance, Cloud Run services and TURN VM with the commit it was deployed from (`git-sha`), and whether there were uncommitted changes (`git-dirty`). The commit is also the `gitSha` stack output.
 
-`scripts/gcp-e2e.mjs` drives them, from the repo root:
+`scripts/gcp-e2e.mjs` drives them. Run these from this folder (`infra/`):
 
-| Command                    | What it does                                                                        |
-| -------------------------- | ----------------------------------------------------------------------------------- |
-| `npm run gcp-deploy-dev`   | `pulumi up`, non-interactive                                                        |
-| `npm run test:e2e:gcp-dev` | Waits until `appUrl` serves, then runs the e2e suite against it                     |
-| `npm run gcp-destroy-dev`  | `pulumi destroy`, non-interactive: removes every resource the stack created         |
-| `npm run gcp-e2e-dev`      | All three. Destroys the stack even if the deploy or tests fail, or you press Ctrl+C |
+| Command                           | What it does                                                                        |
+| --------------------------------- | ----------------------------------------------------------------------------------- |
+| `npm run deploy:dev`              | `pulumi up`, non-interactive                                                        |
+| `npm run test:e2e:dev`            | Waits until `appUrl` serves, then runs the e2e suite against it                     |
+| `npm run destroy:dev`             | `pulumi destroy`, non-interactive: removes every resource the stack created         |
+| `npm run deploy-test-destroy:dev` | All three. Destroys the stack even if the deploy or tests fail, or you press Ctrl+C |
 
-The same four exist for `prod-preview` (`gcp-deploy-prod-preview`, and so on). Pass Playwright arguments after `--`, e.g. `npm run test:e2e:gcp-dev -- --grep @happy-path`. Locally, run `gcloud auth application-default login` first.
+The same four exist for `prod-preview` (`deploy:prod-preview`, and so on). Pass Playwright arguments after `--`, e.g. `npm run test:e2e:dev -- --grep @happy-path`. Locally, run `gcloud auth application-default login` first.
 
 The NAT-traversal suite (`e2e/nat/`) isn't run against these stacks. It needs browsers on separate simulated LANs, which only the local Docker overlay provides.
 
 In CI, `e2e-gcp-dev` (`pr-dev.yml`) and `e2e-gcp-prod-preview` (`pr-main.yml`) run the deploy, test and destroy as separate steps, with the destroy step on `if: always()`. Each stack is shared, so runs queue one at a time (a `concurrency` group). If a newer run starts queueing while one is already waiting, GitHub cancels the waiting one. Fork PRs don't get GCP credentials, so the jobs skip them. The jobs deploy the PR's head commit rather than GitHub's merge commit, so `git-sha` is a commit you can find.
 
-If a teardown ever fails, the stack keeps billing until you run `npm run gcp-destroy-dev` (or `gcp-destroy-prod-preview`). `pulumi stack --stack dev` lists what's left.
+If a teardown ever fails, the stack keeps billing until you run `npm run destroy:dev` (or `destroy:prod-preview`) from `infra/`. `pulumi stack --stack dev` lists what's left.
 
 ## Stack README and outputs
 

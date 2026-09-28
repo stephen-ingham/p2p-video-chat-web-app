@@ -50,13 +50,13 @@ Voneo is a peer-to-peer video chat app. This stack runs its Astro frontend and E
 
 <!-- ephemeral -->
 
-From the repo root (run `gcloud auth application-default login` first):
+From the repo's `infra/` folder (run `gcloud auth application-default login` first):
 
-| Command                        | What it does                          |
-| ------------------------------ | ------------------------------------- |
-| `npm run gcp-deploy-<stack>`   | `pulumi up`, non-interactive          |
-| `npm run test:e2e:gcp-<stack>` | Runs the e2e suite against this stack |
-| `npm run gcp-destroy-<stack>`  | Destroys every resource in this stack |
+| Command                    | What it does                          |
+| -------------------------- | ------------------------------------- |
+| `npm run deploy:<stack>`   | `pulumi up`, non-interactive          |
+| `npm run test:e2e:<stack>` | Runs the e2e suite against this stack |
+| `npm run destroy:<stack>`  | Destroys every resource in this stack |
 
 `<stack>` is `dev` or `prod-preview`.
 
