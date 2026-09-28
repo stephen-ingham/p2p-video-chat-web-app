@@ -9,10 +9,10 @@ export const DEFAULT_STUN_URLS = [
 	'stun:stun1.l.google.com:19302',
 ];
 
-// How long minted TURN credentials stay valid. Only checked by coturn when a
-// relay allocation is created/refreshed, so an in-progress call isn't cut off
-// when they expire.
-export const TURN_CREDENTIAL_TTL_SECS = 12 * 60 * 60;
+// How long minted TURN credentials stay valid, kept short so leaked ones
+// can't be used for long. Matches Cloud Run's 3600s request timeout, which
+// already ends a call's signalling WebSocket after an hour.
+export const TURN_CREDENTIAL_TTL_SECS = 60 * 60;
 
 // Builds the RTCPeerConnection `iceServers` list for a user. With TURN_URLS +
 // TURN_SECRET set (production and the CI NAT-traversal stack), this points at
