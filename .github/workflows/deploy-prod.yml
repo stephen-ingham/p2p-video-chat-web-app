@@ -3,8 +3,8 @@ name: Deploy (prod)
 # Runs after a PR merges into main (i.e. a push to main). Requires the
 # prod GitHub environment's GCP_WORKLOAD_IDENTITY_PROVIDER and
 # GCP_DEPLOY_SERVICE_ACCOUNT secrets (set up, see infra/README.md step 2),
-# plus PULUMI_ACCESS_TOKEN and the prod Pulumi stack (not yet created).
-# Until those exist this workflow fails at the Pulumi step by design,
+# the prod Pulumi stack (created, see step 4), and PULUMI_ACCESS_TOKEN (not
+# yet set). Until it is, this workflow fails at the Pulumi step by design,
 # rather than silently no-op.
 
 on:

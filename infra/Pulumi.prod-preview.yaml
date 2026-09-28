@@ -6,8 +6,8 @@ config:
   gcp:project: voneo-prod-u6p3sp
   gcp:region: europe-west2
   # Ephemeral, like dev: see Pulumi.dev.yaml.
-  voneo-video-chat:ephemeral: true
-  voneo-video-chat:turnEnabled: true
+  voneo-video-chat:ephemeral: "true"
+  voneo-video-chat:turnEnabled: "true"
   # Secrets — set locally once a Pulumi backend/passphrase is configured.
   # Use different values from prod's, so the preview can't mint prod tokens
   # or TURN credentials:
@@ -15,3 +15,12 @@ config:
   #   pulumi config set --secret jwtSecret <value> --stack prod-preview
   #   pulumi config set --secret refreshTokenSecret <value> --stack prod-preview
   #   pulumi config set --secret turnSecret <value> --stack prod-preview
+
+  voneo-video-chat:dbPassword:
+    secure: AAABADgz549GGl997/sVOo2PM98QANPJ6SFMn8oD7v6JyGGDFW9/oDECbuXJLRJ8jyutdashqsrJ50vTJUxDGOMNIcspm46i2NDbnIkPWdY=
+  voneo-video-chat:jwtSecret:
+    secure: AAABANHrBnTP0io58GVTk7gc+xGKYTLPWQwUwEqxZmz/ht6y8H+yxZuKucTQ5fNq+ggVYugHvUZPgDTRBTi4CWLUTtFS+rDeNsaY3VCpmCs8OkLC57zH43DxSFTJzNez
+  voneo-video-chat:refreshTokenSecret:
+    secure: AAABAKjUEqwWVOLspQvwmTV5/Sw+L2AvZw27jAlNzYqWhubj4+AweBLoNuYNBQyNPO2/ejr+mhHtLOdjea11PjRjZ4jXbxWTvI0zaBcDzVLSHco/fvD+2q2tFElS17/9
+  voneo-video-chat:turnSecret:
+    secure: AAABAIj+/G504Qk5py/sJCOBcEQwxenqI84Kk4VWS6TVmd4pvGIDbhN46VC8zuSwBxGmhBeTZ8aE0f27kdkjXTUHCVAdDgqogNECZMKayIW7EKFpAr8EJUT9zBA12gZ+

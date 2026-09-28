@@ -7,4 +7,12 @@ config:
   #   pulumi config set --secret refreshTokenSecret <value> --stack prod
   # Self-hosted coturn STUN/TURN VM (infra/turn-server.ts). Needs:
   #   pulumi config set --secret turnSecret <value> --stack prod
-  voneo-video-chat:turnEnabled: true
+  voneo-video-chat:turnEnabled: "true"
+  voneo-video-chat:dbPassword:
+    secure: AAABAJJKh7u9+Bm0qNuKxAhhYEyiz7BKcyMwqX4vZH7GmgJw7waY5FeYkyKxgkCJm+pNLsMfYfzE3dvwjgaJTi8ktmAvV/rTJwkkaL97m34=
+  voneo-video-chat:jwtSecret:
+    secure: AAABAGT6WJltWTAhyZ9T0o36OSJl8oMBqOcn5QrL3PTlWvxjzw9mqAwKZAmhSb2B8UYOmArWg1c8viF7EtQlzbazU1Wj7m20irmBKaiDi+1kcTwJtYEGGhWrjgxFoV6g
+  voneo-video-chat:refreshTokenSecret:
+    secure: AAABAKaS5d3JUKHWOsK2UJkluar59CJJrZWL599uHWPT3834t+/d2OIuq8ZaNVtrcvE/d7XFT0E3+bwx86CjDUItrqTMs+Pyg2KC5ePdmfDxHGkkX7eBtrdKx4tgW2Za
+  voneo-video-chat:turnSecret:
+    secure: AAABADSDSj1YTpikyztn8HcHFcJCk2cetcXNHao09ImCilX+x1+dVTtNYOa0805yO9rOnbWkNIAjpSsT04T+drcIR74eUsm09an2YxPgDb8V8SaTTpSYpsn4Frdff34Q
