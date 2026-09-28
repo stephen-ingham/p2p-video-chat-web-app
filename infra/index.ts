@@ -155,7 +155,28 @@ const turnServer = turnEnabled
 const registry = new gcp.artifactregistry.Repository(
 	'images',
 	// Stack-suffixed: prod-preview shares the prod stack's GCP project.
-	{location: region, repositoryId: `voneo-${stack}`, format: 'DOCKER'},
+	{
+		location: region,
+		repositoryId: `voneo-${stack}`,
+		format: 'DOCKER',
+		// Each deploy moves the stack's tag to a new image, leaving the old one
+		// untagged and still billed for storage. Untagged images are deleted
+		// after a week (so recent Cloud Run revisions can still roll back), but
+		// the 3 newest versions of each image are always kept.
+		cleanupPolicyDryRun: false,
+		cleanupPolicies: [
+			{
+				id: 'delete-untagged',
+				action: 'DELETE',
+				condition: {tagState: 'UNTAGGED', olderThan: `${7 * 24 * 60 * 60}s`},
+			},
+			{
+				id: 'keep-recent',
+				action: 'KEEP',
+				mostRecentVersions: {keepCount: 3},
+			},
+		],
+	},
 	afterApis,
 );
 const registryHost = `${region}-docker.pkg.dev`;

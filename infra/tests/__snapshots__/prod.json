@@ -65,6 +65,24 @@
       "type": "gcp:artifactregistry/repository:Repository",
       "name": "images",
       "inputs": {
+        "cleanupPolicies": [
+          {
+            "action": "DELETE",
+            "condition": {
+              "olderThan": "604800s",
+              "tagState": "UNTAGGED"
+            },
+            "id": "delete-untagged"
+          },
+          {
+            "action": "KEEP",
+            "id": "keep-recent",
+            "mostRecentVersions": {
+              "keepCount": 3
+            }
+          }
+        ],
+        "cleanupPolicyDryRun": false,
         "format": "DOCKER",
         "location": "europe-west2",
         "repositoryId": "voneo-snapshot-test"
