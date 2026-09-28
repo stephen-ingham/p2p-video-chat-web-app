@@ -4,11 +4,7 @@ appId: com.voneo.app
 ---
 - runFlow: subflows/launch.yaml
 # Let the keyboard settle before typing, then close it: see create-call.yaml.
-- tapOn:
-    id: "email-input"
-- waitForAnimationToEnd:
-    timeout: 3000
-- inputText: "john.smith@gmail.com"
+- runFlow: subflows/type-email.yaml
 - tapOn:
     id: "password-input"
 - waitForAnimationToEnd:

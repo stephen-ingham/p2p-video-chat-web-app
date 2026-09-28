@@ -10,11 +10,7 @@ tags:
 # Each tap opens or moves the keyboard, which shifts the form on a small
 # screen: let it settle before typing, or the text can land in the wrong
 # field. Then close it, as it covers the submit button.
-- tapOn:
-    id: "email-input"
-- waitForAnimationToEnd:
-    timeout: 3000
-- inputText: "john.smith@gmail.com"
+- runFlow: subflows/type-email.yaml
 - tapOn:
     id: "password-input"
 - waitForAnimationToEnd:

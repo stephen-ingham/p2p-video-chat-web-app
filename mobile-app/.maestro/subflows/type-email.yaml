@@ -1,0 +1,22 @@
+# Types the seeded user's email into the login form's email field, checking
+# it reads back exactly. On a slow emulator the first keystroke can register
+# twice ("jjohn.smith@..."), so a mismatch clears the field and types again.
+# The password field is masked and can't be checked the same way.
+appId: com.voneo.app
+---
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn:
+          id: "email-input"
+      # Let the keyboard open and the form settle before typing.
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - eraseText
+      - inputText: "john.smith@gmail.com"
+      - assertVisible:
+          id: "email-input"
+          text: "john\\.smith@gmail\\.com"
+# On a small screen the keyboard covers the password field below, and the
+# form doesn't scroll it into view.
+- hideKeyboard
