@@ -3,7 +3,17 @@
     "main": "index.ts",
     "type": "module",
     "scripts": {
-        "test": "node --import tsx --test tests/**/*.test.ts"
+        "test": "node --import tsx --test tests/**/*.test.ts",
+    "deploy:dev": "node ../scripts/gcp-e2e.mjs up dev",
+    "test:e2e:dev": "node ../scripts/gcp-e2e.mjs test dev",
+    "destroy:dev": "node ../scripts/gcp-e2e.mjs down dev",
+    "deploy-test-destroy:dev": "node ../scripts/gcp-e2e.mjs run dev",
+    "deploy:prod-preview": "node ../scripts/gcp-e2e.mjs up prod-preview",
+    "test:e2e:prod-preview": "node ../scripts/gcp-e2e.mjs test prod-preview",
+    "destroy:prod-preview": "node ../scripts/gcp-e2e.mjs down prod-preview",
+    "deploy-test-destroy:prod-preview": "node ../scripts/gcp-e2e.mjs run prod-preview",
+    "deploy:prod": "pulumi up --stack prod",
+    "destroy:prod": "pulumi destroy --stack prod"
     },
     "devDependencies": {
         "@types/node": "^18",

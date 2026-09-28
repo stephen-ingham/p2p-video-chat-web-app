@@ -2,4 +2,4 @@ echo "Running pre-commit hooks..."
 echo "Running lint checks on staged files..."
 npx lint-staged
 echo "Checking Astro.js frontend succesfully builds..."
-npm run build-video-chat-frontend
+cd web-server/src && npm run build

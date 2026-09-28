@@ -33,7 +33,9 @@
     "web": "expo start --web",
     "lint": "xo --prettier",
     "lint:fix": "xo --prettier --fix",
-    "test": "jest"
+    "test": "jest",
+    "test:e2e": "node ../scripts/dispatch.mjs test-maestro",
+    "open": "node ../scripts/dispatch.mjs mobile"
   },
   "jest": {
     "preset": "jest-expo",
