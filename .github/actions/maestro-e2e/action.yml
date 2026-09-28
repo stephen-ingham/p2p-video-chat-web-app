@@ -122,8 +122,11 @@ runs:
         script: |
           adb install mobile-app/android/app/build/outputs/apk/release/app-release.apk
           curl -Ls "https://get.maestro.mobile.dev" | bash
-          $HOME/.maestro/bin/maestro test mobile-app/.maestro/ $MAESTRO_TAGS --format junit --output maestro-report.xml --debug-output maestro-debug
+          $HOME/.maestro/bin/maestro test mobile-app/.maestro/ $MAESTRO_TAGS --format junit --output maestro-report.xml --debug-output maestro-debug --test-output-dir maestro-test-output
 
+    # maestro-test-output/ holds each flow's step-by-step screenshots, as
+    # maestro-output/test/ does for local runs; maestro-debug/ has the logs,
+    # command records and a screenshot at the point a flow failed.
     - uses: actions/upload-artifact@v4
       if: ${{ !cancelled() && inputs.build_only != 'true' }}
       with:
@@ -131,4 +134,5 @@ runs:
         path: |
           maestro-report.xml
           maestro-debug/
+          maestro-test-output/
         if-no-files-found: ignore
