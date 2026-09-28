@@ -109,10 +109,16 @@ runs:
       uses: reactivecircus/android-emulator-runner@v2
       env:
         MAESTRO_TAGS: ${{ inputs.happy_path_only == 'true' && '--include-tags=happy-path' || '' }}
+      # A low-end Android 16 phone (4 GB, 2 cores, 720p): the OS the app
+      # targets (targetSdk 36, Play's minimum) on Android 16 Go-class
+      # hardware. Keep in sync with the local AVD (mobile-app/README.md).
       with:
-        api-level: 34
+        api-level: 36
+        target: google_apis
         arch: x86_64
-        profile: pixel_6
+        profile: small_phone
+        ram-size: 4096M
+        cores: 2
         script: |
           adb install mobile-app/android/app/build/outputs/apk/release/app-release.apk
           curl -Ls "https://get.maestro.mobile.dev" | bash
