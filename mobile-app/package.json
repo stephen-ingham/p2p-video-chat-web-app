@@ -35,6 +35,7 @@
     "lint:fix": "xo --prettier --fix",
     "test": "jest",
     "test:e2e": "node ../scripts/dispatch.mjs test-maestro",
+    "test:e2e:remote": "node ../scripts/dispatch.mjs test-maestro --remote",
     "open": "node ../scripts/dispatch.mjs mobile"
   },
   "jest": {

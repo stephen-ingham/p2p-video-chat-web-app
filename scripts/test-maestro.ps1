@@ -12,12 +12,22 @@ $ErrorActionPreference = "Stop"
 # An API or Metro that's already running (e.g. from `npm run dev`) is reused
 # and left running. Extra args are passed to `maestro test` in place of the
 # default `.maestro/`, e.g. `npm run test:e2e -- .maestro/create-call.yaml` in mobile-app/.
+#
+# With --remote first (`npm run test:e2e:remote`), it runs the flows the way
+# CI does instead: against a deployed stack (MOBILE_E2E_APP_URL in .env) with
+# a release APK that has the JS bundled in, built by scripts/e2e-apk.mjs. No
+# API, MySQL or Metro is started. The installed app (normally the dev client)
+# is backed up to mobile-app/maestro-output/ and put back afterwards, since
+# both use the com.voneo.app package.
 
 Set-Location (Join-Path $PSScriptRoot "..")
 $startedAt = Get-Date
+$remote = $args.Count -gt 0 -and $args[0] -eq "--remote"
+$flowArgs = if ($remote) { @($args | Select-Object -Skip 1) } else { @($args) }
 # Passed to maestro as $flows, not @flows: a single path comes back from
 # this `if` as a plain string, and splatting a string passes its characters.
-$flows = if ($args.Count -gt 0) { @($args) } else { @(".maestro/") }
+$flows = if ($flowArgs.Count -gt 0) { $flowArgs } else { @(".maestro/") }
+$backupDir = "mobile-app/maestro-output/installed-app-backup"
 
 function Fail($message) {
 	Write-Output "test:e2e: $message"
@@ -38,6 +48,7 @@ $compose = @("--env-file", ".env", "-f", "web-socket-api/src/compose.yaml")
 $startedApi = $false
 $metro = $null
 $device = $null
+$swappedApp = $false
 
 function Get-Device {
 	$line = adb devices | Select-String "^(\S+)\tdevice$" | Select-Object -First 1
@@ -75,66 +86,96 @@ try {
 		$ErrorActionPreference = "Stop"
 	}
 
-	if (-not (adb -s $device shell pm list packages com.voneo.app | Select-String "com.voneo.app")) {
+	$installed = adb -s $device shell pm list packages com.voneo.app | Select-String "com.voneo.app"
+
+	if ($remote) {
+		# --- Release APK against the deployed stack -----------------------
+
+		$abi = (adb -s $device shell getprop ro.product.cpu.abi).Trim()
+		node scripts/e2e-apk.mjs $abi
+		if ($LASTEXITCODE -ne 0) { exit 1 }
+
+		# Removing it too, not just installing over it: the release APK is
+		# signed with a different key from the dev client. With nothing
+		# installed, an earlier run's backup (one it failed to restore) is kept.
+		$swappedApp = $true
+		if ($installed) {
+			Remove-Item -Recurse -Force $backupDir -ErrorAction SilentlyContinue
+			Write-Output "Backing up the installed app to $backupDir..."
+			New-Item -ItemType Directory -Force $backupDir | Out-Null
+			foreach ($line in adb -s $device shell pm path com.voneo.app) {
+				adb -s $device pull ($line -replace "^package:", "").Trim() $backupDir | Out-Null
+				if ($LASTEXITCODE -ne 0) { Fail "couldn't back up the installed app." }
+			}
+			adb -s $device uninstall com.voneo.app | Out-Null
+		}
+		Write-Output "Installing the release APK..."
+		adb -s $device install mobile-app/maestro-output/e2e-apk/app-release.apk
+		if ($LASTEXITCODE -ne 0) { Fail "couldn't install the release APK." }
+	} elseif (-not $installed) {
 		Fail "the Voneo dev client isn't installed on $device. Build it with 'eas build --profile development --platform android' and install the APK."
 	}
 
-	# --- API + MySQL ------------------------------------------------------
+	# Nothing to start with --remote: the stack serves the API, and the JS is
+	# bundled into the APK.
+	if (-not $remote) {
+		# --- API + MySQL --------------------------------------------------
 
-	if (-not (docker compose @compose ps --status running -q signalling-server-dev)) {
-		Write-Output "Starting the signalling API + MySQL (LOCAL=true, NODE_ENV=dev)..."
-		# Shell env overrides .env for compose interpolation. Only for this
-		# command: Metro (started below) mustn't inherit NODE_ENV=dev.
-		$env:LOCAL = "true"
-		$env:NGROK_HOST = ""
-		$env:NODE_ENV = "dev"
-		docker compose @compose up -d --build signalling-server-dev
-		$upExitCode = $LASTEXITCODE
-		Remove-Item Env:LOCAL, Env:NGROK_HOST, Env:NODE_ENV -ErrorAction SilentlyContinue
-		if ($upExitCode -ne 0) { Fail "failed to start the API containers." }
-		$startedApi = $true
-	} else {
-		Write-Output "Reusing the running signalling API."
-	}
-
-	Write-Output "Waiting for the API on :3000..."
-	$deadline = (Get-Date).AddMinutes(4)
-	do {
-		try {
-			Invoke-WebRequest -UseBasicParsing http://localhost:3000/call/ice-servers -TimeoutSec 5 | Out-Null
-		} catch {
-			# 401 (no token) means it's up.
-			if ($_.Exception.Response.StatusCode.value__ -eq 401) { break }
+		if (-not (docker compose @compose ps --status running -q signalling-server-dev)) {
+			Write-Output "Starting the signalling API + MySQL (LOCAL=true, NODE_ENV=dev)..."
+			# Shell env overrides .env for compose interpolation. Only for this
+			# command: Metro (started below) mustn't inherit NODE_ENV=dev.
+			$env:LOCAL = "true"
+			$env:NGROK_HOST = ""
+			$env:NODE_ENV = "dev"
+			docker compose @compose up -d --build signalling-server-dev
+			$upExitCode = $LASTEXITCODE
+			Remove-Item Env:LOCAL, Env:NGROK_HOST, Env:NODE_ENV -ErrorAction SilentlyContinue
+			if ($upExitCode -ne 0) { Fail "failed to start the API containers." }
+			$startedApi = $true
+		} else {
+			Write-Output "Reusing the running signalling API."
 		}
-		if ((Get-Date) -gt $deadline) { Fail "the API didn't come up within 4 minutes." }
-		Start-Sleep -Seconds 3
-	} while ($true)
 
-	# --- Metro ------------------------------------------------------------
-
-	# RawContent, not Content: /status has no text content type, so Content
-	# comes back as bytes.
-	$metroUp = $false
-	try {
-		$metroUp = (Invoke-WebRequest -UseBasicParsing http://localhost:8081/status -TimeoutSec 3).RawContent -match "packager-status:running"
-	} catch {}
-
-	if ($metroUp) {
-		Write-Output "Reusing the Metro server on :8081."
-	} else {
-		Write-Output "Starting Metro (logs: mobile-app/.expo/maestro-metro.log)..."
-		New-Item -ItemType Directory -Force mobile-app/.expo | Out-Null
-		$env:CI = "1" # non-interactive
-		$metro = Start-Process -FilePath "cmd.exe" -WorkingDirectory "mobile-app" -WindowStyle Hidden -PassThru `
-			-ArgumentList "/c", "npx expo start --dev-client --port 8081 > .expo\maestro-metro.log 2>&1"
-		$deadline = (Get-Date).AddMinutes(2)
+		Write-Output "Waiting for the API on :3000..."
+		$deadline = (Get-Date).AddMinutes(4)
 		do {
-			Start-Sleep -Seconds 2
 			try {
-				$metroUp = (Invoke-WebRequest -UseBasicParsing http://localhost:8081/status -TimeoutSec 3).RawContent -match "packager-status:running"
-			} catch {}
-			if ((Get-Date) -gt $deadline) { Fail "Metro didn't start within 2 minutes (see mobile-app/.expo/maestro-metro.log)." }
-		} until ($metroUp)
+				Invoke-WebRequest -UseBasicParsing http://localhost:3000/call/ice-servers -TimeoutSec 5 | Out-Null
+			} catch {
+				# 401 (no token) means it's up.
+				if ($_.Exception.Response.StatusCode.value__ -eq 401) { break }
+			}
+			if ((Get-Date) -gt $deadline) { Fail "the API didn't come up within 4 minutes." }
+			Start-Sleep -Seconds 3
+		} while ($true)
+
+		# --- Metro --------------------------------------------------------
+
+		# RawContent, not Content: /status has no text content type, so Content
+		# comes back as bytes.
+		$metroUp = $false
+		try {
+			$metroUp = (Invoke-WebRequest -UseBasicParsing http://localhost:8081/status -TimeoutSec 3).RawContent -match "packager-status:running"
+		} catch {}
+
+		if ($metroUp) {
+			Write-Output "Reusing the Metro server on :8081."
+		} else {
+			Write-Output "Starting Metro (logs: mobile-app/.expo/maestro-metro.log)..."
+			New-Item -ItemType Directory -Force mobile-app/.expo | Out-Null
+			$env:CI = "1" # non-interactive
+			$metro = Start-Process -FilePath "cmd.exe" -WorkingDirectory "mobile-app" -WindowStyle Hidden -PassThru `
+				-ArgumentList "/c", "npx expo start --dev-client --port 8081 > .expo\maestro-metro.log 2>&1"
+			$deadline = (Get-Date).AddMinutes(2)
+			do {
+				Start-Sleep -Seconds 2
+				try {
+					$metroUp = (Invoke-WebRequest -UseBasicParsing http://localhost:8081/status -TimeoutSec 3).RawContent -match "packager-status:running"
+				} catch {}
+				if ((Get-Date) -gt $deadline) { Fail "Metro didn't start within 2 minutes (see mobile-app/.expo/maestro-metro.log)." }
+			} until ($metroUp)
+		}
 	}
 
 	# --- Maestro ----------------------------------------------------------
@@ -146,7 +187,8 @@ try {
 	$ErrorActionPreference = "Continue"
 	# Logs and screenshots go in mobile-app/maestro-output/ (gitignored), one
 	# timestamped folder per run, rather than ~/.maestro/tests.
-	& $maestro --device $device test -e DEV_CLIENT=true `
+	$devClient = if ($remote) { "false" } else { "true" }
+	& $maestro --device $device test -e "DEV_CLIENT=$devClient" `
 		--debug-output maestro-output/debug --test-output-dir maestro-output/test $flows
 	$exitCode = $LASTEXITCODE
 	$ErrorActionPreference = "Stop"
@@ -161,6 +203,20 @@ try {
 	if ($startedApi) {
 		Write-Output "Stopping the API + MySQL containers..."
 		docker compose @compose down
+	}
+	if ($swappedApp) {
+		$ErrorActionPreference = "Continue"
+		adb -s $device uninstall com.voneo.app | Out-Null
+		$backup = @(Get-ChildItem $backupDir -Filter "*.apk" -ErrorAction SilentlyContinue | ForEach-Object FullName)
+		if ($backup.Count -gt 0) {
+			Write-Output "Restoring the app that was installed before..."
+			if ($backup.Count -eq 1) { adb -s $device install $backup[0] } else { adb -s $device install-multiple @backup }
+			if ($LASTEXITCODE -eq 0) {
+				Remove-Item -Recurse -Force $backupDir
+			} else {
+				Write-Output "test:e2e: couldn't restore it; its APK is still in $backupDir."
+			}
+		}
 	}
 	if ($device -like "emulator-*") {
 		Write-Output "Closing emulator $device..."
