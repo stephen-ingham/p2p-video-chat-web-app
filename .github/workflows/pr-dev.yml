@@ -6,6 +6,40 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Which e2e jobs this PR needs, from the files it changes (see the same job
+  # in pr-main.yml). Manual runs run everything.
+  changes:
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      web_e2e: ${{ github.event_name != 'pull_request' || steps.filter.outputs.web_e2e == 'true' }}
+      gcp: ${{ github.event_name != 'pull_request' || steps.filter.outputs.gcp == 'true' }}
+    steps:
+      - uses: dorny/paths-filter@v3
+        id: filter
+        if: github.event_name == 'pull_request'
+        with:
+          filters: |
+            web_e2e: &web_e2e
+              - "package.json"
+              - "package-lock.json"
+              - ".env.example"
+              - ".github/workflows/pr-dev.yml"
+              - "web-server/**"
+              - "web-socket-api/**"
+              - "e2e/**"
+              - "playwright.config.ts"
+              - "colors.json"
+              - "scripts/dispatch.mjs"
+              - "scripts/test-e2e*"
+            gcp:
+              - *web_e2e
+              - "infra/**"
+              - "scripts/gcp-e2e.mjs"
+
   lint:
     timeout-minutes: 10
     runs-on: ubuntu-latest
@@ -17,10 +51,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Lint (xo + prettier)
-        run: npm run lint
-
   e2e-happy-path:
-    needs: lint
+    needs: [lint, changes]
+    if: needs.changes.outputs.web_e2e == 'true'
     timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
@@ -49,8 +82,8 @@ jobs:
   # stack (infra/Pulumi.dev.yaml) is deployed, tested and always destroyed.
   # Fork PRs get no GCP credentials, so it only runs for this repo's branches.
   e2e-gcp-dev:
-    needs: lint
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    needs: [lint, changes]
+    if: needs.changes.outputs.gcp == 'true' && (github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository)
     # Every run shares the one dev stack, so one at a time. Never cancel a
     # run in progress: that could skip its teardown.
     concurrency:

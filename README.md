@@ -649,6 +649,8 @@ This brings up the e2e compose stack (building fresh images), runs Playwright, a
 
 Camera/microphone are faked via Chromium's `--use-fake-device-for-media-stream` flag (see `playwright.config.ts`), so no real hardware or OS permission prompts are needed. Test data is isolated per run: `e2e/global-setup.ts` truncates the `test-db` tables before the suite starts, and specs create their own users with unique emails rather than relying on any pre-seeded data.
 
+**In CI:** `pr-dev.yml` and `pr-main.yml` skip the e2e jobs (and `pr-main.yml` its API tests) when a PR doesn't change anything they test, e.g. a docs-only or `mobile-app/`-only PR. The paths each job depends on are listed in the `changes` job at the top of each workflow.
+
 **Browser coverage:** only the `chromium` Playwright project is configured — no Firefox or WebKit. This is deliberate, for dev speed/simplicity, and because the fake-media-stream flags above are Chromium-specific.
 
 **Media on the same network:** `e2e/media.spec.ts` checks that both participants actually receive each other's video. It also checks, from the peer connections' ICE stats, that media flows directly and not through a relay.

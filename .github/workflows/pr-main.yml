@@ -6,6 +6,52 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Which test jobs this PR needs, from the files it changes. The jobs below
+  # are skipped (not path-filtered at workflow level) when nothing they cover
+  # changed, since a skipped job still satisfies a required status check.
+  # Manual runs run everything.
+  changes:
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      api: ${{ github.event_name != 'pull_request' || steps.filter.outputs.api == 'true' }}
+      web_e2e: ${{ github.event_name != 'pull_request' || steps.filter.outputs.web_e2e == 'true' }}
+      nat: ${{ github.event_name != 'pull_request' || steps.filter.outputs.nat == 'true' }}
+      gcp: ${{ github.event_name != 'pull_request' || steps.filter.outputs.gcp == 'true' }}
+    steps:
+      - uses: dorny/paths-filter@v3
+        id: filter
+        if: github.event_name == 'pull_request'
+        with:
+          filters: |
+            shared: &shared
+              - "package.json"
+              - "package-lock.json"
+              - ".env.example"
+              - ".github/workflows/pr-main.yml"
+            api:
+              - *shared
+              - "web-socket-api/**"
+            web_e2e: &web_e2e
+              - *shared
+              - "web-server/**"
+              - "web-socket-api/**"
+              - "e2e/**"
+              - "playwright.config.ts"
+              - "colors.json"
+              - "scripts/dispatch.mjs"
+              - "scripts/test-e2e*"
+            nat:
+              - *web_e2e
+              - "infra/coturn/**"
+            gcp:
+              - *web_e2e
+              - "infra/**"
+              - "scripts/gcp-e2e.mjs"
+
   lint:
     timeout-minutes: 10
     runs-on: ubuntu-latest
@@ -20,7 +66,8 @@ jobs:
         run: npm run lint
 
   api-tests:
-    needs: lint
+    needs: [lint, changes]
+    if: needs.changes.outputs.api == 'true'
     timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
@@ -65,8 +112,11 @@ jobs:
         run: npm test
         working-directory: infra
 
+  # !failure() rather than the default success(), so a skipped api-tests
+  # (frontend-only PR) doesn't skip the e2e jobs with it.
   e2e-full-suite:
-    needs: [api-tests, component-tests]
+    needs: [changes, api-tests, component-tests]
+    if: ${{ !failure() && !cancelled() && needs.changes.outputs.web_e2e == 'true' }}
     timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
@@ -97,7 +147,8 @@ jobs:
   # containers on firewalled, simulated LANs (e2e/compose.nat.yaml), so the
   # runner itself needs no Playwright browsers or voneo.test hosts entry.
   e2e-nat-traversal:
-    needs: [api-tests, component-tests]
+    needs: [changes, api-tests, component-tests]
+    if: ${{ !failure() && !cancelled() && needs.changes.outputs.nat == 'true' }}
     timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
@@ -124,8 +175,8 @@ jobs:
   # destroyed. Real prod is untouched until merge. Fork PRs get no GCP
   # credentials, so it only runs for this repo's branches.
   e2e-gcp-prod-preview:
-    needs: [api-tests, component-tests]
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    needs: [changes, api-tests, component-tests]
+    if: ${{ !failure() && !cancelled() && needs.changes.outputs.gcp == 'true' && (github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository) }}
     # Every run shares the one prod-preview stack, so one at a time. Never cancel a
     # run in progress: that could skip its teardown.
     concurrency:
