@@ -89,6 +89,41 @@
       }
     },
     {
+      "type": "gcp:billing/budget:Budget",
+      "name": "budget",
+      "inputs": {
+        "amount": {
+          "specifiedAmount": {
+            "currencyCode": "GBP",
+            "units": "20"
+          }
+        },
+        "billingAccount": "snapshot-test-billing-account",
+        "budgetFilter": {
+          "calendarPeriod": "MONTH",
+          "projects": [
+            "projects/123456789"
+          ]
+        },
+        "displayName": "voneo-snapshot-test",
+        "thresholdRules": [
+          {
+            "thresholdPercent": 0.5
+          },
+          {
+            "thresholdPercent": 0.9
+          },
+          {
+            "thresholdPercent": 1
+          },
+          {
+            "spendBasis": "FORECASTED_SPEND",
+            "thresholdPercent": 1
+          }
+        ]
+      }
+    },
+    {
       "type": "gcp:cloudrunv2/service:Service",
       "name": "backend",
       "inputs": {
@@ -367,6 +402,22 @@
     },
     {
       "type": "gcp:projects/service:Service",
+      "name": "billingbudgets-api",
+      "inputs": {
+        "disableOnDestroy": false,
+        "service": "billingbudgets.googleapis.com"
+      }
+    },
+    {
+      "type": "gcp:projects/service:Service",
+      "name": "cloudbilling-api",
+      "inputs": {
+        "disableOnDestroy": false,
+        "service": "cloudbilling.googleapis.com"
+      }
+    },
+    {
+      "type": "gcp:projects/service:Service",
       "name": "compute-api",
       "inputs": {
         "disableOnDestroy": false,
@@ -595,6 +646,15 @@
           "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
           "value": "snapshot-test-password"
         }
+      }
+    },
+    {
+      "type": "pulumi:providers:gcp",
+      "name": "billing",
+      "inputs": {
+        "billingProject": "snapshot-test-project",
+        "project": "snapshot-test-project",
+        "userProjectOverride": "true"
       }
     }
   ]

@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import * as pulumi from '@pulumi/pulumi';
 import * as gcp from '@pulumi/gcp';
 import * as dockerBuild from '@pulumi/docker-build';
+import {createBudget} from './budget.js';
 import {createTurnServer} from './turn-server.js';
 
 const config = new pulumi.Config();
@@ -336,6 +337,22 @@ const projectNumber = gcp.organizations.getProjectOutput({
 	projectId: project,
 }).number;
 const appUrl = pulumi.interpolate`https://${frontendName}-${projectNumber}.${region}.run.app`;
+
+// Budget alerts and kill switch (infra/budget.ts), on stacks that set
+// `billingAccount`: only prod, as the ephemeral stacks are destroyed after
+// each run. `budgetAmount` is per month, in the billing account's currency.
+const billingAccount = config.get('billingAccount');
+if (billingAccount) {
+	createBudget({
+		stack,
+		project,
+		projectNumber,
+		region,
+		billingAccount,
+		amount: config.requireNumber('budgetAmount'),
+		currency: config.get('budgetCurrency') ?? 'GBP',
+	});
+}
 
 const voneoBackend = new gcp.cloudrunv2.Service(
 	'backend',

@@ -10,6 +10,11 @@ config:
   # Self-hosted coturn STUN/TURN VM (infra/turn-server.ts). Needs:
   #   pulumi config set --secret turnSecret <value> --stack prod
   voneo-video-chat:turnEnabled: "true"
+  # Monthly budget (infra/budget.ts): alert emails at 50/90/100% and 100%
+  # forecast, and billing is disabled on the project once spend reaches it.
+  voneo-video-chat:billingAccount: 01D688-835DC0-70D1B8
+  voneo-video-chat:budgetAmount: "20"
+  voneo-video-chat:budgetCurrency: GBP
   voneo-video-chat:dbPassword:
     secure: AAABAJJKh7u9+Bm0qNuKxAhhYEyiz7BKcyMwqX4vZH7GmgJw7waY5FeYkyKxgkCJm+pNLsMfYfzE3dvwjgaJTi8ktmAvV/rTJwkkaL97m34=
   voneo-video-chat:jwtSecret:
