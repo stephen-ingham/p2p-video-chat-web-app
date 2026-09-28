@@ -3,8 +3,10 @@ description: >
   Builds a release APK of mobile-app/ with the app's JS bundled in (no Metro)
   via `expo prebuild` + Gradle, pointed at the given API, then runs the
   Maestro flows on an Android emulator. No EXPO_TOKEN/EAS account needed.
-  Expects the repo checked out and Node set up. Used by mobile-e2e.yml
-  (local dev API) and pr-dev.yml's e2e-gcp-dev job (the GCP dev stack).
+  The APK is cached (see the restore step), so it's only rebuilt when the
+  app's source or the API URL changes. Expects the repo checked out and Node
+  set up. Used by pr-dev.yml and pr-main.yml's GCP jobs, mobile-e2e.yml
+  (local dev API), and mobile-apk-cache.yml (build_only, to warm the cache).
 
 inputs:
   api_url:
@@ -19,22 +21,63 @@ inputs:
   artifact_name:
     description: Name of the uploaded Maestro report/debug artifact
     default: maestro-results
+  build_only:
+    description: Build (or restore) and cache the APK, without running Maestro
+    default: "false"
 
 runs:
   using: composite
   steps:
+    # EXPO_PUBLIC_API_URL is compiled into the JS bundle, so the URL is part
+    # of the key: one cached APK per backend. The files are everything that
+    # goes into the APK (not the Maestro flows, so editing a flow never
+    # forces a rebuild), plus this action's build steps. A PR run can restore
+    # caches saved by its own earlier runs and by its base branch, which
+    # mobile-apk-cache.yml warms on every push to dev/main.
+    - name: Restore the cached APK
+      id: apk_cache
+      uses: actions/cache/restore@v4
+      with:
+        path: mobile-app/android/app/build/outputs/apk/release/app-release.apk
+        key: maestro-apk-${{ runner.os }}-${{ inputs.api_url }}-${{ hashFiles('mobile-app/src/**', 'mobile-app/assets/**', 'mobile-app/app.tsx', 'mobile-app/index.ts', 'mobile-app/app.json', 'mobile-app/app.config.ts', 'mobile-app/metro.config.js', 'mobile-app/tsconfig.json', 'mobile-app/package.json', 'mobile-app/package-lock.json', 'colors.json', '.github/actions/maestro-e2e/action.yml') }}
+
+    # Everything below up to the save only runs on a cache miss.
     - uses: actions/setup-java@v4
+      if: steps.apk_cache.outputs.cache-hit != 'true'
       with:
         distribution: temurin
         java-version: "17"
 
+    # npm's download cache and Gradle's dependency/wrapper caches, keyed on
+    # the lockfile (the app's native dependencies come from npm packages).
+    # They speed up a rebuild, not skip it: npm ci and Gradle still run.
+    - name: Cache npm downloads
+      if: steps.apk_cache.outputs.cache-hit != 'true'
+      uses: actions/cache@v4
+      with:
+        path: ~/.npm
+        key: npm-mobile-${{ runner.os }}-${{ hashFiles('mobile-app/package-lock.json') }}
+        restore-keys: npm-mobile-${{ runner.os }}-
+
+    - name: Cache Gradle dependencies
+      if: steps.apk_cache.outputs.cache-hit != 'true'
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: gradle-mobile-${{ runner.os }}-${{ hashFiles('mobile-app/package-lock.json', 'mobile-app/app.json', 'mobile-app/app.config.ts') }}
+        restore-keys: gradle-mobile-${{ runner.os }}-
+
     - name: Install mobile-app dependencies
+      if: steps.apk_cache.outputs.cache-hit != 'true'
       shell: bash
       run: npm ci --prefix mobile-app
 
     # VONEO_E2E_BUILD=true makes app.config.ts allow cleartext HTTP, which
     # only an http:// API URL (the local dev API) needs.
     - name: Build the e2e APK
+      if: steps.apk_cache.outputs.cache-hit != 'true'
       shell: bash
       working-directory: mobile-app
       env:
@@ -44,7 +87,17 @@ runs:
         npx expo prebuild --platform android --no-install
         cd android && ./gradlew assembleRelease --no-daemon
 
+    # Saved straight after the build, so a failing Maestro run doesn't stop
+    # the next run reusing it.
+    - name: Save the APK to the cache
+      if: steps.apk_cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: mobile-app/android/app/build/outputs/apk/release/app-release.apk
+        key: ${{ steps.apk_cache.outputs.cache-primary-key }}
+
     - name: Enable KVM for Android emulator
+      if: inputs.build_only != 'true'
       shell: bash
       run: |
         echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -52,6 +105,7 @@ runs:
         sudo udevadm trigger --name-match=kvm
 
     - name: Run Maestro flows on Android emulator
+      if: inputs.build_only != 'true'
       uses: reactivecircus/android-emulator-runner@v2
       env:
         MAESTRO_TAGS: ${{ inputs.happy_path_only == 'true' && '--include-tags=happy-path' || '' }}
@@ -64,7 +118,7 @@ runs:
           $HOME/.maestro/bin/maestro test mobile-app/.maestro/ $MAESTRO_TAGS --format junit --output maestro-report.xml --debug-output maestro-debug
 
     - uses: actions/upload-artifact@v4
-      if: ${{ !cancelled() }}
+      if: ${{ !cancelled() && inputs.build_only != 'true' }}
       with:
         name: ${{ inputs.artifact_name }}
         path: |

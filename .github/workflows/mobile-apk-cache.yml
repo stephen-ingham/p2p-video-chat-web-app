@@ -1,0 +1,43 @@
+name: Mobile APK cache
+
+# Warms the Maestro e2e APK cache (.github/actions/maestro-e2e) from the base
+# branches. A cache saved inside a PR run is only visible to that PR, but PR
+# runs can also restore caches saved by their base branch, so building here
+# after each merge lets every PR's GCP job skip the APK build unless it
+# changes the app's source.
+#
+# Each branch builds the APK for the stack its PRs test against: dev for the
+# dev stack (pr-dev.yml's e2e-gcp-dev), main for prod-preview (pr-main.yml's
+# e2e-gcp-prod-preview). The URLs are repo variables, since the stacks are
+# ephemeral and their Pulumi outputs are gone between runs; they must match
+# each stack's appUrl (https://voneo-frontend-<stack>-<project number>.
+# europe-west2.run.app), or the PR jobs miss the cache and rebuild. The
+# action restores instead of rebuilding when the APK is already cached, and
+# the paths below skip pushes that can't change it.
+
+on:
+  push:
+    branches: [dev, main]
+    paths:
+      - "mobile-app/**"
+      - "!mobile-app/.maestro/**"
+      - "!mobile-app/tests/**"
+      - "colors.json"
+      - ".github/actions/maestro-e2e/**"
+      - ".github/workflows/mobile-apk-cache.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    timeout-minutes: 45
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Build and cache the APK
+        uses: ./.github/actions/maestro-e2e
+        with:
+          api_url: ${{ github.ref_name == 'main' && vars.PROD_PREVIEW_APP_URL || vars.DEV_APP_URL }}
+          build_only: "true"
