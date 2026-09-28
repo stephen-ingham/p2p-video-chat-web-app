@@ -127,7 +127,10 @@ export MAESTRO_DRIVER_STARTUP_TIMEOUT=${MAESTRO_DRIVER_STARTUP_TIMEOUT:-180000}
 if [ $# -eq 0 ]; then set -- .maestro/; fi
 
 set +e
-(cd mobile-app && "$MAESTRO" --device "$DEVICE" test -e DEV_CLIENT=true "$@")
+# Logs and screenshots go in mobile-app/maestro-output/ (gitignored), one
+# timestamped folder per run, rather than ~/.maestro/tests.
+(cd mobile-app && "$MAESTRO" --device "$DEVICE" test -e DEV_CLIENT=true \
+	--debug-output maestro-output/debug --test-output-dir maestro-output/test "$@")
 EXIT_CODE=$?
 set -e
 

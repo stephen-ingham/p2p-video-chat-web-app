@@ -144,7 +144,10 @@ try {
 
 	Push-Location mobile-app
 	$ErrorActionPreference = "Continue"
-	& $maestro --device $device test -e DEV_CLIENT=true $flows
+	# Logs and screenshots go in mobile-app/maestro-output/ (gitignored), one
+	# timestamped folder per run, rather than ~/.maestro/tests.
+	& $maestro --device $device test -e DEV_CLIENT=true `
+		--debug-output maestro-output/debug --test-output-dir maestro-output/test $flows
 	$exitCode = $LASTEXITCODE
 	$ErrorActionPreference = "Stop"
 	Pop-Location
