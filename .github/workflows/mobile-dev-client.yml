@@ -1,8 +1,7 @@
 name: Mobile dev client (APK)
 
 # Builds the mobile app's dev-client APK on a runner, as a quicker
-# alternative to `eas build --profile development` when EAS's free-tier queue
-# is long. No EXPO_TOKEN needed: expo-dev-client is a dependency, so a plain
+# alternative to `eas build --profile development`. No EXPO_TOKEN needed: expo-dev-client is a dependency, so a plain
 # Gradle debug build is a dev client. Needed after any native change (a new
 # native package, or native config in app.json), since the dev client only
 # loads JS from Metro.
