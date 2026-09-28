@@ -92,6 +92,10 @@
       "type": "gcp:billing/budget:Budget",
       "name": "budget",
       "inputs": {
+        "allUpdatesRule": {
+          "pubsubTopic": "budget-alerts_id",
+          "schemaVersion": "1.0"
+        },
         "amount": {
           "specifiedAmount": {
             "currencyCode": "GBP",
@@ -121,6 +125,40 @@
             "thresholdPercent": 1
           }
         ]
+      }
+    },
+    {
+      "type": "gcp:cloudfunctionsv2/function:Function",
+      "name": "kill-switch",
+      "inputs": {
+        "buildConfig": {
+          "entryPoint": "killSwitch",
+          "runtime": "nodejs22",
+          "serviceAccount": "projects/snapshot-test-project/serviceAccounts/undefined",
+          "source": {
+            "storageSource": {
+              "bucket": "snapshot-test-project-kill-switch-snapshot-test",
+              "object": "kill-switch-fbdd058afa5930a7.zip"
+            }
+          }
+        },
+        "eventTrigger": {
+          "eventType": "google.cloud.pubsub.topic.v1.messagePublished",
+          "pubsubTopic": "budget-alerts_id",
+          "retryPolicy": "RETRY_POLICY_DO_NOT_RETRY",
+          "triggerRegion": "europe-west2"
+        },
+        "location": "europe-west2",
+        "name": "voneo-kill-switch-snapshot-test",
+        "serviceConfig": {
+          "availableMemory": "256M",
+          "environmentVariables": {
+            "PROJECT_ID": "snapshot-test-project"
+          },
+          "ingressSettings": "ALLOW_INTERNAL_ONLY",
+          "maxInstanceCount": 1,
+          "timeoutSeconds": 60
+        }
       }
     },
     {
@@ -289,6 +327,16 @@
       }
     },
     {
+      "type": "gcp:cloudrunv2/serviceIamMember:ServiceIamMember",
+      "name": "kill-switch-invoker",
+      "inputs": {
+        "location": "europe-west2",
+        "member": "serviceAccount:undefined",
+        "name": "voneo-kill-switch-snapshot-test",
+        "role": "roles/run.invoker"
+      }
+    },
+    {
       "type": "gcp:compute/address:Address",
       "name": "turn-ip",
       "inputs": {
@@ -393,6 +441,33 @@
       }
     },
     {
+      "type": "gcp:projects/iAMMember:IAMMember",
+      "name": "kill-switch-billing-manager",
+      "inputs": {
+        "member": "serviceAccount:undefined",
+        "project": "snapshot-test-project",
+        "role": "roles/billing.projectManager"
+      }
+    },
+    {
+      "type": "gcp:projects/iAMMember:IAMMember",
+      "name": "kill-switch-builder",
+      "inputs": {
+        "member": "serviceAccount:undefined",
+        "project": "snapshot-test-project",
+        "role": "roles/cloudbuild.builds.builder"
+      }
+    },
+    {
+      "type": "gcp:projects/iAMMember:IAMMember",
+      "name": "kill-switch-event-receiver",
+      "inputs": {
+        "member": "serviceAccount:undefined",
+        "project": "snapshot-test-project",
+        "role": "roles/eventarc.eventReceiver"
+      }
+    },
+    {
       "type": "gcp:projects/service:Service",
       "name": "artifactregistry-api",
       "inputs": {
@@ -418,6 +493,22 @@
     },
     {
       "type": "gcp:projects/service:Service",
+      "name": "cloudbuild-api",
+      "inputs": {
+        "disableOnDestroy": false,
+        "service": "cloudbuild.googleapis.com"
+      }
+    },
+    {
+      "type": "gcp:projects/service:Service",
+      "name": "cloudfunctions-api",
+      "inputs": {
+        "disableOnDestroy": false,
+        "service": "cloudfunctions.googleapis.com"
+      }
+    },
+    {
+      "type": "gcp:projects/service:Service",
       "name": "compute-api",
       "inputs": {
         "disableOnDestroy": false,
@@ -426,10 +517,26 @@
     },
     {
       "type": "gcp:projects/service:Service",
+      "name": "eventarc-api",
+      "inputs": {
+        "disableOnDestroy": false,
+        "service": "eventarc.googleapis.com"
+      }
+    },
+    {
+      "type": "gcp:projects/service:Service",
       "name": "iam-api",
       "inputs": {
         "disableOnDestroy": false,
         "service": "iam.googleapis.com"
+      }
+    },
+    {
+      "type": "gcp:projects/service:Service",
+      "name": "pubsub-api",
+      "inputs": {
+        "disableOnDestroy": false,
+        "service": "pubsub.googleapis.com"
       }
     },
     {
@@ -454,6 +561,21 @@
       "inputs": {
         "disableOnDestroy": false,
         "service": "sqladmin.googleapis.com"
+      }
+    },
+    {
+      "type": "gcp:projects/service:Service",
+      "name": "storage-api",
+      "inputs": {
+        "disableOnDestroy": false,
+        "service": "storage.googleapis.com"
+      }
+    },
+    {
+      "type": "gcp:pubsub/topic:Topic",
+      "name": "budget-alerts",
+      "inputs": {
+        "name": "budget-alerts-snapshot-test"
       }
     },
     {
@@ -599,6 +721,22 @@
     },
     {
       "type": "gcp:serviceaccount/account:Account",
+      "name": "kill-switch-build-sa",
+      "inputs": {
+        "accountId": "voneo-fn-build-snapshot-test",
+        "displayName": "Voneo kill switch builds (snapshot-test)"
+      }
+    },
+    {
+      "type": "gcp:serviceaccount/account:Account",
+      "name": "kill-switch-sa",
+      "inputs": {
+        "accountId": "voneo-kill-switch-snapshot-test",
+        "displayName": "Voneo budget kill switch (snapshot-test)"
+      }
+    },
+    {
+      "type": "gcp:serviceaccount/account:Account",
       "name": "turn-vm-sa",
       "inputs": {
         "accountId": "voneo-turn-snapshot-test",
@@ -646,6 +784,25 @@
           "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
           "value": "snapshot-test-password"
         }
+      }
+    },
+    {
+      "type": "gcp:storage/bucket:Bucket",
+      "name": "kill-switch-source",
+      "inputs": {
+        "forceDestroy": true,
+        "location": "europe-west2",
+        "name": "snapshot-test-project-kill-switch-snapshot-test",
+        "uniformBucketLevelAccess": true
+      }
+    },
+    {
+      "type": "gcp:storage/bucketObject:BucketObject",
+      "name": "kill-switch-source",
+      "inputs": {
+        "bucket": "snapshot-test-project-kill-switch-snapshot-test",
+        "name": "kill-switch-fbdd058afa5930a7.zip",
+        "source": "<archive>"
       }
     },
     {
