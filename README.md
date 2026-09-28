@@ -143,6 +143,7 @@ video-chat-application/
 │   ├── test-e2e.sh / test-e2e.ps1
 │   ├── test-e2e-nat.sh / test-e2e-nat.ps1
 │   ├── test-maestro.sh / test-maestro.ps1
+│   ├── mobile.sh / mobile.ps1
 │   └── gcp-e2e.mjs              # Deploys, e2e-tests and destroys an ephemeral GCP stack (dev, prod-preview)
 ├── e2e/                         # End-to-end tests (Playwright)
 │   ├── compose.nat.yaml         # NAT-traversal overlay: coturn + browsers on isolated Docker networks
@@ -614,6 +615,8 @@ The app needs a development build, because Expo Go doesn't include `react-native
 1. Set `LOCAL=true` in the root `.env` and run `npm run dev`.
 2. Start an Android emulator (Android Studio → Device Manager).
 3. From `mobile-app/`, run `npx expo start --dev-client` and press `a`.
+
+Steps 2 and 3 can be replaced with `npm run mobile` from the repo root. It boots an emulator if none is connected (the first in Device Manager, or the one named in `VONEO_AVD`) and leaves it running. It then starts Metro and opens the app. It doesn't start the API, so do step 1 yourself first.
 
 `react-native-webrtc` asks for camera and microphone permission itself when a call starts.
 
