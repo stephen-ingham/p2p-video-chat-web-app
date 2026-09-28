@@ -10,6 +10,28 @@
 
 `dev` and `prod` each use **their own GCP project**, so dev deployments never touch prod's data, quotas or IAM. `prod-preview` shares prod's project, with every resource name suffixed by its stack name so the two don't collide. See [Ephemeral stacks](#ephemeral-stacks-dev-prod-preview) for how those work.
 
+## Architecture
+
+### Production project
+
+The long-lived `prod` stack. The ephemeral `prod-preview` stack deploys a copy of it into the same project for each PR into `main`.
+
+![Voneo's production GCP project: Cloud Run frontend and backend, Cloud SQL, Secret Manager, Artifact Registry, and the coturn TURN VM in its own VPC, deployed by GitHub Actions through Workload Identity Federation](gcp-prod.svg)
+
+### Dev project
+
+The ephemeral `dev` stack: deployed for each PR into `dev`, e2e tested, then destroyed. With no TURN server, clients get Google's public STUN servers.
+
+![Voneo's dev GCP project: the same Cloud Run, Cloud SQL, Secret Manager and Artifact Registry resources, with no TURN VM (clients use Google's public STUN servers), deployed and destroyed per PR](gcp-dev.svg)
+
+The sources are `gcp-prod.drawio` and `gcp-dev.drawio`. Open one in [draw.io](https://app.diagrams.net/) (web or desktop) to edit it, then export it over the matching `.svg` with the desktop app's CLI:
+
+```bash
+drawio -x -f svg --embed-diagram --embed-svg-fonts false --theme light -b 10 -o gcp-prod.svg gcp-prod.drawio
+```
+
+`--embed-svg-fonts false` keeps each file around 55 KB rather than 1.5 MB, and `--theme light` keeps the white background in GitHub's dark mode. The SVGs also embed their diagram, so draw.io can open them directly.
+
 ## Commands
 
 Run from this folder (`infra/`):
@@ -23,18 +45,18 @@ Run from this folder (`infra/`):
 
 ## What gets created
 
-| Resource                                                                                                                  | What it's for                                                                                                                     | Closest AWS equivalent                     |
-| ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| GCP project (created by hand, see below)                                                                                  | Boundary for billing, IAM and resources                                                                                           | An AWS account                             |
-| `gcp.projects.Service` (×6)                                                                                               | Turns on each GCP API the stack uses. APIs start off in a new project                                                             | No equivalent (AWS services are always on) |
-| VPC `voneo-<stack>` + subnet `10.10.0.0/24`                                                                               | Network for the TURN VM                                                                                                           | VPC + subnet                               |
-| Artifact Registry repo `voneo-<stack>`                                                                                    | Holds the `voneo-backend` / `voneo-frontend` images                                                                               | ECR repository                             |
-| `docker-build` images (×2)                                                                                                | Pulumi builds the prod Dockerfiles and pushes them, then deploys by digest                                                        | `docker build` + `docker push` in CI       |
-| Cloud Run `voneo-frontend-<stack>` / `voneo-backend-<stack>`                                                              | Serverless containers. Scale to zero, max 1 instance (calls are held in memory). Reached at their `run.app` URLs, see below       | App Runner / ECS on Fargate                |
-| Service accounts `voneo-backend-`, `voneo-frontend-`, `voneo-turn-<stack>`                                                | The identity each workload runs as                                                                                                | IAM roles for tasks/instances              |
-| Cloud SQL `voneo-db-<stack>` (MySQL 8.4, `db-f1-micro`) + database + user `voneo`                                         | The app database. Ephemeral stacks add a random suffix to the name, e.g. `voneo-db-dev-4f9c2e1`                                   | RDS for MySQL                              |
-| Secret Manager secrets (DB password, JWT secrets, TURN secret)                                                            | Injected into Cloud Run as env vars                                                                                               | Secrets Manager                            |
-| coturn VM `voneo-turn-<stack>` (only when `turnEnabled`: prod and prod-preview)                                           | STUN/TURN relay, with a static IP and firewall rule                                                                               | EC2 instance + Elastic IP + security group |
+| Resource                                                                          | What it's for                                                                                                               | Closest AWS equivalent                     |
+| --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| GCP project (created by hand, see below)                                          | Boundary for billing, IAM and resources                                                                                     | An AWS account                             |
+| `gcp.projects.Service` (×6)                                                       | Turns on each GCP API the stack uses. APIs start off in a new project                                                       | No equivalent (AWS services are always on) |
+| VPC `voneo-<stack>` + subnet `10.10.0.0/24`                                       | Network for the TURN VM                                                                                                     | VPC + subnet                               |
+| Artifact Registry repo `voneo-<stack>`                                            | Holds the `voneo-backend` / `voneo-frontend` images                                                                         | ECR repository                             |
+| `docker-build` images (×2)                                                        | Pulumi builds the prod Dockerfiles and pushes them, then deploys by digest                                                  | `docker build` + `docker push` in CI       |
+| Cloud Run `voneo-frontend-<stack>` / `voneo-backend-<stack>`                      | Serverless containers. Scale to zero, max 1 instance (calls are held in memory). Reached at their `run.app` URLs, see below | App Runner / ECS on Fargate                |
+| Service accounts `voneo-backend-`, `voneo-frontend-`, `voneo-turn-<stack>`        | The identity each workload runs as                                                                                          | IAM roles for tasks/instances              |
+| Cloud SQL `voneo-db-<stack>` (MySQL 8.4, `db-f1-micro`) + database + user `voneo` | The app database. Ephemeral stacks add a random suffix to the name, e.g. `voneo-db-dev-4f9c2e1`                             | RDS for MySQL                              |
+| Secret Manager secrets (DB password, JWT secrets, TURN secret)                    | Injected into Cloud Run as env vars                                                                                         | Secrets Manager                            |
+| coturn VM `voneo-turn-<stack>` (only when `turnEnabled`: prod and prod-preview)   | STUN/TURN relay, with a static IP and firewall rule                                                                         | EC2 instance + Elastic IP + security group |
 
 There's no load balancer. Users open the frontend's URL, `https://voneo-frontend-<stack>-<project number>.europe-west2.run.app` (the `appUrl` output). The frontend's Node server (`web-server/src/server.mjs`) forwards `/auth/*`, `/call/*` and `/wss/*`, WebSocket upgrades included, to the backend's own `run.app` URL, so browsers only ever see one origin. That keeps the `SameSite=Strict` refresh-token cookie working, and the backend's `ALLOWED_ORIGIN` is `appUrl`. The backend's URL is reachable too, but Cloud Run only lets a request through with an ID token from an identity that has `roles/run.invoker` on it, and only the frontend's service account does. The proxy fetches that token from the metadata server and sends it as `X-Serverless-Authorization` (the app's own JWT stays in `Authorization`), so nothing can call the API without going through the frontend. `index.ts` builds `appUrl` from the service name and project number rather than reading the frontend's URL, which would make the two services depend on each other.
 
