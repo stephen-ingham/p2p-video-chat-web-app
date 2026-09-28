@@ -303,7 +303,7 @@ TURN_SECRET=
 MOBILE_E2E_APP_URL=
 ```
 
-`MOBILE_E2E_APP_URL` is only read by `npm run test:e2e:remote` in `mobile-app/`: it's the deployed stack that command runs the Maestro flows against (see [`mobile-app/README.md`](mobile-app/README.md#against-a-deployed-stack-as-ci-does-npm-run-teste2eremote)).
+`MOBILE_E2E_APP_URL` is only read by `npm run open:remote` and `npm run test:e2e:remote` in `mobile-app/`: it's the deployed stack the mobile app talks to in those commands (see [`mobile-app/README.md`](mobile-app/README.md#against-a-deployed-stack-as-ci-does-npm-run-teste2eremote)).
 
 This should be defined in the root directory in order for both the Astro frontend and Express.js/WebSockets backend to access these variables.
 `NODE_ENV` can be set to either `dev` or `production`.
@@ -393,7 +393,7 @@ The app needs a development build, because Expo Go doesn't include `react-native
 2. Start an Android emulator (Android Studio → Device Manager).
 3. From `mobile-app/`, run `npx expo start --dev-client` and press `a`.
 
-Steps 2 and 3 can be replaced with `npm run open` in `mobile-app/`. It boots an emulator if none is connected (the first in Device Manager, or the one named in `VONEO_AVD`) and leaves it running. It then starts Metro and opens the app. It doesn't start the API, so do step 1 yourself first.
+Steps 2 and 3 can be replaced with `npm run open` in `mobile-app/`. It boots an emulator if none is connected (the first in Device Manager, or the one named in `VONEO_AVD`) and leaves it running. It then starts Metro and opens the app. It doesn't start the API, so do step 1 yourself first. To use a deployed stack instead of a local API, e.g. prod, set `MOBILE_E2E_APP_URL` in `.env` to its `appUrl` and run `npm run open:remote`, skipping step 1.
 
 `react-native-webrtc` asks for camera and microphone permission itself when a call starts.
 
