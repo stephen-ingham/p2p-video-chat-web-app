@@ -131,6 +131,8 @@ video-chat-application/
 │   ├── index.ts                 # Everything except the TURN VM; also builds and pushes the prod images
 │   ├── turn-server.ts           # Self-hosted coturn STUN/TURN VM (prod stack only)
 │   ├── Pulumi.README.md         # Stack README template shown on each stack's Pulumi Cloud page
+│   ├── gcp-prod.drawio / .svg   # Architecture diagram of the prod GCP project (source / export shown in infra/README.md)
+│   ├── gcp-dev.drawio / .svg    # Architecture diagram of the dev GCP project
 │   └── coturn/turnserver.conf   # Base coturn config shared by the prod VM and the CI NAT e2e stack
 ├── scripts/                     # OS-specific scripts backing npm run commands, at the root and in the project folders
 │   ├── dispatch.mjs             # Detects the host OS and runs the matching .ps1/.sh script
