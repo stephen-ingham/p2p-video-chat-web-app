@@ -48,15 +48,17 @@ Run from this folder (`infra/`):
 | Resource                                                                          | What it's for                                                                                                               | Closest AWS equivalent                     |
 | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
 | GCP project (created by hand, see below)                                          | Boundary for billing, IAM and resources                                                                                     | An AWS account                             |
-| `gcp.projects.Service` (×6)                                                       | Turns on each GCP API the stack uses. APIs start off in a new project                                                       | No equivalent (AWS services are always on) |
+| `gcp.projects.Service` (×6, ×13 on prod)                                          | Turns on each GCP API the stack uses. APIs start off in a new project                                                       | No equivalent (AWS services are always on) |
 | VPC `voneo-<stack>` + subnet `10.10.0.0/24`                                       | Network for the TURN VM                                                                                                     | VPC + subnet                               |
-| Artifact Registry repo `voneo-<stack>`                                            | Holds the `voneo-backend` / `voneo-frontend` images                                                                         | ECR repository                             |
+| Artifact Registry repo `voneo-<stack>`                                            | Holds the `voneo-backend` / `voneo-frontend` images. Deletes untagged images after a week, keeping each image's 3 newest    | ECR repository + lifecycle policy          |
 | `docker-build` images (×2)                                                        | Pulumi builds the prod Dockerfiles and pushes them, then deploys by digest                                                  | `docker build` + `docker push` in CI       |
 | Cloud Run `voneo-frontend-<stack>` / `voneo-backend-<stack>`                      | Serverless containers. Scale to zero, max 1 instance (calls are held in memory). Reached at their `run.app` URLs, see below | App Runner / ECS on Fargate                |
 | Service accounts `voneo-backend-`, `voneo-frontend-`, `voneo-turn-<stack>`        | The identity each workload runs as                                                                                          | IAM roles for tasks/instances              |
 | Cloud SQL `voneo-db-<stack>` (MySQL 8.4, `db-f1-micro`) + database + user `voneo` | The app database. Ephemeral stacks add a random suffix to the name, e.g. `voneo-db-dev-4f9c2e1`                             | RDS for MySQL                              |
 | Secret Manager secrets (DB password, JWT secrets, TURN secret)                    | Injected into Cloud Run as env vars                                                                                         | Secrets Manager                            |
 | coturn VM `voneo-turn-<stack>` (only when `turnEnabled`: prod and prod-preview)   | STUN/TURN relay, with a static IP and firewall rule                                                                         | EC2 instance + Elastic IP + security group |
+| Budget `voneo-<stack>` + Pub/Sub topic (only when `billingAccount` is set: prod)  | Monthly budget with alert emails, publishing its updates to the kill switch. See [Spending limits](#spending-limits)        | AWS Budgets + SNS topic                    |
+| Cloud Run function `voneo-kill-switch-<stack>` + source bucket (prod)             | Disables billing on the project once the budget is spent                                                                    | Lambda + S3 bucket                         |
 
 There's no load balancer. Users open the frontend's URL, `https://voneo-frontend-<stack>-<project number>.europe-west2.run.app` (the `appUrl` output). The frontend's Node server (`web-server/src/server.mjs`) forwards `/auth/*`, `/call/*` and `/wss/*`, WebSocket upgrades included, to the backend's own `run.app` URL, so browsers only ever see one origin. That keeps the `SameSite=Strict` refresh-token cookie working, and the backend's `ALLOWED_ORIGIN` is `appUrl`. The backend's URL is reachable too, but Cloud Run only lets a request through with an ID token from an identity that has `roles/run.invoker` on it, and only the frontend's service account does. The proxy fetches that token from the metadata server and sends it as `X-Serverless-Authorization` (the app's own JWT stays in `Authorization`), so nothing can call the API without going through the frontend. `index.ts` builds `appUrl` from the service name and project number rather than reading the frontend's URL, which would make the two services depend on each other.
 
@@ -104,6 +106,18 @@ for role in roles/run.admin roles/cloudsql.admin roles/secretmanager.admin \
   gcloud projects add-iam-policy-binding $PROJECT_ID \
     --member serviceAccount:$DEPLOY_SA --role $role --condition=None
 done
+```
+
+The prod project also needs these, for the budget and its kill switch (`budget.ts`). The budget belongs to the billing account rather than the project, so that grant is made on the account:
+
+```bash
+for role in roles/pubsub.admin roles/cloudfunctions.admin roles/storage.admin \
+  roles/eventarc.admin; do
+  gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member serviceAccount:$DEPLOY_SA --role $role --condition=None
+done
+gcloud billing accounts add-iam-policy-binding <BILLING_ACCOUNT_ID> \
+  --member serviceAccount:$DEPLOY_SA --role roles/billing.costsManager
 ```
 
 Then let GitHub Actions runs from this repo, and only this repo, act as that service account (Workload Identity Federation):
@@ -154,6 +168,9 @@ pulumi config set --secret dbPassword "$(openssl rand -hex 24)" --stack $STACK
 pulumi config set --secret jwtSecret "$(openssl rand -hex 32)" --stack $STACK
 pulumi config set --secret refreshTokenSecret "$(openssl rand -hex 32)" --stack $STACK
 pulumi config set --secret turnSecret "$(openssl rand -hex 32)" --stack $STACK  # prod and prod-preview (turnEnabled) only
+pulumi config set billingAccount <BILLING_ACCOUNT_ID> --stack $STACK  # prod only, with the two below
+pulumi config set budgetAmount 20 --stack $STACK      # per month
+pulumi config set budgetCurrency GBP --stack $STACK   # the billing account's currency
 ```
 
 This writes to `Pulumi.<stack>.yaml`. The secret values are encrypted by Pulumi Cloud, so the file is safe to commit. Give `prod-preview` its own values rather than prod's, so a preview deployment can't mint tokens or TURN credentials that prod accepts.
@@ -222,6 +239,26 @@ Ephemeral stacks cost cents per run: each exists for about 30–45 minutes, and 
 - **Everything else** (Cloud Run, Artifact Registry, Secret Manager) costs very little at this scale.
 
 Cloud Run bills a service while it has a request open, WebSockets included, so both services are billed for as long as a call lasts: about $0.13/hour each at 1 vCPU and 512 MiB in `europe-west2` (list price). The Cloud Run free tier covers the first ~$5 a month across the billing account. There's no load balancer, which would add about $22 a month for its forwarding rule alone.
+
+### Spending limits
+
+`prod` stays up permanently and anyone can sign up to it. These limits stop one busy month or one abuser from running up a large bill:
+
+- **TURN bandwidth.** `coturn/turnserver.conf` caps each relay allocation at 500 KB/s, and all of them together at 5 MB/s (`bps-capacity`), with at most 20 at once. Relayed media is billed as egress, so that's at most about 18 GB, roughly $1.50, an hour.
+- **Credential minting.** The API allows 50 signups an hour in total and 60 `GET /call/ice-servers` requests an hour per user. TURN credentials expire after an hour (see [Rate limits](../web-socket-api/src/README.md#rate-limits)).
+- **Old images.** Artifact Registry deletes untagged images after a week (see [What gets created](#what-gets-created)).
+- **Budget alerts.** `budget.ts` creates a monthly budget (`budgetAmount`, £20 on prod) on the whole project, so `prod-preview` runs count towards it too. Billing account admins get an email at 50%, 90% and 100% of actual spend, and when the month's forecast passes 100%.
+- **Kill switch.** The budget also publishes every update (several a day) to a Pub/Sub topic. The `voneo-kill-switch-<stack>` function (`kill-switch/index.js`) disables billing on the project once actual spend reaches the budget. **That stops everything in the project**: Cloud Run, Cloud SQL and the TURN VM, for both `prod` and `prod-preview`. Billing data lags by a few hours, so spend can go a little over first.
+
+**If the kill switch fires**, find the cause first (Billing → Reports, grouped by SKU). Raise the budget in the console (Billing → Budgets & alerts), or its next update disables billing again. Then turn billing back on:
+
+```bash
+gcloud billing projects link voneo-prod-u6p3sp --billing-account=<BILLING_ACCOUNT_ID>
+```
+
+Set `budgetAmount` to match (`pulumi config set budgetAmount <amount> --stack prod`), or the next deploy puts the old amount back. Resources stopped while billing was off start again, but GCP may delete them if billing stays off for long, so re-enable it soon.
+
+**Checking spend yourself:** Billing → Reports, filtered to the project and grouped by SKU, shows what each service costs day by day. The network egress SKUs (TURN relay traffic) are the ones to watch.
 
 On `prod`, `pulumi destroy --stack prod` removes everything except the Cloud SQL instance, which has deletion protection. Turn that off in `index.ts` first if you really mean to delete it.
 
