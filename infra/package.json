@@ -12,7 +12,7 @@
     "test:e2e:prod-preview": "node ../scripts/gcp-e2e.mjs test prod-preview",
     "destroy:prod-preview": "node ../scripts/gcp-e2e.mjs down prod-preview",
     "deploy-test-destroy:prod-preview": "node ../scripts/gcp-e2e.mjs run prod-preview",
-    "deploy:prod": "pulumi up --stack prod",
+    "deploy:prod": "node ../scripts/buildx-cleanup.mjs pulumi up --stack prod",
     "destroy:prod": "pulumi destroy --stack prod"
     },
     "devDependencies": {

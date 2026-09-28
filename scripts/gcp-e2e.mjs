@@ -16,6 +16,7 @@ import https from 'node:https';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
+import {withBuildxCleanup} from './buildx-cleanup.mjs';
 
 const ephemeralStacks = new Set(['dev', 'prod-preview']);
 const [command, stack, ...playwrightArgs] = process.argv.slice(2);
@@ -125,19 +126,22 @@ async function test() {
 // Retried once: a docker-build image push that takes over about a minute
 // fails with DeadlineExceeded. Artifact Registry keeps the layers already
 // uploaded, and the resources already created are left alone, so the retry
-// only finishes the push and whatever the failure stopped.
-function up() {
-	const status = pulumi('up', '--yes', '--skip-preview');
-	if (status === 0) return status;
-	console.log('pulumi up failed, retrying once.');
-	return pulumi('up', '--yes', '--skip-preview');
+// only finishes the push and whatever the failure stopped. The buildx
+// builder docker-build creates is removed afterwards (see buildx-cleanup.mjs).
+async function up() {
+	return withBuildxCleanup(() => {
+		const status = pulumi('up', '--yes', '--skip-preview');
+		if (status === 0) return status;
+		console.log('pulumi up failed, retrying once.');
+		return pulumi('up', '--yes', '--skip-preview');
+	});
 }
 
 const down = () => pulumi('destroy', '--yes', '--skip-preview');
 
 switch (command) {
 	case 'up': {
-		process.exitCode = up();
+		process.exitCode = await up();
 		break;
 	}
 
@@ -161,7 +165,7 @@ switch (command) {
 		});
 		let status;
 		try {
-			status = up();
+			status = await up();
 			if (status === 0) status = await test();
 		} finally {
 			const downStatus = down();

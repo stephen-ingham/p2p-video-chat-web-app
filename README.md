@@ -142,7 +142,8 @@ video-chat-application/
 │   ├── test-e2e-nat.sh / test-e2e-nat.ps1
 │   ├── test-maestro.sh / test-maestro.ps1
 │   ├── mobile.sh / mobile.ps1
-│   └── gcp-e2e.mjs              # Deploys, e2e-tests and destroys an ephemeral GCP stack (dev, prod-preview)
+│   ├── gcp-e2e.mjs              # Deploys, e2e-tests and destroys an ephemeral GCP stack (dev, prod-preview)
+│   └── buildx-cleanup.mjs       # Removes the buildx builder container Pulumi's image build leaves running
 ├── e2e/                         # End-to-end tests (Playwright)
 │   ├── compose.nat.yaml         # NAT-traversal overlay: coturn + browsers on isolated Docker networks
 │   └── nat/                     # Same-network vs cross-network (TURN relay) call tests
