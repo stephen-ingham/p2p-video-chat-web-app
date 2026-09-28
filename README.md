@@ -35,7 +35,7 @@
 [![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
 [![ngrok](https://img.shields.io/badge/ngrok-1F232C?style=flat&logo=ngrok&logoColor=white)](https://ngrok.com/)
 
-Voneo is a peer-to-peer video chat app with a web client (Astro/React) and an Android mobile client (Expo/React Native), backed by the same Node.js signalling stack. 
+Voneo is a peer-to-peer video chat app with a web client (Astro/React) and an Android mobile client (Expo/React Native), backed by the same Node.js signalling stack.
 Users authenticate then create or join calls through an Express.js API, which provisions per-call WebSocket servers for session coordination. WebRTC handles media between peers once signalling completes.
 
 ## Contents
@@ -159,12 +159,7 @@ video-chat-application/
 
 </details>
 
-| Component                             | Role                                                                                       |
-| ------------------------------------- | ------------------------------------------------------------------------------------------ |
-| **Express.js API** (`web-socket-api`) | REST signalling: auth, users, call lifecycle; creates in-memory WebSocket servers per call |
-| **Astro frontend** (`web-server`)     | SSR Astro app with React components, Tailwind CSS, and shadcn/ui; port **4321** in dev     |
-
-## Local Setup
+## Local Setup (Web)
 
 ### Prerequisites
 
@@ -259,7 +254,8 @@ Instead of tunnelling through Ngrok (steps 2 and 5 above), you can run the app d
 
 ### API Routes
 
-#### Auth (`/auth`)
+<details>
+<summary><b>Auth (<code>/auth</code>)</b></summary>
 
 | Method | Path            | Auth | Request body                                                                          | Success response                                                            |
 | ------ | --------------- | ---- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
@@ -287,7 +283,10 @@ Instead of tunnelling through Ngrok (steps 2 and 5 above), you can run the app d
 - `401` — invalid/expired refresh token: `{ "success": "false", "data": { "message": "Invalid or expired refresh token" }}`
 - `500` — server error: `{ "success": "false", "data": { "message": "Server error" } }`
 
-#### Calls (`/call`)
+</details>
+
+<details>
+<summary><b>Calls (<code>/call</code>)</b></summary>
 
 | Method   | Path                     | Auth | Request                 | Success response                                                                                         |
 | -------- | ------------------------ | ---- | ----------------------- | -------------------------------------------------------------------------------------------------------- |
@@ -302,6 +301,8 @@ Instead of tunnelling through Ngrok (steps 2 and 5 above), you can run the app d
 - `400` — invalid body/params: `{ "success": false, "error": "Invalid input", "details": [...] }`
 - `404` — unknown call: `{ "success": false, "error": "Call ID not present" }`
 - `500` — server error: `{ "success": false, "error": "<message>" }`
+
+</details>
 
 Creating a call also starts a **WebSocket server** (sharing the app's single port, routed by call ID) and stores session state in an in-memory `Map` (`callId` → `{ wsURL, participants, pendingParticipants }`).
 
@@ -462,7 +463,7 @@ None of these steps happen automatically. Until they're done, merges to `main` w
 
 **Making `e2e-nat-traversal` a required check:**
 
-- **GitHub UI:** go to *Settings → Branches* and edit the `main` protection rule. Tick *Require status checks to pass before merging*, then search for `e2e-nat-traversal`. The UI only lists checks that have run on the repo recently, so open a PR into `main` first. Or use *Settings → Rules → Rulesets* to add a *Require status checks to pass* rule targeting `main`.
+- **GitHub UI:** go to _Settings → Branches_ and edit the `main` protection rule. Tick _Require status checks to pass before merging_, then search for `e2e-nat-traversal`. The UI only lists checks that have run on the repo recently, so open a PR into `main` first. Or use _Settings → Rules → Rulesets_ to add a _Require status checks to pass_ rule targeting `main`.
 - **CLI:** create a ruleset, which leaves any existing classic protection untouched:
   ```bash
   gh api -X POST repos/{owner}/{repo}/rulesets --input - <<'JSON'
