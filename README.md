@@ -1,6 +1,6 @@
 # Note: WORK IN PROGRESS
 
-# Voneo - P2P Video Chat Web App
+# Voneo - P2P Video Chat App
 
 ![Voneo](readme%20gif.gif)
 
@@ -35,7 +35,8 @@
 [![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
 [![ngrok](https://img.shields.io/badge/ngrok-1F232C?style=flat&logo=ngrok&logoColor=white)](https://ngrok.com/)
 
-Voneo is a peer-to-peer video chat application built with an Astro/React frontend and a Node.js signalling stack. Users authenticate then create or join calls through an Express.js API, which provisions per-call WebSocket servers for session coordination. WebRTC handles media between peers once signalling completes.
+Voneo is a peer-to-peer video chat app with a web client (Astro/React) and an Android mobile client (Expo/React Native), backed by the same Node.js signalling stack. 
+Users authenticate then create or join calls through an Express.js API, which provisions per-call WebSocket servers for session coordination. WebRTC handles media between peers once signalling completes.
 
 ## Contents
 
