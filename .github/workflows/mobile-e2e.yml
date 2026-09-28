@@ -3,17 +3,16 @@ name: Mobile E2E (Maestro)
 # Heavier e2e check for mobile-app/, split like this repo's Playwright e2e:
 # PRs into dev run only the happy-path flow (tagged `happy-path`), via
 # pr-dev.yml's mobile-e2e-happy-path job calling this workflow with
-# happy_path_only. PRs into main and the scheduled/manual runs run every
-# flow. PRs only run it when they touch the app, the API it talks to, or
-# the workflows.
+# happy_path_only, on every PR. PRs into main run every flow, but only when
+# they touch the app, the API it talks to, or this workflow. The scheduled
+# and manual runs also run every flow.
 #
-# Builds a release APK on the runner with the app's JS bundled in (no Metro
-# in CI) via `expo prebuild` + Gradle, so no EXPO_TOKEN/EAS account is
-# needed. VONEO_E2E_BUILD=true makes app.config.ts allow cleartext HTTP in
-# that build only, since it talks to the dev API at http://10.0.2.2:3000
-# (the emulator's alias for the runner). The API runs from the same compose
-# service as `npm run dev`, with LOCAL=true and NODE_ENV=dev so the seeded
-# test users the flows log in as exist.
+# The APK build and emulator run are in .github/actions/maestro-e2e (shared
+# with pr-dev.yml's run against the GCP dev stack). Here the app talks to a
+# local dev API at http://10.0.2.2:3000 (the emulator's alias for the
+# runner), started from the same compose service as `npm run dev`, with
+# LOCAL=true and NODE_ENV=dev so the seeded test users the flows log in as
+# exist.
 
 on:
   # PRs into dev call this from pr-dev.yml instead.
@@ -45,60 +44,23 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
 
       - name: Start the dev signalling API (LOCAL=true)
         run: |
           cp .env.example .env
           sed -i -e 's/^LOCAL=.*/LOCAL=true/' -e 's/^NGROK_HOST=.*/NGROK_HOST=/' .env
           docker compose --env-file .env -f web-socket-api/src/compose.yaml up -d --build signalling-server-dev
-          for i in $(seq 1 60); do
+          for _ in $(seq 1 60); do
             [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/call/ice-servers)" = "401" ] && exit 0
             sleep 5
           done
           docker compose --env-file .env -f web-socket-api/src/compose.yaml logs
           exit 1
 
-      - name: Install dependencies
-        run: npm ci --prefix mobile-app
-
-      - name: Build the e2e APK
-        working-directory: mobile-app
-        env:
-          VONEO_E2E_BUILD: "true"
-          EXPO_PUBLIC_API_URL: http://10.0.2.2:3000
-        run: |
-          npx expo prebuild --platform android --no-install
-          cd android && ./gradlew assembleRelease --no-daemon
-
-      - name: Enable KVM for Android emulator
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-
-      - name: Run Maestro flows on Android emulator
-        uses: reactivecircus/android-emulator-runner@v2
-        env:
+      - name: Build the APK and run the Maestro flows
+        uses: ./.github/actions/maestro-e2e
+        with:
+          api_url: http://10.0.2.2:3000
           # Happy path only when called with happy_path_only (PRs into dev);
           # every flow otherwise.
-          MAESTRO_TAGS: ${{ inputs.happy_path_only && '--include-tags=happy-path' || '' }}
-        with:
-          api-level: 34
-          arch: x86_64
-          script: |
-            adb install mobile-app/android/app/build/outputs/apk/release/app-release.apk
-            curl -Ls "https://get.maestro.mobile.dev" | bash
-            $HOME/.maestro/bin/maestro test mobile-app/.maestro/ $MAESTRO_TAGS --format junit --output maestro-report.xml --debug-output maestro-debug
-
-      - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
-        with:
-          name: maestro-results
-          path: |
-            maestro-report.xml
-            maestro-debug/
-          if-no-files-found: ignore
+          happy_path_only: ${{ inputs.happy_path_only == true }}

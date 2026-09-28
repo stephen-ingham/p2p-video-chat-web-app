@@ -1,0 +1,73 @@
+name: Maestro e2e
+description: >
+  Builds a release APK of mobile-app/ with the app's JS bundled in (no Metro)
+  via `expo prebuild` + Gradle, pointed at the given API, then runs the
+  Maestro flows on an Android emulator. No EXPO_TOKEN/EAS account needed.
+  Expects the repo checked out and Node set up. Used by mobile-e2e.yml
+  (local dev API) and pr-dev.yml's e2e-gcp-dev job (the GCP dev stack).
+
+inputs:
+  api_url:
+    description: >
+      API base URL baked into the APK (EXPO_PUBLIC_API_URL): the local dev API
+      at http://10.0.2.2:3000 (the emulator's alias for the runner), or a GCP
+      stack's appUrl, whose frontend proxies the API and WebSocket routes.
+    required: true
+  happy_path_only:
+    description: Run only the flows tagged happy-path ("true"/"false")
+    default: "false"
+  artifact_name:
+    description: Name of the uploaded Maestro report/debug artifact
+    default: maestro-results
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: "17"
+
+    - name: Install mobile-app dependencies
+      shell: bash
+      run: npm ci --prefix mobile-app
+
+    # VONEO_E2E_BUILD=true makes app.config.ts allow cleartext HTTP, which
+    # only an http:// API URL (the local dev API) needs.
+    - name: Build the e2e APK
+      shell: bash
+      working-directory: mobile-app
+      env:
+        VONEO_E2E_BUILD: ${{ startsWith(inputs.api_url, 'http://') }}
+        EXPO_PUBLIC_API_URL: ${{ inputs.api_url }}
+      run: |
+        npx expo prebuild --platform android --no-install
+        cd android && ./gradlew assembleRelease --no-daemon
+
+    - name: Enable KVM for Android emulator
+      shell: bash
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+
+    - name: Run Maestro flows on Android emulator
+      uses: reactivecircus/android-emulator-runner@v2
+      env:
+        MAESTRO_TAGS: ${{ inputs.happy_path_only == 'true' && '--include-tags=happy-path' || '' }}
+      with:
+        api-level: 34
+        arch: x86_64
+        script: |
+          adb install mobile-app/android/app/build/outputs/apk/release/app-release.apk
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+          $HOME/.maestro/bin/maestro test mobile-app/.maestro/ $MAESTRO_TAGS --format junit --output maestro-report.xml --debug-output maestro-debug
+
+    - uses: actions/upload-artifact@v4
+      if: ${{ !cancelled() }}
+      with:
+        name: ${{ inputs.artifact_name }}
+        path: |
+          maestro-report.xml
+          maestro-debug/
+        if-no-files-found: ignore
