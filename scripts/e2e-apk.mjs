@@ -199,16 +199,31 @@ function buildApk() {
 
 	// --clean regenerates android/ (gitignored) from scratch, so native config
 	// from an earlier build (e.g. cleartext for an http:// URL) can't carry over.
+	// Prebuild also rewrites package.json's android/ios scripts to
+	// `expo run:*`, so the committed file is put back afterwards.
 	console.log(`Building the release APK for ${abi} (several minutes)...`);
+	const packageJsonPath = path.join(appDir, 'package.json');
+	const packageJson = fs.readFileSync(packageJsonPath);
+	try {
+		run(
+			'npx',
+			['expo', 'prebuild', '--platform', 'android', '--no-install', '--clean'],
+			appDir,
+		);
+	} finally {
+		fs.writeFileSync(packageJsonPath, packageJson);
+	}
+
+	// A full path: cmd doesn't look in the working directory when
+	// NoDefaultCurrentDirectoryInExePath is set. Quoted for cmd, in case of
+	// spaces.
+	const androidDir = path.join(appDir, 'android');
 	run(
-		'npx',
-		['expo', 'prebuild', '--platform', 'android', '--no-install', '--clean'],
-		appDir,
-	);
-	run(
-		isWindows ? 'gradlew.bat' : './gradlew',
+		isWindows
+			? `"${path.join(androidDir, 'gradlew.bat')}"`
+			: path.join(androidDir, 'gradlew'),
 		['assembleRelease', '--no-daemon', `-PreactNativeArchitectures=${abi}`],
-		path.join(appDir, 'android'),
+		androidDir,
 	);
 
 	fs.mkdirSync(outDir, {recursive: true});
