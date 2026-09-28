@@ -7,12 +7,20 @@ tags:
   - happy-path
 ---
 - runFlow: subflows/launch.yaml
+# Each tap opens or moves the keyboard, which shifts the form on a small
+# screen: let it settle before typing, or the text can land in the wrong
+# field. Then close it, as it covers the submit button.
 - tapOn:
     id: "email-input"
+- waitForAnimationToEnd:
+    timeout: 3000
 - inputText: "john.smith@gmail.com"
 - tapOn:
     id: "password-input"
+- waitForAnimationToEnd:
+    timeout: 3000
 - inputText: "ExamplePassword123"
+- hideKeyboard
 - tapOn:
     id: "auth-submit"
 - extendedWaitUntil:
