@@ -50,6 +50,18 @@ jobs:
           node-version: lts/*
       - name: Install dependencies
         run: npm ci
+      # XO type-checks the TypeScript in these workspaces, so it needs their
+      # deps (web-server/src's tsconfig also extends astro/tsconfigs/strict)
+      # and Astro's generated types (astro:middleware, import.meta.env).
+      # mobile-app/ is skipped here, linted by mobile-ci.yml instead.
+      - name: Install workspace dependencies for type-aware lint
+        run: |
+          npm ci --prefix web-server/src
+          npm ci --prefix web-server/tests
+          npm ci --prefix infra
+      - name: Generate Astro types
+        run: npx astro sync
+        working-directory: web-server/src
       - name: Lint (xo + prettier)
         run: npm run lint
 
