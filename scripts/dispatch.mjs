@@ -21,13 +21,13 @@ const isWindows = process.platform === 'win32';
 const command = isWindows ? 'powershell' : 'bash';
 const args = isWindows
 	? [
-		'-NoProfile',
-		'-ExecutionPolicy',
-		'Bypass',
-		'-File',
-		path.join(dirname, `${scriptName}.ps1`),
-		...extraArgs,
-	]
+			'-NoProfile',
+			'-ExecutionPolicy',
+			'Bypass',
+			'-File',
+			path.join(dirname, `${scriptName}.ps1`),
+			...extraArgs,
+		]
 	: [path.join(dirname, `${scriptName}.sh`), ...extraArgs];
 
 const result = spawnSync(command, args, {stdio: 'inherit'});
