@@ -1,0 +1,68 @@
+name: Mobile dev client (APK)
+
+# Builds the mobile app's dev-client APK on a runner, as a quicker
+# alternative to `eas build --profile development` when EAS's free-tier queue
+# is long. No EXPO_TOKEN needed: expo-dev-client is a dependency, so a plain
+# Gradle debug build is a dev client. Needed after any native change (a new
+# native package, or native config in app.json), since the dev client only
+# loads JS from Metro.
+#
+# Manual only: `gh workflow run mobile-dev-client.yml`, then
+# `gh run download <run-id> -n voneo-dev-client`. The APK is debug-signed, so
+# uninstall an EAS-built dev client first (`adb uninstall com.voneo.app`).
+
+on:
+  workflow_dispatch:
+    inputs:
+      architectures:
+        description: >
+          ABIs to build for (comma-separated). x86_64 suits emulators on
+          Intel/AMD hosts; add arm64-v8a for physical phones.
+        default: x86_64
+
+jobs:
+  build:
+    timeout-minutes: 45
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Cache npm downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-mobile-${{ runner.os }}-${{ hashFiles('mobile-app/package-lock.json') }}
+          restore-keys: npm-mobile-${{ runner.os }}-
+
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-mobile-${{ runner.os }}-${{ hashFiles('mobile-app/package-lock.json', 'mobile-app/app.json', 'mobile-app/app.config.ts') }}
+          restore-keys: gradle-mobile-${{ runner.os }}-
+
+      - name: Install mobile-app dependencies
+        run: npm ci --prefix mobile-app
+
+      - name: Build the dev-client APK
+        working-directory: mobile-app
+        env:
+          ARCHITECTURES: ${{ inputs.architectures }}
+        run: |
+          npx expo prebuild --platform android --no-install
+          cd android && ./gradlew assembleDebug --no-daemon -PreactNativeArchitectures="$ARCHITECTURES"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: voneo-dev-client
+          path: mobile-app/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
