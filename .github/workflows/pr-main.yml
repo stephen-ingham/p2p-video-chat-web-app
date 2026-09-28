@@ -46,6 +46,7 @@ jobs:
         run: cp .env.example .env
       - name: web-socket-api integration + unit tests
         run: npm run test:it
+        working-directory: web-socket-api/src
 
   component-tests:
     needs: lint
@@ -59,7 +60,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: web-server component tests
-        run: npm run test:component
+        run: npm test
+        working-directory: web-server/src
 
   infra-tests:
     needs: lint

@@ -12,12 +12,12 @@ set -e
 #   - Metro, serving the app's JS to the dev client
 # An API or Metro that's already running (e.g. from `npm run dev`) is reused
 # and left running. Extra args are passed to `maestro test` in place of the
-# default `.maestro/`, e.g. `npm run test:maestro -- .maestro/create-call.yaml`.
+# default `.maestro/`, e.g. `npm run test:e2e -- .maestro/create-call.yaml` in mobile-app/.
 
 cd "$(dirname "$0")/.."
 
 fail() {
-	echo "test:maestro: $1"
+	echo "test:e2e: $1"
 	exit 1
 }
 

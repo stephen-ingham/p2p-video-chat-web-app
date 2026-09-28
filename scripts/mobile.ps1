@@ -14,7 +14,7 @@ $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..")
 
 function Fail($message) {
-	Write-Output "mobile: $message"
+	Write-Output "open: $message"
 	exit 1
 }
 

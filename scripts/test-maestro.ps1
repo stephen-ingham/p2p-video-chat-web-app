@@ -11,7 +11,7 @@ $ErrorActionPreference = "Stop"
 #   - Metro, serving the app's JS to the dev client
 # An API or Metro that's already running (e.g. from `npm run dev`) is reused
 # and left running. Extra args are passed to `maestro test` in place of the
-# default `.maestro/`, e.g. `npm run test:maestro -- .maestro/create-call.yaml`.
+# default `.maestro/`, e.g. `npm run test:e2e -- .maestro/create-call.yaml` in mobile-app/.
 
 Set-Location (Join-Path $PSScriptRoot "..")
 $startedAt = Get-Date
@@ -20,7 +20,7 @@ $startedAt = Get-Date
 $flows = if ($args.Count -gt 0) { @($args) } else { @(".maestro/") }
 
 function Fail($message) {
-	Write-Output "test:maestro: $message"
+	Write-Output "test:e2e: $message"
 	exit 1
 }
 

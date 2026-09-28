@@ -15,7 +15,7 @@ set -e
 cd "$(dirname "$0")/.."
 
 fail() {
-	echo "mobile: $1"
+	echo "open: $1"
 	exit 1
 }
 
