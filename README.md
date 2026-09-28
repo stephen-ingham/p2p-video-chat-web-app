@@ -383,7 +383,7 @@ For GCP deployments, `pulumi up` builds this image and pushes it to the stack's 
 
 **Running it against the dev stack:**
 
-The app needs a development build, because Expo Go doesn't include `react-native-webrtc`'s native code. Build it once with `eas build --profile development --platform android` and install the APK on the emulator. Rebuild only after adding native packages or changing native config in `app.json`, including the fonts embedded by the `expo-font` config plugin.
+The app needs a development build, because Expo Go doesn't include `react-native-webrtc`'s native code. Build it once with `eas build --profile development --platform android` and install the APK on the emulator, or build it on a GitHub runner with the `mobile-dev-client.yml` workflow (see [`mobile-app/README.md`](mobile-app/README.md)). Rebuild only after adding native packages or changing native config in `app.json`, including the fonts embedded by the `expo-font` config plugin.
 
 1. Set `LOCAL=true` in the root `.env` and run `npm run dev`.
 2. Start an Android emulator (Android Studio → Device Manager).

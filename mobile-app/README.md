@@ -15,7 +15,7 @@ Run from this folder (`mobile-app/`).
 | `npm run test:e2e` | Maestro flows in `.maestro/` on an emulator (see below)                                                                                                                                                                                                                                                                                                                    |
 | `npm run lint`     | XO with Prettier. `lint:fix` applies the fixes it can                                                                                                                                                                                                                                                                                                                      |
 
-`open` and `test:e2e` both need the dev-client build installed on the emulator. Build it with `eas build --profile development --platform android` and install the APK. The dev client loads the app's JavaScript from Metro, so you only need a new build after changing native packages or native config in `app.json`.
+`open` and `test:e2e` both need the dev-client build installed on the emulator. Build it with `eas build --profile development --platform android` and install the APK. If EAS's queue is long, the `mobile-dev-client.yml` GitHub workflow builds the same thing on a runner: run `gh workflow run mobile-dev-client.yml`, download the `voneo-dev-client` artifact from the run, then `adb uninstall com.voneo.app` (it's signed with a different key from an EAS build) and `adb install app-debug.apk`. The dev client loads the app's JavaScript from Metro, so you only need a new build after changing native packages or native config in `app.json`.
 
 ### Maestro flows (`npm run test:e2e`)
 
@@ -27,3 +27,5 @@ This needs [Maestro](https://docs.maestro.dev/getting-started/installing-maestro
 - closes the emulator afterwards (a physical phone is left alone), stops the containers and Metro if it started them, and deletes the ~220 MB copy of the APK that each Maestro run leaves in the temp folder
 
 To run one flow, pass it after `--`: `npm run test:e2e -- .maestro/create-call.yaml`.
+
+Maestro's logs go in `maestro-output/debug/` and its screenshots and other test artifacts in `maestro-output/test/`, one timestamped folder per run. The folder is gitignored.
