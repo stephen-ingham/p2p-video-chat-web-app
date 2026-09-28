@@ -1,38 +1,17 @@
 name: Mobile E2E (Maestro)
 
-# Heavier e2e check for mobile-app/, split like this repo's Playwright e2e:
-# PRs into dev run only the happy-path flow (tagged `happy-path`), via
-# pr-dev.yml's mobile-e2e-happy-path job calling this workflow with
-# happy_path_only, on every PR. PRs into main run every flow, but only when
-# they touch the app, the API it talks to, or this workflow. The scheduled
-# and manual runs also run every flow.
+# Every Maestro flow against a local dev API, on manual dispatch only
+# (Actions tab, or `gh workflow run mobile-e2e.yml`). The PR checks run against GCP instead: pr-dev.yml's
+# e2e-gcp-dev runs the happy-path flow against the dev stack, and
+# pr-main.yml's e2e-gcp-prod-preview runs every flow against prod-preview.
 #
 # The APK build and emulator run are in .github/actions/maestro-e2e (shared
-# with pr-dev.yml's run against the GCP dev stack). Here the app talks to a
-# local dev API at http://10.0.2.2:3000 (the emulator's alias for the
-# runner), started from the same compose service as `npm run dev`, with
-# LOCAL=true and NODE_ENV=dev so the seeded test users the flows log in as
-# exist.
+# with those GCP checks). Here the app talks to a local dev API at
+# http://10.0.2.2:3000 (the emulator's alias for the runner), started from
+# the same compose service as `npm run dev`, with LOCAL=true and
+# NODE_ENV=dev so the seeded test users the flows log in as exist.
 
 on:
-  # PRs into dev call this from pr-dev.yml instead.
-  workflow_call:
-    inputs:
-      happy_path_only:
-        description: Run only the flows tagged happy-path
-        type: boolean
-        default: false
-  pull_request:
-    branches: [main]
-    paths:
-      - "mobile-app/**"
-      # Shared palette, read by the app (src/theme/theme.ts)
-      - "colors.json"
-      # The signalling API the flows log in and create calls against
-      - "web-socket-api/**"
-      - ".github/workflows/mobile-e2e.yml"
-  schedule:
-    - cron: "0 6 * * 1-5" # weekdays, 06:00 UTC
   workflow_dispatch:
 
 jobs:
@@ -61,6 +40,3 @@ jobs:
         uses: ./.github/actions/maestro-e2e
         with:
           api_url: http://10.0.2.2:3000
-          # Happy path only when called with happy_path_only (PRs into dev);
-          # every flow otherwise.
-          happy_path_only: ${{ inputs.happy_path_only == true }}

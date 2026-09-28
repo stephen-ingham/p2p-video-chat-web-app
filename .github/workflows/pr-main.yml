@@ -6,52 +6,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Which test jobs this PR needs, from the files it changes. The jobs below
-  # are skipped (not path-filtered at workflow level) when nothing they cover
-  # changed, since a skipped job still satisfies a required status check.
-  # Manual runs run everything.
-  changes:
-    timeout-minutes: 5
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      api: ${{ github.event_name != 'pull_request' || steps.filter.outputs.api == 'true' }}
-      web_e2e: ${{ github.event_name != 'pull_request' || steps.filter.outputs.web_e2e == 'true' }}
-      nat: ${{ github.event_name != 'pull_request' || steps.filter.outputs.nat == 'true' }}
-      gcp: ${{ github.event_name != 'pull_request' || steps.filter.outputs.gcp == 'true' }}
-    steps:
-      - uses: dorny/paths-filter@v3
-        id: filter
-        if: github.event_name == 'pull_request'
-        with:
-          filters: |
-            shared: &shared
-              - "package.json"
-              - "package-lock.json"
-              - ".env.example"
-              - ".github/workflows/pr-main.yml"
-            api:
-              - *shared
-              - "web-socket-api/**"
-            web_e2e: &web_e2e
-              - *shared
-              - "web-server/**"
-              - "web-socket-api/**"
-              - "e2e/**"
-              - "playwright.config.ts"
-              - "colors.json"
-              - "scripts/dispatch.mjs"
-              - "scripts/test-e2e*"
-            nat:
-              - *web_e2e
-              - "infra/coturn/**"
-            gcp:
-              - *web_e2e
-              - "infra/**"
-              - "scripts/gcp-e2e.mjs"
-
   lint:
     timeout-minutes: 10
     runs-on: ubuntu-latest
@@ -78,8 +32,7 @@ jobs:
         run: npm run lint
 
   api-tests:
-    needs: [lint, changes]
-    if: needs.changes.outputs.api == 'true'
+    needs: lint
     timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
@@ -124,11 +77,8 @@ jobs:
         run: npm test
         working-directory: infra
 
-  # !failure() rather than the default success(), so a skipped api-tests
-  # (frontend-only PR) doesn't skip the e2e jobs with it.
   e2e-full-suite:
-    needs: [changes, api-tests, component-tests]
-    if: ${{ !failure() && !cancelled() && needs.changes.outputs.web_e2e == 'true' }}
+    needs: [api-tests, component-tests]
     timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
@@ -159,8 +109,7 @@ jobs:
   # containers on firewalled, simulated LANs (e2e/compose.nat.yaml), so the
   # runner itself needs no Playwright browsers or voneo.test hosts entry.
   e2e-nat-traversal:
-    needs: [changes, api-tests, component-tests]
-    if: ${{ !failure() && !cancelled() && needs.changes.outputs.nat == 'true' }}
+    needs: [api-tests, component-tests]
     timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
@@ -181,21 +130,24 @@ jobs:
           path: playwright-report/
           retention-days: 30
 
-  # Full e2e suite against a pre-merge preview of prod: the ephemeral
-  # prod-preview stack (prod's settings, TURN VM included, in prod's GCP
-  # project; infra/Pulumi.prod-preview.yaml) is deployed, tested and always
-  # destroyed. Real prod is untouched until merge. Fork PRs get no GCP
-  # credentials, so it only runs for this repo's branches.
+  # Full web e2e suite and every Maestro flow against a pre-merge preview of
+  # prod: the ephemeral prod-preview stack (prod's settings, TURN VM
+  # included, in prod's GCP project; infra/Pulumi.prod-preview.yaml) is
+  # deployed, tested and always destroyed, all in this one job so the
+  # concurrency lock covers the stack's whole life. Real prod is untouched
+  # until merge. Fork PRs get no GCP credentials, so it only runs for this
+  # repo's branches.
   e2e-gcp-prod-preview:
-    needs: [changes, api-tests, component-tests]
-    if: ${{ !failure() && !cancelled() && needs.changes.outputs.gcp == 'true' && (github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    needs: [api-tests, component-tests]
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     # Every run shares the one prod-preview stack, so one at a time. Never cancel a
     # run in progress: that could skip its teardown.
     concurrency:
       group: gcp-prod-preview-stack
       cancel-in-progress: false
-    # Up to ~25 min deploy + tests, with time left for the teardown.
-    timeout-minutes: 75
+    # Up to ~35 min deploy, ~25 min web tests, ~45 min APK build + emulator
+    # run, with time left for the teardown.
+    timeout-minutes: 140
     runs-on: ubuntu-latest
     environment: prod-preview
     permissions:
@@ -230,7 +182,7 @@ jobs:
       - name: Deploy ephemeral prod-preview stack
         timeout-minutes: 35
         run: node scripts/gcp-e2e.mjs up prod-preview
-      - name: Run e2e suite against it
+      - name: Run web e2e suite against it
         timeout-minutes: 25
         run: node scripts/gcp-e2e.mjs test prod-preview
       - uses: actions/upload-artifact@v4
@@ -239,6 +191,28 @@ jobs:
           name: playwright-report-gcp-prod-preview
           path: playwright-report/
           retention-days: 14
+      # The stack runs with NODE_ENV=production, so the dev seed users the
+      # Maestro flows log in as don't exist: sign that one up (through the
+      # frontend, which proxies the API), then check it can log in.
+      - name: Sign up the user the Maestro flows log in as
+        id: mobile_user
+        timeout-minutes: 20
+        working-directory: infra
+        run: |
+          APP_URL=$(pulumi stack output appUrl --stack prod-preview)
+          echo "app_url=$APP_URL" >> "$GITHUB_OUTPUT"
+          until [ "$(curl -s -o /dev/null -w '%{http_code}' "$APP_URL/call/ice-servers")" = "401" ]; do
+            echo "Waiting for $APP_URL to serve the API"
+            sleep 15
+          done
+          curl -s -o /dev/null -X POST "$APP_URL/auth/signup" -H 'Content-Type: application/json'             -d '{"username":"john2739","email":"john.smith@gmail.com","password":"ExamplePassword123"}'
+          curl -fsS -o /dev/null -X POST "$APP_URL/auth/login" -H 'Content-Type: application/json'             -d '{"email":"john.smith@gmail.com","password":"ExamplePassword123"}'
+      - name: Run every Maestro flow against it
+        timeout-minutes: 45
+        uses: ./.github/actions/maestro-e2e
+        with:
+          api_url: ${{ steps.mobile_user.outputs.app_url }}
+          artifact_name: maestro-results-gcp-prod-preview
       # Runs even if an earlier step failed or the job was cancelled, so a
       # half-created stack doesn't keep billing.
       - name: Destroy ephemeral prod-preview stack

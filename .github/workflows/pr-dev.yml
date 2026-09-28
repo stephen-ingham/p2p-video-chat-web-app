@@ -31,17 +31,9 @@ jobs:
       - name: Lint (xo + prettier)
         run: npm run lint
 
-  # The happy paths below (web and mobile, locally and on GCP) run on every
-  # PR, whatever files it touches, to catch obvious regressions early.
-
-  # Mobile happy path (Maestro, Android emulator) against a local API:
-  # mobile-e2e.yml with only the flows tagged happy-path. PRs into main run
-  # every flow from there.
-  mobile-e2e-happy-path:
-    needs: lint
-    uses: ./.github/workflows/mobile-e2e.yml
-    with:
-      happy_path_only: true
+  # The happy paths below run on every PR, whatever files it touches, to
+  # catch obvious regressions early: web against a local Docker stack, then
+  # web and mobile against the GCP dev stack.
 
   e2e-happy-path:
     needs: lint
