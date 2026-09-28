@@ -37,6 +37,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationError'
+        '429':
+          description: >
+            Signup limit reached. One limit is shared by all clients: 50 an
+            hour by default (`SIGNUP_RATE_LIMIT_PER_HOUR`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
         '500':
           description: Server error
           content:
@@ -157,7 +165,7 @@ paths:
         Returns an `RTCPeerConnection` `iceServers` list. When the API has
         `TURN_URLS` and `TURN_SECRET` configured, this is the self-hosted
         coturn server's STUN and TURN URLs, with TURN credentials minted for
-        the requesting user that expire after 12 hours (coturn TURN REST API
+        the requesting user that expire after 1 hour (coturn TURN REST API
         scheme). Otherwise it's Google's public STUN servers only, with no
         TURN relay.
       operationId: getIceServers
@@ -195,6 +203,14 @@ paths:
                               description: TURN only — base64 HMAC-SHA1 of `username`
         '401':
           description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '429':
+          description: >
+            The user's limit is reached: 60 requests an hour by default
+            (`ICE_SERVERS_RATE_LIMIT_PER_HOUR`).
           content:
             application/json:
               schema:

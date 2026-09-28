@@ -47,6 +47,7 @@ The tests read the repo root's `.env`. `../tests/unit/` is still empty.
 **Signup errors:**
 
 - `400` — invalid body: `{ "success": "false", "data": { "message": "Invalid credentials"}}`
+- `429` — signup limit reached (see [Rate limits](#rate-limits)): `{ "success": false, "data": { "error": "Too many requests" } }`
 - `500` — server error: `{ "success": false, "data": { "message": "Server error" } }`
 
 **Login errors:**
@@ -80,11 +81,23 @@ The tests read the repo root's `.env`. `../tests/unit/` is still empty.
 
 - `400` — invalid body/params: `{ "success": false, "error": "Invalid input", "details": [...] }`
 - `404` — unknown call: `{ "success": false, "error": "Call ID not present" }`
+- `429` — `GET /call/ice-servers` only, the user's limit is reached (see [Rate limits](#rate-limits)): `{ "success": false, "data": { "error": "Too many requests" } }`
 - `500` — server error: `{ "success": false, "error": "<message>" }`
 
 </details>
 
 Creating a call also starts a **WebSocket server** (sharing the app's single port, routed by call ID) and stores session state in an in-memory `Map` (`callId` → `{ wsURL, participants, pendingParticipants }`).
+
+## Rate limits
+
+Two routes are rate limited, to limit what an abuser can cost the TURN server (`web-socket-api/src/common/middlewares/rate-limits.js`). Both apply in every environment, count requests over a rolling hour, and are held in memory, so they reset when the API restarts. Past a limit, the API answers `429` with a `RateLimit` header saying when to retry.
+
+| Route                   | Default limit                          | Env var to change it              |
+| ----------------------- | -------------------------------------- | --------------------------------- |
+| `POST /auth/signup`     | 50 an hour, shared by all clients      | `SIGNUP_RATE_LIMIT_PER_HOUR`      |
+| `GET /call/ice-servers` | 60 an hour per user (by token's email) | `ICE_SERVERS_RATE_LIMIT_PER_HOUR` |
+
+Neither is per IP address: requests reach the API through Google's front end and the frontend's proxy, so the client's address is only in an `X-Forwarded-For` chain that clients can forge. There's no rate limit on the WebSocket signalling path yet.
 
 ## Authentication
 
@@ -180,7 +193,7 @@ For a machine-readable spec, see `web-socket-api/src/openapi.yaml` (some paths/r
 Before creating its peer connections, the frontend asks the API for its ICE servers (`GET /call/ice-servers`, built in `web-socket-api/src/call/utils/ice-servers.js`):
 
 - **`TURN_URLS`/`TURN_SECRET` unset (default for local dev):** Google's public STUN servers (`stun.l.google.com:19302`, `stun1.l.google.com:19302`). Fine for testing with devices on the same network, but there's no TURN relay, so peers behind symmetric/carrier-grade NAT (e.g. a phone on mobile data) often can't connect to each other.
-- **Both set (production, CI NAT tests):** the self-hosted [coturn](https://github.com/coturn/coturn) server, for both STUN and TURN. `TURN_URLS` is a comma-separated list, e.g. `stun:<ip>:3478,turn:<ip>:3478?transport=udp,turn:<ip>:3478?transport=tcp`. `TURN_SECRET` is coturn's `static-auth-secret`. The API uses it to mint TURN credentials for each user that are valid for 12 hours, using coturn's TURN REST API scheme, so the secret never reaches the browser.
+- **Both set (production, CI NAT tests):** the self-hosted [coturn](https://github.com/coturn/coturn) server, for both STUN and TURN. `TURN_URLS` is a comma-separated list, e.g. `stun:<ip>:3478,turn:<ip>:3478?transport=udp,turn:<ip>:3478?transport=tcp`. `TURN_SECRET` is coturn's `static-auth-secret`. The API uses it to mint TURN credentials for each user that are valid for 1 hour, using coturn's TURN REST API scheme, so the secret never reaches the browser.
 
 In production, Pulumi provisions coturn (`infra/turn-server.ts`) and sets both variables on the backend Cloud Run service. The deploy runs from `deploy-prod.yml` when a PR merges into `main`. Cloud Run can't host coturn, because TURN needs inbound UDP and a range of relay ports. So Pulumi creates:
 
