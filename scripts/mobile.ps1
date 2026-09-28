@@ -10,12 +10,32 @@ $ErrorActionPreference = "Stop"
 # The dev client loads the current JS from Metro, so only native changes need
 # a new dev-client build. The signalling API isn't started: run it yourself
 # (LOCAL=true, e.g. `npm run dev`); this only warns if :3000 isn't answering.
+#
+# With --remote (`npm run open:remote`), the app talks to a deployed stack
+# instead: MOBILE_E2E_APP_URL (shell env, else the root .env), e.g. a GCP
+# stack's appUrl. Metro is started with it as EXPO_PUBLIC_API_URL and a
+# cleared cache, as the URL is inlined into the JS; an already running Metro
+# isn't reused, since it serves whichever URL it was started with.
 
 Set-Location (Join-Path $PSScriptRoot "..")
 
 function Fail($message) {
 	Write-Output "open: $message"
 	exit 1
+}
+
+$remote = $args.Count -gt 0 -and $args[0] -eq "--remote"
+$apiUrl = $null
+if ($remote) {
+	$apiUrl = $env:MOBILE_E2E_APP_URL
+	if (-not $apiUrl -and (Test-Path .env)) {
+		# Values in .env can carry trailing `#` comments.
+		$line = Select-String -Path .env -Pattern '^MOBILE_E2E_APP_URL=(.*)$' | Select-Object -First 1
+		if ($line) { $apiUrl = ($line.Matches[0].Groups[1].Value -replace '\s+#.*$', '').Trim().Trim('"', "'") }
+	}
+	$apiUrl = "$apiUrl".TrimEnd("/")
+	if (-not $apiUrl) { Fail "set MOBILE_E2E_APP_URL in the root .env to the deployed stack's URL (its appUrl)." }
+	Write-Output "Pointing the app at $apiUrl."
 }
 
 function Get-Device {
@@ -58,16 +78,21 @@ if (-not (adb -s $device shell pm list packages com.voneo.app | Select-String "c
 
 # --- API check (not started here) -------------------------------------------
 
+$apiCheckUrl = if ($remote) { "$apiUrl/call/ice-servers" } else { "http://localhost:3000/call/ice-servers" }
 $apiUp = $false
 try {
-	Invoke-WebRequest -UseBasicParsing http://localhost:3000/call/ice-servers -TimeoutSec 3 | Out-Null
+	Invoke-WebRequest -UseBasicParsing $apiCheckUrl -TimeoutSec 10 | Out-Null
 	$apiUp = $true
 } catch {
 	# 401 (no token) means it's up.
 	if ($_.Exception.Response.StatusCode.value__ -eq 401) { $apiUp = $true }
 }
 if (-not $apiUp) {
-	Write-Output "Warning: the signalling API isn't answering on :3000. Start it (LOCAL=true) before logging in."
+	if ($remote) {
+		Write-Output "Warning: $apiUrl isn't serving the API (is the stack deployed?)."
+	} else {
+		Write-Output "Warning: the signalling API isn't answering on :3000. Start it (LOCAL=true) before logging in."
+	}
 }
 
 # --- Metro ------------------------------------------------------------------
@@ -78,6 +103,9 @@ try {
 	$metroUp = (Invoke-WebRequest -UseBasicParsing http://localhost:8081/status -TimeoutSec 3).RawContent -match "packager-status:running"
 } catch {}
 
+if ($metroUp -and $remote) {
+	Fail "Metro is already running on :8081, serving the API URL it was started with. Stop it (Ctrl+C in its window) and run this again."
+}
 if ($metroUp) {
 	Write-Output "Reusing the Metro server on :8081; opening the app on $device."
 	adb -s $device shell am start -a android.intent.action.VIEW `
@@ -87,5 +115,10 @@ if ($metroUp) {
 
 $env:ANDROID_SERIAL = $device # which device `--android` opens the app on
 Set-Location mobile-app
-npx expo start --dev-client --port 8081 --android
+if ($remote) {
+	$env:EXPO_PUBLIC_API_URL = $apiUrl
+	npx expo start --dev-client --port 8081 --android --clear
+} else {
+	npx expo start --dev-client --port 8081 --android
+}
 exit $LASTEXITCODE

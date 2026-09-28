@@ -36,7 +36,8 @@
     "test": "jest",
     "test:e2e": "node ../scripts/dispatch.mjs test-maestro",
     "test:e2e:remote": "node ../scripts/dispatch.mjs test-maestro --remote",
-    "open": "node ../scripts/dispatch.mjs mobile"
+    "open": "node ../scripts/dispatch.mjs mobile",
+    "open:remote": "node ../scripts/dispatch.mjs mobile --remote"
   },
   "jest": {
     "preset": "jest-expo",
