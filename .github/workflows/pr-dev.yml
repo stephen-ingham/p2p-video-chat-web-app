@@ -6,50 +6,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Which e2e jobs this PR needs, from the files it changes (see the same job
-  # in pr-main.yml). Manual runs run everything.
-  changes:
-    timeout-minutes: 5
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      web_e2e: ${{ github.event_name != 'pull_request' || steps.filter.outputs.web_e2e == 'true' }}
-      gcp: ${{ github.event_name != 'pull_request' || steps.filter.outputs.gcp == 'true' }}
-      mobile_e2e: ${{ github.event_name != 'pull_request' || steps.filter.outputs.mobile_e2e == 'true' }}
-    steps:
-      - uses: dorny/paths-filter@v3
-        id: filter
-        if: github.event_name == 'pull_request'
-        with:
-          filters: |
-            web_e2e: &web_e2e
-              - "package.json"
-              - "package-lock.json"
-              - ".env.example"
-              - ".github/workflows/pr-dev.yml"
-              - "web-server/**"
-              - "web-socket-api/**"
-              - "e2e/**"
-              - "playwright.config.ts"
-              - "colors.json"
-              - "scripts/dispatch.mjs"
-              - "scripts/test-e2e*"
-            gcp:
-              - *web_e2e
-              - "infra/**"
-              - "scripts/gcp-e2e.mjs"
-            mobile_e2e:
-              - ".env.example"
-              - ".github/workflows/pr-dev.yml"
-              - ".github/workflows/mobile-e2e.yml"
-              - "mobile-app/**"
-              # Shared palette, read by the app (src/theme/theme.ts)
-              - "colors.json"
-              # The signalling API the flows log in and create calls against
-              - "web-socket-api/**"
-
   lint:
     timeout-minutes: 10
     runs-on: ubuntu-latest
@@ -75,18 +31,20 @@ jobs:
       - name: Lint (xo + prettier)
         run: npm run lint
 
-  # Mobile happy path (Maestro, Android emulator): mobile-e2e.yml with only
-  # the flows tagged happy-path. PRs into main run every flow from there.
+  # The happy paths below (web and mobile, locally and on GCP) run on every
+  # PR, whatever files it touches, to catch obvious regressions early.
+
+  # Mobile happy path (Maestro, Android emulator) against a local API:
+  # mobile-e2e.yml with only the flows tagged happy-path. PRs into main run
+  # every flow from there.
   mobile-e2e-happy-path:
-    needs: [lint, changes]
-    if: needs.changes.outputs.mobile_e2e == 'true'
+    needs: lint
     uses: ./.github/workflows/mobile-e2e.yml
     with:
       happy_path_only: true
 
   e2e-happy-path:
-    needs: [lint, changes]
-    if: needs.changes.outputs.web_e2e == 'true'
+    needs: lint
     timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
@@ -111,19 +69,22 @@ jobs:
           path: playwright-report/
           retention-days: 14
 
-  # Full e2e suite against a real GCP deployment of the PR: the ephemeral dev
-  # stack (infra/Pulumi.dev.yaml) is deployed, tested and always destroyed.
-  # Fork PRs get no GCP credentials, so it only runs for this repo's branches.
+  # Web and mobile happy paths against a real GCP deployment of the PR: the
+  # ephemeral dev stack (infra/Pulumi.dev.yaml) is deployed, tested and always
+  # destroyed, all in this one job so the concurrency lock covers the stack's
+  # whole life. Fork PRs get no GCP credentials, so it only runs for this
+  # repo's branches.
   e2e-gcp-dev:
-    needs: [lint, changes]
-    if: needs.changes.outputs.gcp == 'true' && (github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository)
+    needs: lint
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     # Every run shares the one dev stack, so one at a time. Never cancel a
     # run in progress: that could skip its teardown.
     concurrency:
       group: gcp-dev-stack
       cancel-in-progress: false
-    # Up to ~25 min deploy + tests, with time left for the teardown.
-    timeout-minutes: 75
+    # Up to ~35 min deploy, ~10 min web tests, ~40 min APK build + emulator
+    # run, with time left for the teardown.
+    timeout-minutes: 120
     runs-on: ubuntu-latest
     environment: dev
     permissions:
@@ -158,15 +119,38 @@ jobs:
       - name: Deploy ephemeral dev stack
         timeout-minutes: 35
         run: node scripts/gcp-e2e.mjs up dev
-      - name: Run e2e suite against it
+      - name: Run web happy-path e2e against it
         timeout-minutes: 25
-        run: node scripts/gcp-e2e.mjs test dev
+        run: node scripts/gcp-e2e.mjs test dev --grep @happy-path
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
           name: playwright-report-gcp-dev
           path: playwright-report/
           retention-days: 14
+      # The stack runs with NODE_ENV=production, so the dev seed users the
+      # Maestro flows log in as don't exist: sign that one up (through the
+      # frontend, which proxies the API), then check it can log in.
+      - name: Sign up the user the Maestro flows log in as
+        id: mobile_user
+        timeout-minutes: 20
+        working-directory: infra
+        run: |
+          APP_URL=$(pulumi stack output appUrl --stack dev)
+          echo "app_url=$APP_URL" >> "$GITHUB_OUTPUT"
+          until [ "$(curl -s -o /dev/null -w '%{http_code}' "$APP_URL/call/ice-servers")" = "401" ]; do
+            echo "Waiting for $APP_URL to serve the API"
+            sleep 15
+          done
+          curl -s -o /dev/null -X POST "$APP_URL/auth/signup" -H 'Content-Type: application/json'             -d '{"username":"john2739","email":"john.smith@gmail.com","password":"ExamplePassword123"}'
+          curl -fsS -o /dev/null -X POST "$APP_URL/auth/login" -H 'Content-Type: application/json'             -d '{"email":"john.smith@gmail.com","password":"ExamplePassword123"}'
+      - name: Run mobile happy-path e2e against it (Maestro)
+        timeout-minutes: 45
+        uses: ./.github/actions/maestro-e2e
+        with:
+          api_url: ${{ steps.mobile_user.outputs.app_url }}
+          happy_path_only: "true"
+          artifact_name: maestro-results-gcp-dev
       # Runs even if an earlier step failed or the job was cancelled, so a
       # half-created stack doesn't keep billing.
       - name: Destroy ephemeral dev stack
