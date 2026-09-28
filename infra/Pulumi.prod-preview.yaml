@@ -2,9 +2,8 @@ config:
   # Pre-merge preview of prod for PRs into main (pr-main.yml): prod's
   # settings (TURN VM on), deployed into the prod stack's GCP project with
   # stack-suffixed resource names, then destroyed after its e2e run.
-  # TODO: set the same GCP project as the prod stack:
-  #   pulumi config set gcp:project YOUR_PROD_PROJECT_ID --stack prod-preview
-  gcp:project: TODO-prod-project-id
+  # Same GCP project as the prod stack.
+  gcp:project: voneo-prod-u6p3sp
   gcp:region: europe-west2
   # Ephemeral, like dev: see Pulumi.dev.yaml.
   voneo-video-chat:ephemeral: true

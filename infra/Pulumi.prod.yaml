@@ -1,7 +1,5 @@
 config:
-  # TODO: set the target GCP project for the prod environment:
-  #   pulumi config set gcp:project YOUR_PROD_PROJECT_ID --stack prod
-  gcp:project: TODO-prod-project-id
+  gcp:project: voneo-prod-u6p3sp
   gcp:region: europe-west2
   # Secrets — set locally once a Pulumi backend/passphrase is configured:
   #   pulumi config set --secret dbPassword <value> --stack prod
