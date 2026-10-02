@@ -222,7 +222,7 @@ Note: the `npm run setup` command above isn't technically necessary for developi
 
 Copy `.env.example` to new `.env`. The defaults suit local dev, except for how you reach the app:
 
-- **Web, through Ngrok:** set `NGROK_HOST` to your Ngrok tunnel URL and keep `LOCAL=false`.
+- **Web, through Ngrok:** set `NGROK_HOST` to your Ngrok tunnel's hostname, with no `https://` or `wss://` in front (e.g. `horizon-velvet-symphony.ngrok-free.dev`), and keep `LOCAL=false`.
 - **Android emulator, or web on `localhost` only:** set `LOCAL=true` and leave `NGROK_HOST` empty (see [Using `LOCAL` instead of an Ngrok tunnel](#using-local-instead-of-an-ngrok-tunnel)).
 
 ### 3. Run the docker dev containers
@@ -328,7 +328,7 @@ DB_NAME=dev-db
 DB_PASSWORD=testpassword123
 DB_HOST=mysql-db
 DB_PORT=3306
-NGROK_HOST=wss://<tunnel>.ngrok-free.dev
+NGROK_HOST=<tunnel>.ngrok-free.dev
 LOCAL=false
 TURN_URLS=
 TURN_SECRET=
@@ -339,6 +339,8 @@ MOBILE_E2E_APP_URL=
 
 This should be defined in the root directory in order for both the Astro frontend and Express.js/WebSockets backend to access these variables.
 `NODE_ENV` can be set to either `dev` or `production`.
+
+`NGROK_HOST` is the tunnel's hostname only, with no scheme. The frontend uses it as is for Vite's allowed hosts and hot-reload host, and puts `https://` in front of it for Astro's `site`, Vite's `origin` and the API's CORS allowlist.
 
 A `.env.example` file has been defined using these defaults for local testing. For production usage, ensure to set your own.
 
