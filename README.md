@@ -478,7 +478,7 @@ npm run test:e2e:dev
 npm run destroy:dev
 ```
 
-The `prod-preview` equivalents end in `:prod-preview` instead. A run costs a few cents. None of this works until the GCP projects, Pulumi stacks and GitHub secrets exist: see [`infra/README.md`](infra/README.md), which also covers how the ephemeral stacks work.
+The `prod-preview` equivalents end in `:prod-preview` instead.
 
 ---
 
