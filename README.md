@@ -347,7 +347,7 @@ See [`web-server/src/README.md`](web-server/src/README.md) for how the frontend 
 
 ## Mobile app (Expo, Android)
 
-`mobile-app/` is an Expo (React Native) Android app. It talks to the signalling API directly, with no code shared with `web-server`, and uses `react-native-webrtc` for calls. Its signalling matches the web client's, so web and mobile users can be on the same call.
+`mobile-app/` is an Expo (React Native) Android app. It talks to the signalling API directly and uses `react-native-webrtc` for calls. Its signalling matches the web client's, so web and mobile users can be on the same call.
 
 - **Dev client:** it needs a development build, because Expo Go doesn't include `react-native-webrtc`'s native code.
 - **Look:** it shares the web app's palette (`colors.json`) and type scale.

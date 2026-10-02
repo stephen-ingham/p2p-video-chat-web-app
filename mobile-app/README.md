@@ -57,7 +57,7 @@ It doesn't start the API, MySQL or Metro, and it doesn't deploy or destroy the s
 
 ## How it's put together
 
-The app is an Expo (React Native) Android app. It talks to the signalling API directly, with no code shared with `web-server`, and uses `react-native-webrtc` for calls. Its signalling matches the web client's, so web and mobile users can be on the same call.
+The app is an Expo (React Native) Android app. It talks to the signalling API directly and uses `react-native-webrtc` for calls. Its signalling matches the web client's, so web and mobile users can be on the same call.
 
 - `app.tsx` — shows `AuthScreen` while logged out and `CallScreen` once logged in. It uses plain state rather than Expo Router: there are only two screens, and Expo Router would need a new native build.
 - `src/screens/` — `auth-screen.tsx` (login/register), `call-screen.tsx` (create or join a call), `in-call-view.tsx` (full-screen remote video, your video in a corner, mic/camera/chat/hang-up controls), `chat-sheet.tsx` (chat as a bottom sheet).
