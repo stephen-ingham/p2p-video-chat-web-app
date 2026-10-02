@@ -44,7 +44,9 @@ Users authenticate then create or join calls through an Express.js API, which pr
 - [Overview](#overview)
 - [Project Structure](#project-structure)
 - [Commands](#commands)
-- [Local Setup](#local-setup-web)
+- [Local Setup](#local-setup)
+  - [Web](#web)
+  - [Mobile (Android)](#mobile-android)
 - [Signalling Server (Express.js API)](#signalling-server-expressjs-api)
 - [Environment Variables](#environment-variables)
 - [Database Structure & Data Models](#database-structure--data-models)
@@ -190,15 +192,17 @@ Commands for one part of the project run from that part's folder. Some key ones:
 
 Each folder's README lists all of its commands.
 
-## Local Setup (Web)
+## Local Setup
+
+The web app and the Android app share their first three setup steps: cloning the repo, creating the `.env` and starting the dev stack. After that, follow [Web](#web) or [Mobile (Android)](#mobile-android).
 
 ### Prerequisites
 
 - [Docker](https://docs.docker.com/desktop/setup/install/) (v28+)
 - [Node.js](https://nodejs.org/) (LTS recommended)
-- [Ngrok](https://ngrok.com/download/)
 - [Git](https://git-scm.com/install/)
-- A machine with camera/microphone access for testing WebRTC
+- For the web app: [Ngrok](https://ngrok.com/download/), and a machine with camera/microphone access for testing WebRTC
+- For the Android app: [Android Studio](https://developer.android.com/studio), for the Android SDK and an emulator
 
 ### 1. Clone repo, install npm deps & build dev docker images
 
@@ -214,46 +218,20 @@ npm run setup
 
 Note: the `npm run setup` command above isn't technically necessary for developing using the docker containers as they will setup their own dependencies from scratch. However, it will help you avoid a lot of in-editor errors related to typing and package imports that could be inconvenient!
 
-### 2. Provide your Ngrok auth token in `ngrok.yml`
+### 2. Create the .env in the root
 
-- Copy `ngrok.example.yml` to `ngrok.yml`
-- [Create an Ngrok account](https://dashboard.ngrok.com/login)
-- Grab your account Auth Token and put it in the `authtoken` field in your new `ngrok.yml`.
-  Alternatively you can add your authtoken to the default `ngrok.yml` configuration file at your system root using the following command:
+Copy `.env.example` to new `.env`. The defaults suit local dev, except for how you reach the app:
 
-```bash
-ngrok config add-authtoken $YOUR_AUTHTOKEN
-```
+- **Web, through Ngrok:** set `NGROK_HOST` to your Ngrok tunnel URL and keep `LOCAL=false`.
+- **Android emulator, or web on `localhost` only:** set `LOCAL=true` and leave `NGROK_HOST` empty (see [Using `LOCAL` instead of an Ngrok tunnel](#using-local-instead-of-an-ngrok-tunnel)).
 
-For further details, [refer to the Ngrok setup instructions here](https://dashboard.ngrok.com/get-started/setup/)
-
-### 3. Create the .env in the root
-
-Copy `.env.example` to new `.env`:
-
-Note: you will need to replace the `WS_HOST` in `.env` with the ngrok tunnel URL prefixed explicitly by `wss://`. Otherwise the current defaults should be sufficient for local dev.
-
-### 4. Run the docker dev containers
+### 3. Run the docker dev containers
 
 Spins up the built images for the Astro.js/React SSR frontend (`web-server-dev:1.0.0`), the Express.js/WebSockets backend (`signalling-server-dev:1.0.0`) and pulls/builds the MySQL 8.4 image (`mysql:8.4`)
 
 ```bash
 npm run dev
 ```
-
-### 5. Start the Ngrok tunnel
-
-```bash
-npm run dev:tunnel
-```
-
-### 6. Navigate to the UI
-
-If the docker container setup went well then the frontend should be accessible at the your Ngrok tunnel URL in the browser and ready for use!:
-
-For example:
-
-App URL: **https://horizon-velvet-symphony.ngrok-free.dev/**
 
 To spin down the dev containers smoothly use the following command. It also stops the `docker compose watch` processes that `npm run dev` started, which would otherwise keep a lock on the Compose projects and make the next `npm run dev` fail with "cannot take exclusive lock":
 
@@ -269,9 +247,59 @@ If something goes wrong during setup, you can run `npm run setup:nuke` to delete
 npm run setup:nuke
 ```
 
-### Alternative Setup: using localhost directly (no Ngrok)
+### Web
 
-Instead of tunnelling through Ngrok (steps 2 and 5 above), you can run the app directly against `localhost` by setting `LOCAL=true` in your `.env`. This is quicker to get going but comes with major limitations — most notably you won't be able to reach the app from any device other than the machine running the containers. See [Using `LOCAL` instead of an Ngrok tunnel](#using-local-instead-of-an-ngrok-tunnel) in the Environment Variables section for full details before choosing this route.
+#### 4. Provide your Ngrok auth token in `ngrok.yml`
+
+- Copy `ngrok.example.yml` to `ngrok.yml`
+- [Create an Ngrok account](https://dashboard.ngrok.com/login)
+- Grab your account Auth Token and put it in the `authtoken` field in your new `ngrok.yml`.
+  Alternatively you can add your authtoken to the default `ngrok.yml` configuration file at your system root using the following command:
+
+```bash
+ngrok config add-authtoken $YOUR_AUTHTOKEN
+```
+
+For further details, [refer to the Ngrok setup instructions here](https://dashboard.ngrok.com/get-started/setup/)
+
+#### 5. Start the Ngrok tunnel
+
+```bash
+npm run dev:tunnel
+```
+
+#### 6. Navigate to the UI
+
+If the docker container setup went well then the frontend should be accessible at the your Ngrok tunnel URL in the browser and ready for use!:
+
+For example:
+
+App URL: **https://horizon-velvet-symphony.ngrok-free.dev/**
+
+#### Alternative: using localhost directly (no Ngrok)
+
+Instead of tunnelling through Ngrok (steps 4 and 5 above), you can run the app directly against `localhost` by setting `LOCAL=true` in your `.env`. This is quicker to get going but comes with major limitations — most notably you won't be able to reach the app from any device other than the machine running the containers. See [Using `LOCAL` instead of an Ngrok tunnel](#using-local-instead-of-an-ngrok-tunnel) in the Environment Variables section for full details before choosing this route.
+
+### Mobile (Android)
+
+The Android app runs on an emulator against the local API, so it needs `LOCAL=true` in `.env` (step 2).
+
+#### 4. Install the dev-client build
+
+The app needs a development build, because Expo Go doesn't include `react-native-webrtc`'s native code. Build it with `eas build --profile development --platform android`, or on a GitHub runner with the `mobile-dev-client.yml` workflow, and install the APK on the emulator (see [`mobile-app/README.md`](mobile-app/README.md#commands)). You only need a new build after changing native packages or native config in `app.json`.
+
+#### 5. Create an emulator
+
+Create an Android emulator in Android Studio's Device Manager. To match the phone CI tests on, see [Emulator](mobile-app/README.md#emulator).
+
+#### 6. Open the app
+
+```bash
+cd mobile-app
+npm run open
+```
+
+It boots an emulator if none is connected (the first in Device Manager, or the one named in `VONEO_AVD`) and leaves it running, then starts Metro and opens the app. It doesn't start the API, so run `npm run dev` (step 3) first. To use a deployed stack instead of the local API, see `npm run open:remote` in [`mobile-app/README.md`](mobile-app/README.md#commands).
 
 ---
 
