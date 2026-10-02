@@ -1,19 +1,20 @@
 Set-Location (Join-Path $PSScriptRoot "..")
 
+# Every folder with its own package.json. Keep in step with setup.ps1.
+$dirs = ".", "web-server/src", "web-server/tests", "web-socket-api/src", "web-socket-api/tests", "infra", "infra/kill-switch", "mobile-app"
+
 Write-Host ">>> Removing node_modules..."
-Remove-Item -Recurse -Force -ErrorAction SilentlyContinue node_modules
-Remove-Item -Recurse -Force -ErrorAction SilentlyContinue web-server/src/node_modules
-Remove-Item -Recurse -Force -ErrorAction SilentlyContinue web-socket-api/src/node_modules
-Remove-Item -Recurse -Force -ErrorAction SilentlyContinue infra/node_modules
+foreach ($dir in $dirs) {
+    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue (Join-Path $dir "node_modules")
+}
 
 Write-Host ">>> Clearing npm cache..."
 npm cache clean --force
 
 Write-Host ">>> Reinstalling dependencies..."
-npm install
-Push-Location web-server/src; npm install; Pop-Location
-Push-Location web-socket-api/src; npm install; Pop-Location
-Push-Location infra; npm install; Pop-Location
+foreach ($dir in $dirs) {
+    Push-Location $dir; npm install; Pop-Location
+}
 
 Write-Host ">>> Tearing down Docker containers and images..."
 docker compose --env-file .env -f web-socket-api/src/compose.yaml down --rmi all

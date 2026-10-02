@@ -3,17 +3,21 @@ set -e
 
 cd "$(dirname "$0")/.."
 
+# Every folder with its own package.json. Keep in step with setup.sh.
+dirs=". web-server/src web-server/tests web-socket-api/src web-socket-api/tests infra infra/kill-switch mobile-app"
+
 echo ">>> Removing node_modules..."
-rm -rf node_modules web-server/src/node_modules web-socket-api/src/node_modules infra/node_modules
+for dir in $dirs; do
+  rm -rf "$dir/node_modules"
+done
 
 echo ">>> Clearing npm cache..."
 npm cache clean --force
 
 echo ">>> Reinstalling dependencies..."
-npm install
-(cd web-server/src && npm install)
-(cd web-socket-api/src && npm install)
-(cd infra && npm install)
+for dir in $dirs; do
+  (cd "$dir" && npm install)
+done
 
 echo ">>> Tearing down Docker containers and images..."
 docker compose --env-file .env -f web-socket-api/src/compose.yaml down --rmi all
