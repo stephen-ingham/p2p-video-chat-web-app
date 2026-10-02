@@ -33,7 +33,7 @@ Repo-wide commands live in the root `package.json` and run from the repo root. C
 
 Notes on the root commands:
 
-- `setup` isn't strictly required (containers self-provision) but avoids editor type/import errors. Only run `setup:nuke` when setup is broken.
+- `setup` runs `npm install` in every folder with its own `package.json` (root, `web-server/src`, `web-server/tests`, `web-socket-api/src`, `web-socket-api/tests`, `infra`, `infra/kill-switch`, `mobile-app`); add new ones to the loop in `scripts/setup.*` and `scripts/nuke.*`. It isn't strictly required (containers self-provision) but avoids editor type/import errors. Only run `setup:nuke` when setup is broken.
 - `dev:halt` also stops the `docker compose watch` processes `npm run dev` started (left running, they hold a lock that makes the next `npm run dev` fail with "cannot take exclusive lock").
 - `dev:tunnel` requires `ngrok.yml` with an authtoken, copied from `ngrok.example.yml`.
 - `lint` — Runs XO linting with prettier config passed in. Skips `mobile-app/` (`--ignore`), which `npm run lint` inside `mobile-app/` covers instead (as `mobile-ci.yml` does): its `tsconfig.json` extends `expo/tsconfig.base`, which is only installed in `mobile-app/node_modules`, so XO would crash on it wherever those deps aren't installed. The root `xo.config.mjs` still applies to both. XO type-checks the TypeScript it lints, so on a clean checkout it also needs the `web-server/src`, `web-server/tests` and `infra` deps installed and `npx astro sync` run in `web-server/src` (the `pr-dev.yml`/`pr-main.yml` lint jobs do both). Otherwise it crashes on `astro/tsconfigs/strict` or reports `no-unsafe-*` errors for unresolved types.
