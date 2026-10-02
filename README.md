@@ -210,7 +210,7 @@ git clone https://github.com/stephen-ingham/p2p-video-chat-web-app
 npm run setup
 ```
 
-`npm run setup` auto-detects your OS (via `scripts/dispatch.mjs`) and runs `scripts/setup.ps1` on Windows or `scripts/setup.sh` everywhere else - no need to pick a variant yourself.
+`npm run setup` auto-detects your OS (via `scripts/dispatch.mjs`) and runs `scripts/setup.ps1` on Windows or `scripts/setup.sh` everywhere else - no need to pick a variant yourself. It runs `npm install` in every folder with its own `package.json`: the root, `web-server/src`, `web-server/tests`, `web-socket-api/src`, `web-socket-api/tests`, `infra`, `infra/kill-switch` and `mobile-app`.
 
 Note: the `npm run setup` command above isn't technically necessary for developing using the docker containers as they will setup their own dependencies from scratch. However, it will help you avoid a lot of in-editor errors related to typing and package imports that could be inconvenient!
 
