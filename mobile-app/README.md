@@ -1,6 +1,6 @@
 # Voneo mobile app
 
-The Expo (React Native) Android app. See the [root README](../README.md#mobile-app-expo-android) for how it's built, how it talks to the signalling API, and how its tests run in CI.
+The Expo (React Native) Android app. See [How it's put together](#how-its-put-together) below for how it's built, how it talks to the signalling API, and how its tests run in CI.
 
 ## Commands
 
@@ -54,3 +54,38 @@ Maestro's logs go in `maestro-output/debug/` and its screenshots and other test 
    - backs up the installed app (normally the dev client) to `maestro-output/installed-app-backup/` and uninstalls it, because the two share a package name and are signed with different keys. It installs the release APK, runs the flows, then reinstalls the backup. If that fails, the backup stays in that folder.
 
 It doesn't start the API, MySQL or Metro, and it doesn't deploy or destroy the stack. Pass one flow after `--`, as with `test:e2e`. `expo prebuild --clean` regenerates the gitignored `android/` folder.
+
+## How it's put together
+
+The app is an Expo (React Native) Android app. It talks to the signalling API directly, with no code shared with `web-server`, and uses `react-native-webrtc` for calls. Its signalling matches the web client's, so web and mobile users can be on the same call.
+
+- `app.tsx` — shows `AuthScreen` while logged out and `CallScreen` once logged in. It uses plain state rather than Expo Router: there are only two screens, and Expo Router would need a new native build.
+- `src/screens/` — `auth-screen.tsx` (login/register), `call-screen.tsx` (create or join a call), `in-call-view.tsx` (full-screen remote video, your video in a corner, mic/camera/chat/hang-up controls), `chat-sheet.tsx` (chat as a bottom sheet).
+- `src/theme/theme.ts` and `src/components/` — the look shared with the web app: the palette from the root `colors.json`, Geist type scale, spacing and 48dp touch targets, and the `Button`, `IconButton`, `TextField`, `Tabs` and `Card` primitives. `metro.config.js` lets Metro read `colors.json` from outside `mobile-app/`.
+- `src/lib/config.ts` — API base URL, from `EXPO_PUBLIC_API_URL`. The default, `http://10.0.2.2:3000`, is the Android emulator's alias for the host machine, direct to the API port. It suits the `LOCAL=true` dev stack. Expo inlines the variable when Metro starts, so restart Metro after changing it.
+- `src/lib/call-url.ts` — builds a call's WebSocket URL from its `callID` (`ws://<host>/ws/:callID` for an `http` API URL, `wss://<host>/wss/:callID` for `https`), and validates call IDs.
+- `src/lib/api.ts` / `src/lib/signalling.ts` — REST client (including ICE servers) and the WebSocket join handshake.
+- `src/lib/call-session.ts` — the call's WebRTC signalling: the joiner offers to everyone already on the call, they answer, and ICE candidates are exchanged. Peers are injected, so it's tested with fakes.
+- `src/lib/webrtc.ts` — the only module using `react-native-webrtc` directly: camera/mic capture and the real peer connections.
+- `src/lib/use-call.ts` — the hook tying these together for the call screen.
+
+### Running it against the dev stack
+
+The app needs a development build, because Expo Go doesn't include `react-native-webrtc`'s native code. Build it once with `eas build --profile development --platform android` and install the APK on the emulator, or build it on a GitHub runner with the `mobile-dev-client.yml` workflow (see [Commands](#commands)). Rebuild only after adding native packages or changing native config in `app.json`, including the fonts embedded by the `expo-font` config plugin.
+
+1. Set `LOCAL=true` in the root `.env` and run `npm run dev` from the repo root.
+2. Start an Android emulator (Android Studio → Device Manager).
+3. From this folder, run `npx expo start --dev-client` and press `a`.
+
+Steps 2 and 3 can be replaced with `npm run open`. It boots an emulator if none is connected (the first in Device Manager, or the one named in `VONEO_AVD`) and leaves it running. It then starts Metro and opens the app. It doesn't start the API, so do step 1 yourself first. To use a deployed stack instead of a local API, e.g. prod, set `MOBILE_E2E_APP_URL` in the root `.env` to its `appUrl` and run `npm run open:remote`, skipping step 1.
+
+`react-native-webrtc` asks for camera and microphone permission itself when a call starts.
+
+### Tests
+
+- `npm test` runs Jest (`jest-expo` preset) with [React Native Testing Library](https://callstack.github.io/react-native-testing-library/). Tests live in `tests/`: unit tests for `api.ts`, `call-url.ts` and `call-session.ts`, and component tests for the auth and call screens with the API, signalling and WebRTC modules mocked. These include accessibility checks (labelled fields, tab and switch states, button names). `mobile-ci.yml` runs them on PRs that touch `mobile-app/` or `colors.json`.
+- [Maestro](https://maestro.mobile.dev/) flows in `.maestro/` cover logging in, creating a call and hanging up, and a failed login. In CI they run on an emulator with a release APK built on the runner, against the GCP deployments (see [Against a GCP deployment](../README.md#against-a-gcp-deployment) in the root README): PRs into `dev` run only the happy path (`create-call.yaml`, tagged `happy-path`) against the dev stack, and PRs into `main` run every flow against `prod-preview`. `mobile-e2e.yml` runs every flow when started manually (Actions tab, or `gh workflow run mobile-e2e.yml`): against a local API on the runner by default, or against a deployed stack with its `api_url` input set to that stack's `appUrl` (`gh workflow run mobile-e2e.yml -f api_url=<appUrl>`), after signing up the user the flows log in as. The APK build and emulator steps live in `.github/actions/maestro-e2e`, shared by all three. The built APK is cached per API URL, keyed on the app's source (not the Maestro flows), so it's only rebuilt when the app changes. `mobile-apk-cache.yml` builds it after every push to `dev` (dev stack) and `main` (`prod-preview`), because a PR can only restore caches from its own runs and its base branch. It reads those stacks' URLs from the `DEV_APP_URL`/`PROD_PREVIEW_APP_URL` repo variables, which must match each stack's `appUrl`. npm and Gradle downloads are cached too, to speed up the builds that do happen. To run them locally, install the dev-client build on an Android emulator and run `npm run test:e2e` (see [Maestro flows](#maestro-flows-npm-run-teste2e)). It needs [Maestro](https://docs.maestro.dev/getting-started/installing-maestro) installed, and starts the API, MySQL, Metro and the emulator itself if they aren't already running. To run them the way CI does, on a release APK against a deployed stack, set `MOBILE_E2E_APP_URL` in the root `.env` to that stack's `appUrl` and run `npm run test:e2e:remote` instead.
+
+Avoid regular expressions in the app's code: XO requires the `v` flag on them, and Hermes (React Native's JavaScript engine) rejects that flag when the app loads. Node-only config files such as `metro.config.js` don't run on Hermes, so they're exempt.
+
+A physical phone can't reach `10.0.2.2`. Point `EXPO_PUBLIC_API_URL` at your machine's LAN IP, or at the ngrok tunnel with `LOCAL=false`.
