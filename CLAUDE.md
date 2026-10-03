@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-Voneo is a peer-to-peer video chat app: an Astro/React frontend (`web-server/`) talks to an Express.js signalling API (`web-socket-api/`), which spins up a dedicated in-memory WebSocket server per call for session coordination (participants, chat, SDP offer relay). WebRTC handles actual media peer-to-peer once signalling completes (`web-server/src/src/lib/rtc-utils.ts`).
+Voneo is a peer-to-peer video chat app: an Astro/React frontend (`web-server/`) and/or an Expo/React Native android app (`mobile-app/`) talks to an Express.js signalling API (`web-socket-api/`), which spins up a dedicated in-memory WebSocket server per call for session coordination (participants, chat, SDP offer relay). WebRTC handles actual media peer-to-peer once signalling completes (`web-server/src/src/lib/rtc-utils.ts`).
 
 Everything runs via Docker Compose in dev, tunnelled through ngrok so the app is reachable from devices other than the host (needed for testing real WebRTC peers). A `LOCAL=true` env mode exists to bypass ngrok and run against `localhost` only — see @README.md for the tradeoffs (single-device testing only, and `NGROK_HOST` must be unset when `LOCAL=true`).
 
@@ -52,6 +52,10 @@ Notes on the folder commands:
 A root `.env` (copied from `.env.example`) is required and is shared by both the frontend and backend containers — see the @README.md Environment Variables section for the full variable list (`JWT_SECRET`, `REFRESH_TOKEN_SECRET`, `DB_*`, `NGROK_HOST`, `LOCAL`, `NODE_ENV`).
 
 Pre-commit hook (Husky) runs `lint-staged` (`xo --prettier` on staged `.js`/`.css`) and verifies the Astro frontend builds.
+
+## Ticket Management
+Tickets covering development tasks for this project are recorded under a [Trello board called 'Video Chat Web App'](https://trello.com/b/PnfDFRNd/video-chat-web-app). This board should be used whenever you are asked to check on the status of or record work/tickets for this project.
+
 
 ## Git Conventions
 
