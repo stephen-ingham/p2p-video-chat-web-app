@@ -1,7 +1,7 @@
 {
   "name": "voneo-video-chat-app",
   "version": "1.0.0",
-  "description": "P2P Video Chat Web App built with Express.js, WebSockets & WebRTC",
+  "description": "P2P Video Chat App (Web & Android) built with Express.js, WebSockets & WebRTC",
   "scripts": {
     "setup": "node scripts/dispatch.mjs setup",
     "setup:nuke": "node scripts/dispatch.mjs nuke",
