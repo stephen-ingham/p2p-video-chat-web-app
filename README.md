@@ -171,7 +171,7 @@ Commands that cover the whole repo run from the root:
 | Command                       | What it does                                                                                                         |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `npm run setup`               | Installs every folder's npm dependencies and builds the dev Docker images                                            |
-| `npm run setup:nuke`          | Deletes all of that (dependencies, images, volumes, containers) and sets it up again                                 |
+| `npm run setup:nuke`          | Deletes all of that (dependencies, images, volumes, containers, generated output) and sets it up again               |
 | `npm run dev`                 | Starts the dev stack: frontend, signalling API and MySQL, rebuilding on changes                                      |
 | `npm run dev:halt`            | Stops the dev stack                                                                                                  |
 | `npm run dev:tunnel`          | Starts the ngrok tunnel to the dev stack                                                                             |
@@ -241,7 +241,7 @@ npm run dev:halt
 
 #### Handling setup errors:
 
-If something goes wrong during setup, you can run `npm run setup:nuke` to delete and re-setup all npm dependencies, cache, docker dev images/volumes and containers. Like `npm run setup`, it auto-detects your OS and runs the matching `scripts/nuke.ps1` or `scripts/nuke.sh`:
+If something goes wrong during setup, you can run `npm run setup:nuke` to delete and re-setup all npm dependencies, cache, docker dev images/volumes and containers. It also deletes generated output that gets recreated when needed: test reports (`playwright-report/`, `test-results/`, `blob-report/`, `web-server/src/coverage/`, `mobile-app/maestro-output/`), the mobile app's `.expo/` and `android/` folders, and `infra/.root-context/`. Like `npm run setup`, it auto-detects your OS and runs the matching `scripts/nuke.ps1` or `scripts/nuke.sh`:
 
 ```bash
 npm run setup:nuke
