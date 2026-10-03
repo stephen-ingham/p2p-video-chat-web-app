@@ -11,3 +11,6 @@ ngrok.yml
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+
+# Claude
+.claude/

@@ -44,7 +44,9 @@ Users authenticate then create or join calls through an Express.js API, which pr
 - [Overview](#overview)
 - [Project Structure](#project-structure)
 - [Commands](#commands)
-- [Local Setup](#local-setup-web)
+- [Local Setup](#local-setup)
+  - [Web](#web)
+  - [Mobile (Android)](#mobile-android)
 - [Signalling Server (Express.js API)](#signalling-server-expressjs-api)
 - [Environment Variables](#environment-variables)
 - [Database Structure & Data Models](#database-structure--data-models)
@@ -169,7 +171,7 @@ Commands that cover the whole repo run from the root:
 | Command                       | What it does                                                                                                         |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `npm run setup`               | Installs every folder's npm dependencies and builds the dev Docker images                                            |
-| `npm run setup:nuke`          | Deletes all of that (dependencies, images, volumes, containers) and sets it up again                                 |
+| `npm run setup:nuke`          | Deletes all of that (dependencies, images, volumes, containers, generated output) and sets it up again               |
 | `npm run dev`                 | Starts the dev stack: frontend, signalling API and MySQL, rebuilding on changes                                      |
 | `npm run dev:halt`            | Stops the dev stack                                                                                                  |
 | `npm run dev:tunnel`          | Starts the ngrok tunnel to the dev stack                                                                             |
@@ -190,15 +192,17 @@ Commands for one part of the project run from that part's folder. Some key ones:
 
 Each folder's README lists all of its commands.
 
-## Local Setup (Web)
+## Local Setup
+
+The web app and the Android app share their first three setup steps: cloning the repo, creating the `.env` and starting the dev stack. After that, follow [Web](#web) or [Mobile (Android)](#mobile-android).
 
 ### Prerequisites
 
 - [Docker](https://docs.docker.com/desktop/setup/install/) (v28+)
 - [Node.js](https://nodejs.org/) (LTS recommended)
-- [Ngrok](https://ngrok.com/download/)
 - [Git](https://git-scm.com/install/)
-- A machine with camera/microphone access for testing WebRTC
+- For the web app: [Ngrok](https://ngrok.com/download/), and a machine with camera/microphone access for testing WebRTC
+- For the Android app: [Android Studio](https://developer.android.com/studio), for the Android SDK and an emulator
 
 ### 1. Clone repo, install npm deps & build dev docker images
 
@@ -210,11 +214,42 @@ git clone https://github.com/stephen-ingham/p2p-video-chat-web-app
 npm run setup
 ```
 
-`npm run setup` auto-detects your OS (via `scripts/dispatch.mjs`) and runs `scripts/setup.ps1` on Windows or `scripts/setup.sh` everywhere else - no need to pick a variant yourself.
+`npm run setup` auto-detects your OS (via `scripts/dispatch.mjs`) and runs `scripts/setup.ps1` on Windows or `scripts/setup.sh` everywhere else - no need to pick a variant yourself. It runs `npm install` in every folder with its own `package.json`: the root, `web-server/src`, `web-server/tests`, `web-socket-api/src`, `web-socket-api/tests`, `infra`, `infra/kill-switch` and `mobile-app`.
 
 Note: the `npm run setup` command above isn't technically necessary for developing using the docker containers as they will setup their own dependencies from scratch. However, it will help you avoid a lot of in-editor errors related to typing and package imports that could be inconvenient!
 
-### 2. Provide your Ngrok auth token in `ngrok.yml`
+### 2. Create the .env in the root
+
+Copy `.env.example` to new `.env`. The defaults suit local dev, except for how you reach the app:
+
+- **Web, through Ngrok:** set `NGROK_HOST` to your Ngrok tunnel's hostname, with no `https://` or `wss://` in front (e.g. `horizon-velvet-symphony.ngrok-free.dev`), and keep `LOCAL=false`.
+- **Android emulator, or web on `localhost` only:** set `LOCAL=true` and leave `NGROK_HOST` empty (see [Using `LOCAL` instead of an Ngrok tunnel](#using-local-instead-of-an-ngrok-tunnel)).
+
+### 3. Run the docker dev containers
+
+Spins up the built images for the Astro.js/React SSR frontend (`web-server-dev:1.0.0`), the Express.js/WebSockets backend (`signalling-server-dev:1.0.0`) and pulls/builds the MySQL 8.4 image (`mysql:8.4`)
+
+```bash
+npm run dev
+```
+
+To spin down the dev containers smoothly use the following command. It also stops the `docker compose watch` processes that `npm run dev` started, which would otherwise keep a lock on the Compose projects and make the next `npm run dev` fail with "cannot take exclusive lock":
+
+```bash
+npm run dev:halt
+```
+
+#### Handling setup errors:
+
+If something goes wrong during setup, you can run `npm run setup:nuke` to delete and re-setup all npm dependencies, cache, docker dev images/volumes and containers. It also deletes generated output that gets recreated when needed: test reports (`playwright-report/`, `test-results/`, `blob-report/`, `web-server/src/coverage/`, `mobile-app/maestro-output/`), the mobile app's `.expo/` and `android/` folders, and `infra/.root-context/`. Like `npm run setup`, it auto-detects your OS and runs the matching `scripts/nuke.ps1` or `scripts/nuke.sh`:
+
+```bash
+npm run setup:nuke
+```
+
+### Web
+
+#### 4. Provide your Ngrok auth token in `ngrok.yml`
 
 - Copy `ngrok.example.yml` to `ngrok.yml`
 - [Create an Ngrok account](https://dashboard.ngrok.com/login)
@@ -227,27 +262,13 @@ ngrok config add-authtoken $YOUR_AUTHTOKEN
 
 For further details, [refer to the Ngrok setup instructions here](https://dashboard.ngrok.com/get-started/setup/)
 
-### 3. Create the .env in the root
-
-Copy `.env.example` to new `.env`:
-
-Note: you will need to replace the `WS_HOST` in `.env` with the ngrok tunnel URL prefixed explicitly by `wss://`. Otherwise the current defaults should be sufficient for local dev.
-
-### 4. Run the docker dev containers
-
-Spins up the built images for the Astro.js/React SSR frontend (`web-server-dev:1.0.0`), the Express.js/WebSockets backend (`signalling-server-dev:1.0.0`) and pulls/builds the MySQL 8.4 image (`mysql:8.4`)
-
-```bash
-npm run dev
-```
-
-### 5. Start the Ngrok tunnel
+#### 5. Start the Ngrok tunnel
 
 ```bash
 npm run dev:tunnel
 ```
 
-### 6. Navigate to the UI
+#### 6. Navigate to the UI
 
 If the docker container setup went well then the frontend should be accessible at the your Ngrok tunnel URL in the browser and ready for use!:
 
@@ -255,23 +276,30 @@ For example:
 
 App URL: **https://horizon-velvet-symphony.ngrok-free.dev/**
 
-To spin down the dev containers smoothly use the following command. It also stops the `docker compose watch` processes that `npm run dev` started, which would otherwise keep a lock on the Compose projects and make the next `npm run dev` fail with "cannot take exclusive lock":
+#### Alternative: using localhost directly (no Ngrok)
+
+Instead of tunnelling through Ngrok (steps 4 and 5 above), you can run the app directly against `localhost` by setting `LOCAL=true` in your `.env`. This is quicker to get going but comes with major limitations — most notably you won't be able to reach the app from any device other than the machine running the containers. See [Using `LOCAL` instead of an Ngrok tunnel](#using-local-instead-of-an-ngrok-tunnel) in the Environment Variables section for full details before choosing this route.
+
+### Mobile (Android)
+
+The Android app runs on an emulator against the local API, so it needs `LOCAL=true` in `.env` (step 2).
+
+#### 4. Install the dev-client build
+
+The app needs a development build, because Expo Go doesn't include `react-native-webrtc`'s native code. Build it with `eas build --profile development --platform android`, or on a GitHub runner with the `mobile-dev-client.yml` workflow, and install the APK on the emulator (see [`mobile-app/README.md`](mobile-app/README.md#commands)). You only need a new build after changing native packages or native config in `app.json`.
+
+#### 5. Create an emulator
+
+Create an Android emulator in Android Studio's Device Manager. To match the phone CI tests on, see [Emulator](mobile-app/README.md#emulator).
+
+#### 6. Open the app
 
 ```bash
-npm run dev:halt
+cd mobile-app
+npm run open
 ```
 
-#### Handling setup errors:
-
-If something goes wrong during setup, you can run `npm run setup:nuke` to delete and re-setup all npm dependencies, cache, docker dev images/volumes and containers. Like `npm run setup`, it auto-detects your OS and runs the matching `scripts/nuke.ps1` or `scripts/nuke.sh`:
-
-```bash
-npm run setup:nuke
-```
-
-### Alternative Setup: using localhost directly (no Ngrok)
-
-Instead of tunnelling through Ngrok (steps 2 and 5 above), you can run the app directly against `localhost` by setting `LOCAL=true` in your `.env`. This is quicker to get going but comes with major limitations — most notably you won't be able to reach the app from any device other than the machine running the containers. See [Using `LOCAL` instead of an Ngrok tunnel](#using-local-instead-of-an-ngrok-tunnel) in the Environment Variables section for full details before choosing this route.
+It boots an emulator if none is connected (the first in Device Manager, or the one named in `VONEO_AVD`) and leaves it running, then starts Metro and opens the app. It doesn't start the API, so run `npm run dev` (step 3) first. To use a deployed stack instead of the local API, see `npm run open:remote` in [`mobile-app/README.md`](mobile-app/README.md#commands).
 
 ---
 
@@ -300,7 +328,7 @@ DB_NAME=dev-db
 DB_PASSWORD=testpassword123
 DB_HOST=mysql-db
 DB_PORT=3306
-NGROK_HOST=wss://<tunnel>.ngrok-free.dev
+NGROK_HOST=<tunnel>.ngrok-free.dev
 LOCAL=false
 TURN_URLS=
 TURN_SECRET=
@@ -311,6 +339,8 @@ MOBILE_E2E_APP_URL=
 
 This should be defined in the root directory in order for both the Astro frontend and Express.js/WebSockets backend to access these variables.
 `NODE_ENV` can be set to either `dev` or `production`.
+
+`NGROK_HOST` is the tunnel's hostname only, with no scheme. The frontend uses it as is for Vite's allowed hosts and hot-reload host, and puts `https://` in front of it for Astro's `site`, Vite's `origin` and the API's CORS allowlist.
 
 A `.env.example` file has been defined using these defaults for local testing. For production usage, ensure to set your own.
 
@@ -334,81 +364,26 @@ See [`web-socket-api/src/README.md`](web-socket-api/src/README.md#database-struc
 
 ## Frontend (Astro + React)
 
-**Framework:** Astro (SSR via `@astrojs/node`), accessed via Ngrok tunnel (e.g. `https://horizon-velvet-symphony.ngrok-free.dev/`) request forwarding to docker container spun up from image `web-server-dev:1.0.0`. Paths below are relative to `web-server/src/` (the Astro source tree itself lives one level further down, at `web-server/src/src/`).
+The frontend in `web-server/src/` is an Astro app, server-rendered through `@astrojs/node`, with React islands, Tailwind and shadcn/ui.
 
-**Entry:** `src/pages/index.astro` imports global CSS and renders `<App client:load />`.
+- **Access token:** a Web Worker (`public/token-worker.js`) holds the JWT access token and makes every API call, so the token never touches the main thread.
+- **Colours:** the web and mobile apps share one palette, `colors.json` in the repo root, which a Tailwind plugin turns into classes like `bg-surface`.
+- **CSP:** in production, every response carries a nonce-based `Content-Security-Policy` header.
+- **Production:** `server.mjs` serves the built app and forwards `/auth/`, `/call/` and `/wss/` to the signalling API, so browsers only talk to the frontend's origin.
 
-### `use-token-worker.ts`
-
-Hook that wraps the `token-worker.js` Web Worker. The Worker instance is a **module-level singleton** so all components share the same instance and the token stored after login is available to subsequent calls. Exposes: `login`, `register`, `logout`, `createCall`, `joinCall`.
-
-### `token-worker.js`
-
-Plain JS Web Worker served from `public/`. Owns the `TokenService` class which holds the JWT access token in a private field. Handles all `fetch` calls to the Express API so the token never touches the main thread.
-
-### Colours (`colors.json`)
-
-The web and mobile apps share one colour palette, `colors.json` in the repo root. Each entry has a role-based name (`canvas`, `surface`, `ink-muted`, `line-control`, `focus`, `danger`…), its hex value, and what it's for, including its WCAG contrast ratio where it's used for text or control edges.
-
-- **Web:** `src/styles/colors-plugin.mjs` adds each entry as a Tailwind colour, so components use classes like `bg-surface` and `text-ink-muted` rather than raw `zinc-*` classes.
-- **Mobile:** `mobile-app/src/theme/theme.ts` imports the same file.
-
-The file sits outside `web-server/src`, which is the web images' Docker build context. So the Dockerfiles copy it in from a second build context named `root` (the repo root), set in `compose.yaml` and `e2e/compose.e2e.yaml` (`additional_contexts`) and in the setup scripts (`--build-context root=.`). Pulumi's GCP image build is the exception. It copies `colors.json` into `infra/.root-context/` (gitignored) and uses that folder as `root`, because `@pulumi/docker-build` reads and hashes every file in a build context, and hashing the whole repo made each preview take minutes. The images use `/voneo/web-server/src` as their working directory, so the plugin finds `colors.json` at the same relative path as in the repo. `npm run dev` restarts the web container when `colors.json` changes.
-
-### CSP middleware (`src/middleware.ts`)
-
-Sets a nonce-based `Content-Security-Policy` header on every response in production. Skipped in dev mode to avoid blocking Vite's HMR and dev toolbar scripts. Directives cover `script-src`, `worker-src`, `connect-src` (API + WebSocket), `media-src`, `style-src`, `img-src`, `object-src`, and `base-uri`.
-
-### Dockerfiles
-
-There are two dockerfiles for the frontend in `web-server/src/`:
-
-- `Dockerfile.dev`:
-
-Created for local development and syncs local file changes into the container automatically.
-
-- `Dockerfile.prod`:
-
-Produces a production-optimised image. The e2e stack also uses it. It runs `server.mjs`, which serves the built app through `@astrojs/node`'s handler and, when `API_PROXY_TARGET` is set, forwards `/auth/`, `/call/` and `/wss/` (including WebSocket upgrades) to the signalling API. On Cloud Run it also attaches an ID token for the frontend's service account (`API_PROXY_ID_TOKEN=true`), the only identity allowed to call the API. This is the production version of the Vite dev proxy in `astro.config.mjs`: browsers only talk to the frontend's origin, so there's no need for a load balancer to route paths, and the `SameSite=Strict` refresh cookie stays first-party.
-
-For GCP deployments, `pulumi up` builds this image and pushes it to the stack's Artifact Registry repo, as `europe-west2-docker.pkg.dev/<project>/voneo-<stack>/voneo-frontend:<stack>`. The Cloud Run service then runs it by digest. The signalling API's `Dockerfile.prod` is handled the same way.
+See [`web-server/src/README.md`](web-server/src/README.md) for how the frontend is put together, its colour setup and its Dockerfiles.
 
 ---
 
 ## Mobile app (Expo, Android)
 
-`mobile-app/` is an Expo (React Native) Android app. It talks to the signalling API directly, with no code shared with `web-server`, and uses `react-native-webrtc` for calls. Its signalling matches the web client's, so web and mobile users can be on the same call.
+`mobile-app/` is an Expo (React Native) Android app. It talks to the signalling API directly and uses `react-native-webrtc` for calls. Its signalling matches the web client's, so web and mobile users can be on the same call.
 
-- `app.tsx` — shows `AuthScreen` while logged out and `CallScreen` once logged in. It uses plain state rather than Expo Router: there are only two screens, and Expo Router would need a new native build.
-- `src/screens/` — `auth-screen.tsx` (login/register), `call-screen.tsx` (create or join a call), `in-call-view.tsx` (full-screen remote video, your video in a corner, mic/camera/chat/hang-up controls), `chat-sheet.tsx` (chat as a bottom sheet).
-- `src/theme/theme.ts` and `src/components/` — the look shared with the web app: the palette from the root `colors.json`, Geist type scale, spacing and 48dp touch targets, and the `Button`, `IconButton`, `TextField`, `Tabs` and `Card` primitives. `metro.config.js` lets Metro read `colors.json` from outside `mobile-app/`.
-- `src/lib/config.ts` — API base URL, from `EXPO_PUBLIC_API_URL`. The default, `http://10.0.2.2:3000`, is the Android emulator's alias for the host machine, direct to the API port. It suits the `LOCAL=true` dev stack. Expo inlines the variable when Metro starts, so restart Metro after changing it.
-- `src/lib/call-url.ts` — builds a call's WebSocket URL from its `callID` (`ws://<host>/ws/:callID` for an `http` API URL, `wss://<host>/wss/:callID` for `https`), and validates call IDs.
-- `src/lib/api.ts` / `src/lib/signalling.ts` — REST client (including ICE servers) and the WebSocket join handshake.
-- `src/lib/call-session.ts` — the call's WebRTC signalling: the joiner offers to everyone already on the call, they answer, and ICE candidates are exchanged. Peers are injected, so it's tested with fakes.
-- `src/lib/webrtc.ts` — the only module using `react-native-webrtc` directly: camera/mic capture and the real peer connections.
-- `src/lib/use-call.ts` — the hook tying these together for the call screen.
+- **Dev client:** it needs a development build, because Expo Go doesn't include `react-native-webrtc`'s native code.
+- **Look:** it shares the web app's palette (`colors.json`) and type scale.
+- **Tests:** Jest and React Native Testing Library for units and components, and Maestro flows on an emulator, which CI runs against the GCP deployments.
 
-**Running it against the dev stack:**
-
-The app needs a development build, because Expo Go doesn't include `react-native-webrtc`'s native code. Build it once with `eas build --profile development --platform android` and install the APK on the emulator, or build it on a GitHub runner with the `mobile-dev-client.yml` workflow (see [`mobile-app/README.md`](mobile-app/README.md)). Rebuild only after adding native packages or changing native config in `app.json`, including the fonts embedded by the `expo-font` config plugin.
-
-1. Set `LOCAL=true` in the root `.env` and run `npm run dev`.
-2. Start an Android emulator (Android Studio → Device Manager).
-3. From `mobile-app/`, run `npx expo start --dev-client` and press `a`.
-
-Steps 2 and 3 can be replaced with `npm run open` in `mobile-app/`. It boots an emulator if none is connected (the first in Device Manager, or the one named in `VONEO_AVD`) and leaves it running. It then starts Metro and opens the app. It doesn't start the API, so do step 1 yourself first. To use a deployed stack instead of a local API, e.g. prod, set `MOBILE_E2E_APP_URL` in `.env` to its `appUrl` and run `npm run open:remote`, skipping step 1.
-
-`react-native-webrtc` asks for camera and microphone permission itself when a call starts.
-
-**Tests:**
-
-- `npm test` in `mobile-app/` runs Jest (`jest-expo` preset) with [React Native Testing Library](https://callstack.github.io/react-native-testing-library/). Tests live in `mobile-app/tests/`: unit tests for `api.ts`, `call-url.ts` and `call-session.ts`, and component tests for the auth and call screens with the API, signalling and WebRTC modules mocked. These include accessibility checks (labelled fields, tab and switch states, button names). `mobile-ci.yml` runs them on PRs that touch `mobile-app/` or `colors.json`.
-- [Maestro](https://maestro.mobile.dev/) flows in `mobile-app/.maestro/` cover logging in, creating a call and hanging up, and a failed login. In CI they run on an emulator with a release APK built on the runner, against the GCP deployments (see [Against a GCP deployment](#against-a-gcp-deployment)): PRs into `dev` run only the happy path (`create-call.yaml`, tagged `happy-path`) against the dev stack, and PRs into `main` run every flow against `prod-preview`. `mobile-e2e.yml` runs every flow when started manually (Actions tab, or `gh workflow run mobile-e2e.yml`): against a local API on the runner by default, or against a deployed stack with its `api_url` input set to that stack's `appUrl` (`gh workflow run mobile-e2e.yml -f api_url=<appUrl>`), after signing up the user the flows log in as. The APK build and emulator steps live in `.github/actions/maestro-e2e`, shared by all three. The built APK is cached per API URL, keyed on the app's source (not the Maestro flows), so it's only rebuilt when the app changes. `mobile-apk-cache.yml` builds it after every push to `dev` (dev stack) and `main` (`prod-preview`), because a PR can only restore caches from its own runs and its base branch. It reads those stacks' URLs from the `DEV_APP_URL`/`PROD_PREVIEW_APP_URL` repo variables, which must match each stack's `appUrl`. npm and Gradle downloads are cached too, to speed up the builds that do happen. To run them locally, install the dev-client build on an Android emulator and run `npm run test:e2e` in `mobile-app/` (see [its README](mobile-app/README.md)). It needs [Maestro](https://docs.maestro.dev/getting-started/installing-maestro) installed, and starts the API, MySQL, Metro and the emulator itself if they aren't already running. To run them the way CI does, on a release APK against a deployed stack, set `MOBILE_E2E_APP_URL` in `.env` to that stack's `appUrl` and run `npm run test:e2e:remote` instead.
-
-Avoid regular expressions in `mobile-app/` app code: XO requires the `v` flag on them, and Hermes (React Native's JavaScript engine) rejects that flag when the app loads. Node-only config files such as `metro.config.js` don't run on Hermes, so they're exempt.
-
-A physical phone can't reach `10.0.2.2`. Point `EXPO_PUBLIC_API_URL` at your machine's LAN IP, or at the ngrok tunnel with `LOCAL=false`.
+See [`mobile-app/README.md`](mobile-app/README.md) for how the app is put together, how to run it against the dev stack, and its tests.
 
 ---
 
@@ -478,7 +453,7 @@ npm run test:e2e:dev
 npm run destroy:dev
 ```
 
-The `prod-preview` equivalents end in `:prod-preview` instead. A run costs a few cents. None of this works until the GCP projects, Pulumi stacks and GitHub secrets exist: see [`infra/README.md`](infra/README.md), which also covers how the ephemeral stacks work.
+The `prod-preview` equivalents end in `:prod-preview` instead.
 
 ---
 

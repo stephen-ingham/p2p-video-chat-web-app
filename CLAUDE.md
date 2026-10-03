@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-Voneo is a peer-to-peer video chat app: an Astro/React frontend (`web-server/`) talks to an Express.js signalling API (`web-socket-api/`), which spins up a dedicated in-memory WebSocket server per call for session coordination (participants, chat, SDP offer relay). WebRTC handles actual media peer-to-peer once signalling completes (`web-server/src/src/lib/rtc-utils.ts`).
+Voneo is a peer-to-peer video chat app: an Astro/React frontend (`web-server/`) and/or an Expo/React Native android app (`mobile-app/`) talks to an Express.js signalling API (`web-socket-api/`), which spins up a dedicated in-memory WebSocket server per call for session coordination (participants, chat, SDP offer relay). WebRTC handles actual media peer-to-peer once signalling completes (`web-server/src/src/lib/rtc-utils.ts`).
 
 Everything runs via Docker Compose in dev, tunnelled through ngrok so the app is reachable from devices other than the host (needed for testing real WebRTC peers). A `LOCAL=true` env mode exists to bypass ngrok and run against `localhost` only — see @README.md for the tradeoffs (single-device testing only, and `NGROK_HOST` must be unset when `LOCAL=true`).
 
@@ -12,17 +12,17 @@ Everything runs via Docker Compose in dev, tunnelled through ngrok so the app is
 
 Repo-wide commands live in the root `package.json` and run from the repo root. Commands for one part of the project live in that folder's `package.json` and run from that folder; its README lists them all.
 
-| Root command                  | What it does                                                                        |
-| ----------------------------- | ----------------------------------------------------------------------------------- |
-| `npm run setup`               | Installs npm deps across the repo and builds the dev Docker images                  |
-| `npm run setup:nuke`          | Full teardown (containers, images, volumes, deps), then sets up again. Destructive  |
-| `npm run dev`                 | Starts the dev stack (frontend + signalling API + MySQL) via `docker compose watch` |
-| `npm run dev:halt`            | Stops the dev stack                                                                 |
-| `npm run dev:tunnel`          | Starts the ngrok tunnel                                                             |
-| `npm run lint` / `lint:fix`   | XO with Prettier across the repo, except `mobile-app/`                              |
-| `npm run test:e2e`            | Playwright e2e suite against a local prod-mode stack                                |
-| `npm run test:e2e:happy-path` | The same, `@happy-path` specs only                                                  |
-| `npm run test:e2e:nat`        | NAT-traversal e2e suite                                                             |
+| Root command                  | What it does                                                                                         |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `npm run setup`               | Installs npm deps across the repo and builds the dev Docker images                                   |
+| `npm run setup:nuke`          | Full teardown (containers, images, volumes, deps, generated output), then sets up again. Destructive |
+| `npm run dev`                 | Starts the dev stack (frontend + signalling API + MySQL) via `docker compose watch`                  |
+| `npm run dev:halt`            | Stops the dev stack                                                                                  |
+| `npm run dev:tunnel`          | Starts the ngrok tunnel                                                                              |
+| `npm run lint` / `lint:fix`   | XO with Prettier across the repo, except `mobile-app/`                                               |
+| `npm run test:e2e`            | Playwright e2e suite against a local prod-mode stack                                                 |
+| `npm run test:e2e:happy-path` | The same, `@happy-path` specs only                                                                   |
+| `npm run test:e2e:nat`        | NAT-traversal e2e suite                                                                              |
 
 | Folder                | Key commands                                                                                                                                                                                                                                                                                    |
 | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -33,7 +33,7 @@ Repo-wide commands live in the root `package.json` and run from the repo root. C
 
 Notes on the root commands:
 
-- `setup` isn't strictly required (containers self-provision) but avoids editor type/import errors. Only run `setup:nuke` when setup is broken.
+- `setup` runs `npm install` in every folder with its own `package.json` (root, `web-server/src`, `web-server/tests`, `web-socket-api/src`, `web-socket-api/tests`, `infra`, `infra/kill-switch`, `mobile-app`); add new ones to the loop in `scripts/setup.*` and `scripts/nuke.*`. It isn't strictly required (containers self-provision) but avoids editor type/import errors. Only run `setup:nuke` when setup is broken. Besides the `node_modules` folders, Docker images and containers, it clears the npm cache and deletes generated output that the relevant commands recreate: `playwright-report/`, `test-results/`, `blob-report/`, `web-server/src/coverage/`, `mobile-app/.expo/`, `mobile-app/android/`, `mobile-app/maestro-output/` and `infra/.root-context/`.
 - `dev:halt` also stops the `docker compose watch` processes `npm run dev` started (left running, they hold a lock that makes the next `npm run dev` fail with "cannot take exclusive lock").
 - `dev:tunnel` requires `ngrok.yml` with an authtoken, copied from `ngrok.example.yml`.
 - `lint` — Runs XO linting with prettier config passed in. Skips `mobile-app/` (`--ignore`), which `npm run lint` inside `mobile-app/` covers instead (as `mobile-ci.yml` does): its `tsconfig.json` extends `expo/tsconfig.base`, which is only installed in `mobile-app/node_modules`, so XO would crash on it wherever those deps aren't installed. The root `xo.config.mjs` still applies to both. XO type-checks the TypeScript it lints, so on a clean checkout it also needs the `web-server/src`, `web-server/tests` and `infra` deps installed and `npx astro sync` run in `web-server/src` (the `pr-dev.yml`/`pr-main.yml` lint jobs do both). Otherwise it crashes on `astro/tsconfigs/strict` or reports `no-unsafe-*` errors for unresolved types.
@@ -52,6 +52,10 @@ Notes on the folder commands:
 A root `.env` (copied from `.env.example`) is required and is shared by both the frontend and backend containers — see the @README.md Environment Variables section for the full variable list (`JWT_SECRET`, `REFRESH_TOKEN_SECRET`, `DB_*`, `NGROK_HOST`, `LOCAL`, `NODE_ENV`).
 
 Pre-commit hook (Husky) runs `lint-staged` (`xo --prettier` on staged `.js`/`.css`) and verifies the Astro frontend builds.
+
+## Ticket Management
+Tickets covering development tasks for this project are recorded under a [Trello board called 'Video Chat Web App'](https://trello.com/b/PnfDFRNd/video-chat-web-app). This board should be used whenever you are asked to check on the status of or record work/tickets for this project.
+
 
 ## Git Conventions
 
