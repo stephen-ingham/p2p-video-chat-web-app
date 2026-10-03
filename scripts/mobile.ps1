@@ -76,6 +76,12 @@ if (-not (adb -s $device shell pm list packages com.voneo.app | Select-String "c
 	Fail "the Voneo dev client isn't installed on $device. Build it with 'eas build --profile development --platform android' and install the APK."
 }
 
+# The emulator reports mouse clicks as stylus input, so Gboard opens its
+# handwriting toolbar instead of the keyboard on non-password fields.
+if ($device -like "emulator-*") {
+	adb -s $device shell settings put secure stylus_handwriting_enabled 0
+}
+
 # --- API check (not started here) -------------------------------------------
 
 $apiCheckUrl = if ($remote) { "$apiUrl/call/ice-servers" } else { "http://localhost:3000/call/ice-servers" }

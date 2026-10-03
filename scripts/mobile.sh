@@ -72,6 +72,12 @@ fi
 adb -s "$DEVICE" shell pm list packages com.voneo.app | grep -q com.voneo.app ||
 	fail "the Voneo dev client isn't installed on $DEVICE. Build it with 'eas build --profile development --platform android' and install the APK."
 
+# The emulator reports mouse clicks as stylus input, so Gboard opens its
+# handwriting toolbar instead of the keyboard on non-password fields.
+case $DEVICE in
+emulator-*) adb -s "$DEVICE" shell settings put secure stylus_handwriting_enabled 0 ;;
+esac
+
 # --- API check (not started here) -----------------------------------------------
 
 # 401 (no token) means it's up.
