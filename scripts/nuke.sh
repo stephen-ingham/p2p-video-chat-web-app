@@ -8,6 +8,7 @@ dirs=". web-server/src web-server/tests web-socket-api/src web-socket-api/tests 
 
 echo ">>> Removing node_modules..."
 for dir in $dirs; do
+  echo "Deleting $dir/node_modules..."
   rm -rf "$dir/node_modules"
 done
 
@@ -23,6 +24,7 @@ npm cache clean --force
 
 echo ">>> Reinstalling dependencies..."
 for dir in $dirs; do
+  echo "Installing $dir npm dependencies..."
   (cd "$dir" && npm install)
 done
 

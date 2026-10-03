@@ -5,6 +5,7 @@ $dirs = ".", "web-server/src", "web-server/tests", "web-socket-api/src", "web-so
 
 Write-Host ">>> Removing node_modules..."
 foreach ($dir in $dirs) {
+    Write-Host "Deleting $dir/node_modules..."
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue (Join-Path $dir "node_modules")
 }
 
@@ -23,6 +24,7 @@ npm cache clean --force
 
 Write-Host ">>> Reinstalling dependencies..."
 foreach ($dir in $dirs) {
+    Write-Host "Installing $dir npm dependencies..."
     Push-Location $dir; npm install; Pop-Location
 }
 
