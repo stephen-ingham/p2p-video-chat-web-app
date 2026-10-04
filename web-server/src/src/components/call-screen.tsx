@@ -1,9 +1,7 @@
-import React, {useRef, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {LogOut, Mic, MicOff, PhoneOff, Video, VideoOff} from 'lucide-react';
 import {Button} from '@/components/ui/button.tsx';
-import {Input} from '@/components/ui/input.tsx';
 import {Badge} from '@/components/ui/badge.tsx';
-import {Separator} from '@/components/ui/separator.tsx';
 import {useTokenWorker} from '@/lib/use-token-worker.ts';
 import {
 	connectToCall,
@@ -11,10 +9,13 @@ import {
 	closeConns,
 	closeWebSocketServerConn,
 	setLocalTrackEnabled,
+	startLocalMedia,
+	stopLocalMedia,
 } from '@/lib/rtc-utils.ts';
 import {useIsMobile} from '@/lib/use-is-mobile.ts';
 import VideoGrid, {type RemoteStream} from '@/components/video-grid.tsx';
 import ChatPanel from '@/components/chat-panel.tsx';
+import DesktopCallSetup from '@/components/desktop-call-setup.tsx';
 import MobileCallSetup from '@/components/mobile-call-setup.tsx';
 import MobileInCallView from '@/components/mobile-in-call-view.tsx';
 
@@ -52,7 +53,45 @@ export default function CallScreen({
 	const [error, setError] = useState('');
 	const [micOn, setMicOn] = useState(true);
 	const [cameraOn, setCameraOn] = useState(true);
+	// Mirrors micOn/cameraOn for async callbacks, which would otherwise see
+	// the values from the render that started them.
+	const mediaChoices = useRef({micOn: true, cameraOn: true});
+	const [previewError, setPreviewError] = useState('');
 	const isMobile = useIsMobile();
+	const inCall = Boolean(callId);
+
+	// Desktop lobby: preview the camera before a call. The same stream is sent
+	// once a call starts, so the mic/camera choices made here carry into it.
+	useEffect(() => {
+		if (inCall || isMobile) return;
+		let cancelled = false;
+		startLocalMedia()
+			.then(async (stream) => {
+				if (cancelled) return;
+				setPreviewError('');
+				if (localVideoRef.current && !localVideoRef.current.srcObject)
+					localVideoRef.current.srcObject = stream;
+				await setLocalTrackEnabled('audio', mediaChoices.current.micOn);
+				await setLocalTrackEnabled('video', mediaChoices.current.cameraOn);
+			})
+			.catch(() => {
+				if (!cancelled)
+					setPreviewError(
+						"Couldn't access your camera or mic. Check your browser's permissions.",
+					);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [inCall, isMobile]);
+
+	// Turns the camera light off on logout.
+	useEffect(
+		() => () => {
+			void stopLocalMedia();
+		},
+		[],
+	);
 
 	const trimmedJoinInput = joinInput.trim();
 	const joinInputError =
@@ -104,6 +143,13 @@ export default function CallScreen({
 
 	// Undefined (-> rtc-utils' public-STUN default) if the API call fails, so a
 	// hiccup fetching TURN credentials degrades the call rather than blocking it.
+	// Toggles made before the stream existed only changed state, so apply them
+	// once the call has its tracks.
+	async function applyMediaChoices() {
+		await setLocalTrackEnabled('audio', mediaChoices.current.micOn);
+		await setLocalTrackEnabled('video', mediaChoices.current.cameraOn);
+	}
+
 	async function fetchIceServers(): Promise<RTCIceServer[] | undefined> {
 		try {
 			const result = await getIceServers();
@@ -137,6 +183,7 @@ export default function CallScreen({
 				getCurrentUser,
 				await fetchIceServers(),
 			);
+			await applyMediaChoices();
 		} catch {
 			setError('Failed to create a call.');
 		} finally {
@@ -167,6 +214,7 @@ export default function CallScreen({
 				getCurrentUser,
 				await fetchIceServers(),
 			);
+			await applyMediaChoices();
 		} catch {
 			setError('Failed to join the call. Check the call ID.');
 		} finally {
@@ -199,6 +247,10 @@ export default function CallScreen({
 			setMessages([]);
 			setMicOn(true);
 			setCameraOn(true);
+			mediaChoices.current = {micOn: true, cameraOn: true};
+			// Phones have no lobby preview, so release the camera; the desktop
+			// lobby keeps showing it.
+			await (isMobile ? stopLocalMedia() : applyMediaChoices());
 		} catch (error_) {
 			setError('Failed to leave the call. Please try again.');
 			console.error(error_);
@@ -208,11 +260,13 @@ export default function CallScreen({
 	}
 
 	function toggleMic() {
+		mediaChoices.current.micOn = !micOn;
 		setMicOn(!micOn);
 		void setLocalTrackEnabled('audio', !micOn);
 	}
 
 	function toggleCamera() {
+		mediaChoices.current.cameraOn = !cameraOn;
 		setCameraOn(!cameraOn);
 		void setLocalTrackEnabled('video', !cameraOn);
 	}
@@ -246,8 +300,6 @@ export default function CallScreen({
 			/>
 		);
 	}
-
-	const inCall = Boolean(callId);
 
 	return (
 		<div className="min-h-dvh bg-canvas text-ink flex flex-col">
@@ -304,114 +356,83 @@ export default function CallScreen({
 				/>
 			)}
 
-			{/* Controls bar — hidden once in a call */}
 			{!inCall && !isMobile && (
-				<div className="flex flex-wrap items-center gap-3 px-6 py-4 border-b border-line">
-					<Button
-						onClick={() => {
-							void handleCreate();
-						}}
-						disabled={loading !== undefined}
-						className="bg-action text-on-action hover:bg-action-hover"
-						data-testid="create-call-button"
-					>
-						{loading === 'create' ? 'Creating…' : 'Create call'}
-					</Button>
-
-					<Separator orientation="vertical" className="h-6 bg-line-strong" />
-
-					<div className="flex gap-2">
-						<Input
-							value={joinInput}
-							onChange={(event) => {
-								setJoinInput(event.target.value);
-							}}
-							placeholder="Enter call ID"
-							aria-label="Call ID"
-							className="w-64 bg-surface border-line-control text-ink placeholder:text-ink-muted focus-visible:ring-focus"
-							suppressHydrationWarning={true}
-							data-testid="join-call-input"
-						/>
-						<Button
-							onClick={() => {
-								void handleJoin();
-							}}
-							disabled={loading !== undefined || !isJoinInputValid}
-							variant="outline"
-							className="border-line-control bg-surface text-ink hover:bg-surface-raised hover:text-ink"
-							data-testid="join-call-button"
-						>
-							{loading === 'join' ? 'Joining…' : 'Join call'}
-						</Button>
-					</div>
-
-					{joinInputError && (
-						<p
-							className="text-xs text-danger w-full"
-							data-testid="join-call-input-error"
-						>
-							{joinInputError}
-						</p>
-					)}
-					{error && (
-						<p role="alert" className="text-sm text-danger w-full">
-							{error}
-						</p>
-					)}
-				</div>
+				<DesktopCallSetup
+					localVideoRef={localVideoRef}
+					previewError={previewError}
+					micOn={micOn}
+					cameraOn={cameraOn}
+					joinInput={joinInput}
+					joinInputError={joinInputError}
+					isJoinInputValid={isJoinInputValid}
+					loading={loading}
+					error={error}
+					onToggleMic={toggleMic}
+					onToggleCamera={toggleCamera}
+					onJoinInputChange={setJoinInput}
+					onCreate={() => {
+						void handleCreate();
+					}}
+					onJoin={() => {
+						void handleJoin();
+					}}
+				/>
 			)}
 
-			{/* Main area */}
-			{!isMobile && (
+			{/* Main area — the chat sidebar only exists during a call */}
+			{inCall && !isMobile && (
 				<div className="flex flex-1 overflow-hidden">
 					<div className="flex-1 flex flex-col gap-4 p-6 overflow-y-auto">
-						{inCall && (
-							<div className="flex items-center justify-between">
-								<Badge
-									variant="outline"
-									className="border-line-control text-ink-soft font-mono text-xs"
-								>
-									Call ID: <span data-testid="call-id">{callId}</span>
-								</Badge>
-								<div className="flex items-center gap-2">
-									<Button
-										variant="outline"
-										size="icon-sm"
-										role="switch"
-										aria-checked={micOn}
-										aria-label="Microphone"
-										onClick={toggleMic}
-										className="border-line-control bg-surface text-ink hover:bg-surface-raised hover:text-ink"
-										data-testid="mic-toggle"
-									>
-										{micOn ? <Mic /> : <MicOff />}
-									</Button>
-									<Button
-										variant="outline"
-										size="icon-sm"
-										role="switch"
-										aria-checked={cameraOn}
-										aria-label="Camera"
-										onClick={toggleCamera}
-										className="border-line-control bg-surface text-ink hover:bg-surface-raised hover:text-ink"
-										data-testid="camera-toggle"
-									>
-										{cameraOn ? <Video /> : <VideoOff />}
-									</Button>
-									<Button
-										variant="destructive"
-										size="sm"
-										onClick={() => {
-											void handleLeave();
-										}}
-										data-testid="hang-up-button"
-									>
-										<PhoneOff className="h-4 w-4 mr-1.5" />
-										Hang up
-									</Button>
-								</div>
-							</div>
+						{error && (
+							<p role="alert" className="text-sm text-danger">
+								{error}
+							</p>
 						)}
+						<div className="flex items-center justify-between">
+							<Badge
+								variant="outline"
+								className="border-line-control text-ink-soft font-mono text-xs"
+							>
+								Call ID: <span data-testid="call-id">{callId}</span>
+							</Badge>
+							<div className="flex items-center gap-2">
+								<Button
+									variant="outline"
+									size="icon-sm"
+									role="switch"
+									aria-checked={micOn}
+									aria-label="Microphone"
+									onClick={toggleMic}
+									className="border-line-control bg-surface text-ink hover:bg-surface-raised hover:text-ink"
+									data-testid="mic-toggle"
+								>
+									{micOn ? <Mic /> : <MicOff />}
+								</Button>
+								<Button
+									variant="outline"
+									size="icon-sm"
+									role="switch"
+									aria-checked={cameraOn}
+									aria-label="Camera"
+									onClick={toggleCamera}
+									className="border-line-control bg-surface text-ink hover:bg-surface-raised hover:text-ink"
+									data-testid="camera-toggle"
+								>
+									{cameraOn ? <Video /> : <VideoOff />}
+								</Button>
+								<Button
+									variant="destructive"
+									size="sm"
+									onClick={() => {
+										void handleLeave();
+									}}
+									data-testid="hang-up-button"
+								>
+									<PhoneOff className="h-4 w-4 mr-1.5" />
+									Hang up
+								</Button>
+							</div>
+						</div>
 						<VideoGrid
 							localVideoRef={localVideoRef}
 							remoteStreams={remoteStreams}
