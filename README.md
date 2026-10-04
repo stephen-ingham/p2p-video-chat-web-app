@@ -173,17 +173,18 @@ video-chat-application/
 
 Commands that cover the whole repo run from the root:
 
-| Command                       | What it does                                                                                                         |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `npm run setup`               | Installs every folder's npm dependencies and builds the dev Docker images                                            |
-| `npm run setup:nuke`          | Deletes all of that (dependencies, images, volumes, containers, generated output) and sets it up again               |
-| `npm run dev`                 | Starts the dev stack: frontend, signalling API and MySQL, rebuilding on changes                                      |
-| `npm run dev:halt`            | Stops the dev stack                                                                                                  |
-| `npm run dev:tunnel`          | Starts the ngrok tunnel to the dev stack                                                                             |
-| `npm run lint` / `lint:fix`   | Lints the repo with XO and Prettier (except `mobile-app/`) / applies the fixes it can                                |
-| `npm run test:e2e`            | Runs the Playwright e2e suite against a local prod-mode stack (see [End-to-end tests](#end-to-end-tests-playwright)) |
-| `npm run test:e2e:happy-path` | The same, only the `@happy-path` specs                                                                               |
-| `npm run test:e2e:nat`        | The NAT traversal suite (see [NAT traversal suite](#nat-traversal-suite-stunturn))                                   |
+| Command                        | What it does                                                                                                         |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `npm run setup`                | Installs every folder's npm dependencies and builds the dev Docker images                                            |
+| `npm run setup:nuke`           | Deletes all of that (dependencies, images, volumes, containers, generated output) and sets it up again               |
+| `npm run dev`                  | Starts the dev stack: frontend, signalling API and MySQL, rebuilding on changes                                      |
+| `npm run dev:halt`             | Stops the dev stack                                                                                                  |
+| `npm run dev:tunnel`           | Starts the ngrok tunnel to the dev stack                                                                             |
+| `npm run lint` / `lint:fix`    | Lints the repo with XO and Prettier (except `mobile-app/`) / applies the fixes it can                                |
+| `npm run test:e2e`             | Runs the Playwright e2e suite against a local prod-mode stack (see [End-to-end tests](#end-to-end-tests-playwright)) |
+| `npm run test:e2e:happy-path`  | The same, only the `@happy-path` specs                                                                               |
+| `npm run test:e2e:interactive` | The same, in Playwright's UI mode, to watch or step through the specs locally                                        |
+| `npm run test:e2e:nat`         | The NAT traversal suite (see [NAT traversal suite](#nat-traversal-suite-stunturn))                                   |
 
 Commands for one part of the project run from that part's folder. Some key ones:
 
@@ -410,6 +411,8 @@ npm run test:e2e
 
 This brings up the e2e compose stack (building fresh images), runs Playwright, and tears the stack down afterwards regardless of outcome. Stop `npm run dev` first — the e2e stack publishes the same fixed host ports (`3000`, `8080`, `3306`, plus `443` for the Caddy proxy) and the two will collide.
 
+To watch the specs run or step through them, use `npm run test:e2e:interactive`, which opens Playwright's UI mode. The stack stays up until you close the UI window. Extra Playwright arguments go after `--` (quoted as `'--'` in PowerShell), e.g. `npm run test:e2e:interactive '--' --project=mobile-chromium`.
+
 Camera/microphone are faked via Chromium's `--use-fake-device-for-media-stream` flag (see `playwright.config.ts`), so no real hardware or OS permission prompts are needed. Test data is isolated per run: `e2e/global-setup.ts` truncates the `test-db` tables before the suite starts, and specs create their own users with unique emails rather than relying on any pre-seeded data.
 
 **In CI:** `pr-dev.yml` and `pr-main.yml` run all their jobs on every PR, whatever files it changes, to catch regressions (there's no path filtering).
@@ -447,7 +450,7 @@ This suite needs no `voneo.test` hosts entry and no local Playwright browsers, b
 
 PRs also run e2e tests against a real, short-lived GCP deployment of the PR. The deployment is created, tested, then always destroyed:
 
-- **PRs into `dev`:** the `e2e-gcp-dev` job in `pr-dev.yml` uses the `dev` stack. It runs only the happy paths: the web one (`@happy-path` Playwright specs), and the mobile one (the Maestro `happy-path` flow, on an emulator with an APK built against the stack's `appUrl`). Both run on every PR, whatever it changes. The stack runs with `NODE_ENV=production`, so there are no seeded users: the job signs up the one the Maestro flow logs in as first.
+- **PRs into `dev`:** the `e2e-gcp-dev` job in `pr-dev.yml` uses the `dev` stack. It runs only the happy paths: the web ones (`@happy-path` Playwright specs, at desktop and phone viewports), and the mobile one (the Maestro `happy-path` flow, on an emulator with an APK built against the stack's `appUrl`). Both run on every PR, whatever it changes. The stack runs with `NODE_ENV=production`, so there are no seeded users: the job signs up the one the Maestro flow logs in as first.
 - **PRs into `main`:** the `e2e-gcp-prod-preview` job in `pr-main.yml` uses `prod-preview`, which has prod's settings (TURN VM included) and deploys into prod's GCP project. It runs the full web e2e suite and then every Maestro flow (after signing up the user the flows log in as, as on `dev`). Real prod isn't touched until the PR merges.
 
 The app is served from the frontend Cloud Run service's own `run.app` URL (the stack's `appUrl` output), which has real DNS and a Google-managed certificate, so no domain, hosts entry or certificate workaround is needed. You can open it on any device, including a phone. `scripts/gcp-e2e.mjs` passes it to Playwright as `E2E_BASE_URL`. To do the same from your machine, run these in `infra/`:

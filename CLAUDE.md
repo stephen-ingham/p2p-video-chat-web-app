@@ -12,17 +12,18 @@ Everything runs via Docker Compose in dev, tunnelled through ngrok so the app is
 
 Repo-wide commands live in the root `package.json` and run from the repo root. Commands for one part of the project live in that folder's `package.json` and run from that folder; its README lists them all.
 
-| Root command                  | What it does                                                                                         |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `npm run setup`               | Installs npm deps across the repo and builds the dev Docker images                                   |
-| `npm run setup:nuke`          | Full teardown (containers, images, volumes, deps, generated output), then sets up again. Destructive |
-| `npm run dev`                 | Starts the dev stack (frontend + signalling API + MySQL) via `docker compose watch`                  |
-| `npm run dev:halt`            | Stops the dev stack                                                                                  |
-| `npm run dev:tunnel`          | Starts the ngrok tunnel                                                                              |
-| `npm run lint` / `lint:fix`   | XO with Prettier across the repo, except `mobile-app/`                                               |
-| `npm run test:e2e`            | Playwright e2e suite against a local prod-mode stack                                                 |
-| `npm run test:e2e:happy-path` | The same, `@happy-path` specs only                                                                   |
-| `npm run test:e2e:nat`        | NAT-traversal e2e suite                                                                              |
+| Root command                   | What it does                                                                                                    |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `npm run setup`                | Installs npm deps across the repo and builds the dev Docker images                                              |
+| `npm run setup:nuke`           | Full teardown (containers, images, volumes, deps, generated output), then sets up again. Destructive            |
+| `npm run dev`                  | Starts the dev stack (frontend + signalling API + MySQL) via `docker compose watch`                             |
+| `npm run dev:halt`             | Stops the dev stack                                                                                             |
+| `npm run dev:tunnel`           | Starts the ngrok tunnel                                                                                         |
+| `npm run lint` / `lint:fix`    | XO with Prettier across the repo, except `mobile-app/`                                                          |
+| `npm run test:e2e`             | Playwright e2e suite against a local prod-mode stack                                                            |
+| `npm run test:e2e:happy-path`  | The same, `@happy-path` specs only                                                                              |
+| `npm run test:e2e:interactive` | The same, in Playwright's UI mode (pick, run and step through specs; the stack stays up until you close the UI) |
+| `npm run test:e2e:nat`         | NAT-traversal e2e suite                                                                                         |
 
 | Folder                | Key commands                                                                                                                                                                                                                                                                                    |
 | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -39,7 +40,8 @@ Notes on the root commands:
 - `lint` — Runs XO linting with prettier config passed in. Skips `mobile-app/` (`--ignore`), which `npm run lint` inside `mobile-app/` covers instead (as `mobile-ci.yml` does): its `tsconfig.json` extends `expo/tsconfig.base`, which is only installed in `mobile-app/node_modules`, so XO would crash on it wherever those deps aren't installed. The root `xo.config.mjs` still applies to both. XO type-checks the TypeScript it lints, so on a clean checkout it also needs the `web-server/src`, `web-server/tests` and `infra` deps installed and `npx astro sync` run in `web-server/src` (the `pr-dev.yml`/`pr-main.yml` lint jobs do both). Otherwise it crashes on `astro/tsconfigs/strict` or reports `no-unsafe-*` errors for unresolved types.
 - `lint:fix` — Applies XO linting and prettier formatting fixes where possible, identifies any errors/warnings that couldn't be implemented. Same `mobile-app/` skip as `lint`.
 - `test:e2e` — run e2e tests in `e2e/` against a prod-mode simulation stack (own compose project, isolated `test-db`, Caddy TLS proxy at `https://voneo.test` that forwards everything to the frontend, whose own proxy sends API/WS routes on, as on Cloud Run; see `e2e/compose.e2e.yaml`). Brings the stack up, runs Playwright, tears down. Requires `voneo.test` to resolve to `127.0.0.1` in your hosts file, and stopping `npm run dev` first (fixed host ports collide). Don't run `npx playwright test` directly — it expects the stack already running at that URL. Only Chromium is configured (see `playwright.config.ts`) — kept deliberately single-browser for dev speed/simplicity, and because the fake-media-stream flags the suite relies on are Chromium-only; no Firefox/WebKit coverage exists. It has two projects: `chromium` (desktop viewport, every spec except `e2e/nat/` and `e2e/web-mobile/`) and `mobile-chromium` (Pixel 7 viewport, only `e2e/web-mobile/`, which tests the web app's mobile layout, not the Android app).
-- `test:e2e:happy-path` — same as `test:e2e` but filtered to specs tagged `@happy-path` (currently just call creation/join); used by the `pr-dev.yml` CI workflow for a faster PR check into `dev`. Neither `pr-dev.yml` nor `pr-main.yml` has path filtering: every job runs on every PR, to catch regressions.
+- `test:e2e:happy-path` — same as `test:e2e` but filtered to specs tagged `@happy-path` (the call spec: create/join, both videos, chat, hang up; and the `mobile-chromium` phone-layout call spec); used by the `pr-dev.yml` CI workflow for a faster PR check into `dev`. Neither `pr-dev.yml` nor `pr-main.yml` has path filtering: every job runs on every PR, to catch regressions.
+- `test:e2e:interactive` — `test:e2e` with `--ui`, for local use only (not CI). Extra Playwright filters still go after `--`, quoted as `'--'` in PowerShell, which otherwise swallows it, e.g. `npm run test:e2e:interactive '--' --project=mobile-chromium`.
 - `test:e2e:nat` — NAT-traversal e2e suite (`e2e/nat/`), run by the `e2e-nat-traversal` job in `pr-main.yml`. Adds `e2e/compose.nat.yaml` on top of the e2e stack. That overlay adds a `coturn` container, using the same pinned image and `infra/coturn/turnserver.conf` as the prod VM, plus three `playwright run-server` browser containers, two on Docker network `lan-a` and one on `lan-b`. Lan-a↔lan-b calls can only connect through the TURN relay. Don't rely on Docker for that isolation: Docker Desktop routes and NATs between bridge networks. The overlay enforces it itself, with per-browser iptables sidecars that drop the other LAN's subnet and with `enable_ip_masquerade: false` on both LANs. As a result the LANs have no internet, so the browsers run the host's mounted `node_modules/playwright-core`. The tests assert same-network = `host`↔`host` pair, cross-network = both local candidates `relay`. `E2E_NAT=1` swaps `playwright.config.ts` to this project only; the regular `chromium` project ignores `e2e/nat/`. The browser container image version comes from the installed `@playwright/test` (`PLAYWRIGHT_VERSION`, set by `scripts/test-e2e-nat.*`, which also pre-pulls that image because Compose can crash pulling one image for several services at once). No hosts entry or local browsers are needed. It uses the same host ports as `test:e2e`, so don't run both at once.
 
 Notes on the folder commands:
@@ -54,8 +56,8 @@ A root `.env` (copied from `.env.example`) is required and is shared by both the
 Pre-commit hook (Husky) runs `lint-staged` (`xo --prettier` on staged `.js`/`.css`) and verifies the Astro frontend builds.
 
 ## Ticket Management
-Tickets covering development tasks for this project are recorded under a [Trello board called 'Video Chat Web App'](https://trello.com/b/PnfDFRNd/video-chat-web-app). This board should be used whenever you are asked to check on the status of or record work/tickets for this project.
 
+Tickets covering development tasks for this project are recorded under a [Trello board called 'Video Chat Web App'](https://trello.com/b/PnfDFRNd/video-chat-web-app). This board should be used whenever you are asked to check on the status of or record work/tickets for this project.
 
 ## Git Conventions
 
