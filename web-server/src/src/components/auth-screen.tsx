@@ -22,14 +22,9 @@ type AuthScreenProps = {
 	onAuthenticated: (email: string, username: string) => void;
 };
 
-// Inputs grow to a 48px touch target below the md breakpoint, like the mobile
-// app's TextField.
 const inputClass =
 	'h-12 px-3 text-base md:h-8 md:px-2.5 md:text-sm bg-surface-raised border-line-control text-ink placeholder:text-ink-muted focus-visible:ring-focus';
 
-// A visible label above its input below the md breakpoint, as in the mobile
-// app; on desktop the placeholder shows the field's name and the label is
-// screen-reader only.
 function Field({
 	label,
 	id,

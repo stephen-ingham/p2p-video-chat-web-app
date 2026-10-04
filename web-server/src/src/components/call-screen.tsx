@@ -226,9 +226,6 @@ export default function CallScreen({
 		if (callId) sendChatMessageToCall(message, callId, email);
 	}
 
-	// Below the md breakpoint the layout follows the mobile app's: a
-	// full-screen call, and stacked cards to start one. Each layout renders on
-	// its own, so test IDs stay unique.
 	if (isMobile && callId) {
 		return (
 			<MobileInCallView

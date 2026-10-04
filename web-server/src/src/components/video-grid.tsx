@@ -19,9 +19,6 @@ type VideoGridProps = {
 	cameraOn: boolean;
 };
 
-// Your own camera. getLocalMedia (rtc-utils.ts) sets srcObject through the ref
-// when capture starts; a video mounted after that, such as when the layout
-// switches between desktop and mobile mid-call, fetches the stream itself.
 export function LocalVideo({
 	videoRef,
 	cameraOn,

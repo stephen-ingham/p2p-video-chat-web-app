@@ -294,9 +294,6 @@ export async function getLocalMedia(
 		});
 }
 
-// For a video element mounted after capture started (e.g. the layout changed
-// between desktop and mobile mid-call), which getLocalMedia's own ref
-// assignment missed.
 export async function getLocalStream(): Promise<MediaStream | undefined> {
 	return localMedia;
 }
@@ -355,8 +352,6 @@ export async function attachWsConnListeners(
 
 		switch (message.type) {
 			case 'receivedNewParticipantNotif': {
-				// Broadcast to everyone on the call, the joiner included. The
-				// joiner sends us the offer, so there's nothing to negotiate here.
 				const {data} = message;
 				if (data.email !== callerEmail) addParticipant(data.email);
 				addChatMessage(`${data.email}: ${data.message}`);

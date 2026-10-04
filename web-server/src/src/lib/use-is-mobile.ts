@@ -1,13 +1,8 @@
 import {useSyncExternalStore} from 'react';
 
-// Below Tailwind's `md` breakpoint (48rem), the web app switches to the
-// mobile app's layout. CSS (`md:` classes) covers what it can; this is for
-// layout changes CSS can't make, like rendering a different component tree
-// without duplicating its test IDs.
 const query = '(max-width: 767.98px)';
 
 function getMediaQueryList() {
-	// Jsdom has no matchMedia.
 	return typeof globalThis.matchMedia === 'function'
 		? globalThis.matchMedia(query)
 		: undefined;
