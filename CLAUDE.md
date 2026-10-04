@@ -66,9 +66,13 @@ A rough design system and screen mockups for both clients live in the [Voneo des
 - **Design system:**
   - Variables: the `Voneo colours` collection (one `Dark` mode) mirrors the repo-root `colors.json` (same names, usage notes as descriptions, `var(--color-<name>)` as web code syntax). `Voneo dimensions` holds `space/xs`–`xl` (4–24), `radius/sm`/`md`/`lg` (7/10/14), `size/touch-min` (48) and `size/call-control` (56), matching `mobile-app/src/theme/theme.ts`.
   - Text styles: Geist, `Voneo/Android/*` (theme.ts scale, body 16) and `Voneo/Web/*` (the Tailwind sizes the web app uses, body 14). Each scale has Title, Heading, Body, Label, Caption and Mono.
-  - Lucide icons as `Icon/*` components.
-  - Component sets mirroring `mobile-app/src/components/` and the web's shadcn/ui primitives: `Button` (Variant × Platform Android/Web × State), `Call control` (the round in-call `IconButton`/`call-control-button`, with an icon swap and an unread badge), `Text field`, `Tabs`, `Card`, `Video tile`, `Chat message`, and the web-only `Badge` and `Avatar`.
-- **Screens:** rough frames built from those components: phone auth, phone call setup, phone in-call (the Android app and the web app's below-`md` layout share it), and desktop web in-call with the chat sidebar. They're approximations, not pixel specs.
+  - Lucide icons as `Icon/*` components (Mic, MicOff, Video, VideoOff, MessageSquare, PhoneOff, Send, X, LogOut, Copy), with paths copied from the installed `lucide-react-native`.
+  - Component sets mirroring `mobile-app/src/components/` and the web's shadcn/ui primitives:
+    - `Button`: Variant × Platform (Android/Web) × State, with an optional leading icon (`Show icon` + an `Icon` instance swap).
+    - `Call control`: the round in-call `IconButton`/`call-control-button`, Control × State. Control is Microphone, Microphone off, Camera, Camera off, Chat, Chat unread (badge with a `Count`), Hang up, or Custom (any icon, used for the chat sheet's Close and Send).
+    - `Chat sheet`: `chat-sheet.tsx`'s bottom sheet, in Empty and Messages variants. Its message row is `Chat sheet message`.
+    - `Text field`, `Tabs`, `Card`, `Video tile`, `Chat message` (the web chat sidebar's), and the web-only `Badge` and `Avatar`.
+- **Screens:** rough frames built from those components: phone auth, phone call setup, phone in-call, the phone in-call with the chat sheet open (empty, and with a message), and desktop web in-call with the chat sidebar. The phone frames cover both the Android app and the web app's below-`md` layout. They're approximations, not pixel specs.
 
 The owner's Figma account is on the free Starter plan, so Figma MCP calls are scarce. Read the code instead of the file where possible. Draft `use_figma` scripts locally and batch each page's work into one retry-safe script. Take screenshots inside the script (`node.screenshot()`) rather than with separate `get_screenshot`/`get_metadata` calls.
 
