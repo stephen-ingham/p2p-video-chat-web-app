@@ -66,11 +66,13 @@ A rough design system and screen mockups for both clients live in the [Voneo des
 - **Design system:**
   - Variables: the `Voneo colours` collection (one `Dark` mode) mirrors the repo-root `colors.json` (same names, usage notes as descriptions, `var(--color-<name>)` as web code syntax). `Voneo dimensions` holds `space/xs`–`xl` (4–24), `radius/sm`/`md`/`lg` (7/10/14), `size/touch-min` (48) and `size/call-control` (56), matching `mobile-app/src/theme/theme.ts`.
   - Text styles: Geist, `Voneo/Android/*` (theme.ts scale, body 16) and `Voneo/Web/*` (the Tailwind sizes the web app uses, body 14). Each scale has Title, Heading, Body, Label, Caption and Mono.
-  - Lucide icons as `Icon/*` components (Mic, MicOff, Video, VideoOff, MessageSquare, PhoneOff, Send, X, LogOut, Copy), with paths copied from the installed `lucide-react-native`.
+  - Lucide icons as `Icon/*` components (Mic, MicOff, Video, VideoOff, MessageSquare, PhoneOff, Send, X, LogOut, Copy, ChevronRight, ChevronDown), with paths copied from the installed `lucide-react-native`.
   - Component sets mirroring `mobile-app/src/components/` and the web's shadcn/ui primitives:
     - `Button`: Variant × Platform (Android/Web) × State, with an optional leading icon (`Show icon` + an `Icon` instance swap).
     - `Call control`: the round in-call `IconButton`/`call-control-button`, Control × State. Control is Microphone, Microphone off, Camera, Camera off, Chat, Chat unread (badge with a `Count`), Hang up, or Custom (any icon, used for the chat sheet's Close and Send).
-    - `Chat sheet`: `chat-sheet.tsx`'s bottom sheet, in Empty and Messages variants. Its message row is `Chat sheet message`.
+    - `Chat sheet`: `chat-sheet.tsx`'s bottom sheet, in Empty, Messages and People open variants. Its subtitle is a tappable "N people" toggle that opens a list of `Participant row`s (username, muted email, yours last as "(You)"). Its message row is `Chat sheet message`, whose sender is a username ("You" for your own).
+    - `Participant summary` (in the "Voneo · Participants" frame): the in-call header's avatar stack (up to 3, then "+N") and one-line summary ("Sam and you"), in Just you / Two / Five or more variants.
+    - The participants design (usernames, the summary, the "N people" list) is agreed but not built yet. Until it is, the code still shows comma-joined emails. Tickets: Trello `6Lo7aC1L` (phones) and `Y60kQemS` (desktop/tablet).
     - `Text field`, `Tabs`, `Card`, `Video tile`, `Chat message` (the web chat sidebar's), and the web-only `Badge` and `Avatar`.
 - **Screens:** rough frames built from those components: phone auth, phone call setup, phone in-call, the phone in-call with the chat sheet open (empty, and with a message), and desktop web in-call with the chat sidebar. The phone frames cover both the Android app and the web app's below-`md` layout. They're approximations, not pixel specs.
 
