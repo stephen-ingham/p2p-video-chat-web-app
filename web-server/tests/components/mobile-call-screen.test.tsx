@@ -238,3 +238,71 @@ describe('CallScreen on mobile — in a call', () => {
 		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 	});
 });
+
+describe('CallScreen on mobile — unread chat badge', () => {
+	it("doesn't count your own lines, such as the echo of your join", async () => {
+		const user = userEvent.setup();
+		renderCallScreen();
+		const call = await startCall(user);
+
+		call.addChatMessage('alice@example.com: joined the call');
+		call.addChatMessage('bob@example.com: joined the call');
+
+		expect(await screen.findByTestId('chat-open-badge')).toHaveTextContent(
+			/^1$/v,
+		);
+	});
+
+	it('counts messages that arrive while the chat sheet is closed', async () => {
+		const user = userEvent.setup();
+		renderCallScreen();
+		const call = await startCall(user);
+		expect(screen.queryByTestId('chat-open-badge')).not.toBeInTheDocument();
+
+		call.addChatMessage('bob@example.com: hi');
+		call.addChatMessage('bob@example.com: are you there?');
+
+		expect(await screen.findByTestId('chat-open-badge')).toHaveTextContent(
+			/^2$/v,
+		);
+		expect(
+			screen.getByRole('button', {name: 'Chat, 2 unread'}),
+		).toBeInTheDocument();
+	});
+
+	it('clears when the sheet opens and stays clear for messages read there', async () => {
+		const user = userEvent.setup();
+		renderCallScreen();
+		const call = await startCall(user);
+		call.addChatMessage('bob@example.com: hi');
+		await screen.findByTestId('chat-open-badge');
+
+		await user.click(screen.getByTestId('chat-open'));
+		call.addChatMessage('bob@example.com: read while open');
+		await screen.findByText('read while open');
+		await user.keyboard('{Escape}');
+
+		expect(screen.queryByTestId('chat-open-badge')).not.toBeInTheDocument();
+		expect(screen.getByRole('button', {name: 'Chat'})).toBeInTheDocument();
+
+		call.addChatMessage('bob@example.com: and one more');
+		expect(await screen.findByTestId('chat-open-badge')).toHaveTextContent(
+			/^1$/v,
+		);
+	});
+
+	it('caps the count at 9+', async () => {
+		const user = userEvent.setup();
+		renderCallScreen();
+		const call = await startCall(user);
+
+		for (let i = 0; i < 12; i++) call.addChatMessage(`bob@example.com: ${i}`);
+
+		expect(await screen.findByTestId('chat-open-badge')).toHaveTextContent(
+			'9+',
+		);
+		expect(
+			screen.getByRole('button', {name: 'Chat, 12 unread'}),
+		).toBeInTheDocument();
+	});
+});
