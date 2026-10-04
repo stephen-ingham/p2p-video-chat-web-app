@@ -29,7 +29,7 @@ const setLocalTrackEnabled = vi.fn();
 // Rtc-utils.ts drives real WebRTC/getUserMedia/WebSocket — none of which
 // jsdom implements. Mocked entirely; these tests assert CallScreen wires
 // its callbacks/refs correctly, not that WebRTC itself works (that's
-// e2e/call.spec.ts and chat.spec.ts, against real browsers).
+// e2e/chromium/call.spec.ts and chat.spec.ts, against real browsers).
 vi.mock('@/lib/rtc-utils.ts', () => ({
 	async connectToCall(...arguments_: unknown[]): Promise<void> {
 		await connectToCall(...arguments_);

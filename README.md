@@ -154,9 +154,12 @@ video-chat-application/
 │   ├── mobile.sh / mobile.ps1
 │   ├── gcp-e2e.mjs              # Deploys, e2e-tests and destroys an ephemeral GCP stack (dev, prod-preview)
 │   └── buildx-cleanup.mjs       # Removes the buildx builder container Pulumi's image build leaves running
-├── e2e/                         # End-to-end tests (Playwright)
-│   ├── compose.nat.yaml         # NAT-traversal overlay: coturn + browsers on isolated Docker networks
-│   └── nat/                     # Same-network vs cross-network (TURN relay) call tests
+├── e2e/                         # End-to-end tests (Playwright), one folder per Playwright project
+│   ├── chromium/                # Desktop-viewport specs
+│   ├── mobile-chromium/         # Phone-viewport specs (the web app's mobile layout)
+│   ├── nat/                     # Same-network vs cross-network (TURN relay) call tests
+│   ├── support/                 # Helpers shared by the specs
+│   └── compose.nat.yaml         # NAT-traversal overlay: coturn + browsers on isolated Docker networks
 ├── .github/workflows/           # CI/CD workflows
 ├── .husky/                      # Git hooks
 ├── colors.json                  # Shared colour palette for the web and mobile apps (see Colours)
@@ -396,7 +399,24 @@ See [`mobile-app/README.md`](mobile-app/README.md) for how the app is put togeth
 
 ## End-to-end tests (Playwright)
 
-E2e tests (`e2e/*.spec.ts`) run against a **prod-mode simulation** of the app rather than the local dev containers or a real deployed environment: the existing `signalling-server-prod`/`web-server-prod`/`mysql-db` compose services, run with `NODE_ENV=production` and an isolated `test-db`, behind a local [Caddy](https://caddyserver.com/) reverse proxy that terminates TLS at `https://voneo.test`. Caddy forwards everything to the frontend, which proxies the API and WebSocket routes itself (`web-server/src/server.mjs`), as it does on Cloud Run. This lets the suite exercise real production-only behavior (`Secure` cookies, the `ALLOWED_ORIGIN` CORS/WS-origin allowlist) without needing a deployed GCP environment or incurring any cloud cost — see `e2e/compose.e2e.yaml` and `e2e/Caddyfile`.
+E2e tests (`e2e/**/*.spec.ts`) run against a **prod-mode simulation** of the app rather than the local dev containers or a real deployed environment: the existing `signalling-server-prod`/`web-server-prod`/`mysql-db` compose services, run with `NODE_ENV=production` and an isolated `test-db`, behind a local [Caddy](https://caddyserver.com/) reverse proxy that terminates TLS at `https://voneo.test`. Caddy forwards everything to the frontend, which proxies the API and WebSocket routes itself (`web-server/src/server.mjs`), as it does on Cloud Run. This lets the suite exercise real production-only behavior (`Secure` cookies, the `ALLOWED_ORIGIN` CORS/WS-origin allowlist) without needing a deployed GCP environment or incurring any cloud cost — see `e2e/compose.e2e.yaml` and `e2e/Caddyfile`.
+
+**Layout:** each Playwright project (see `playwright.config.ts`) runs the specs in the `e2e/` folder named after it:
+
+```
+e2e/
+├── chromium/          # `chromium` project: desktop viewport
+│   ├── auth.spec.ts   #   sign up, log in, log out
+│   ├── call.spec.ts   #   create/join, both videos, chat, hang up (@happy-path)
+│   ├── chat.spec.ts   #   a chat message reaches the other participant
+│   └── media.spec.ts  #   video flows directly between peers on one network
+├── mobile-chromium/   # `mobile-chromium` project: Pixel 7 viewport, the web app's mobile layout
+│   └── mobile-call.spec.ts  # a full call through the phone layout (@happy-path)
+├── nat/               # `nat-traversal` project, only with `npm run test:e2e:nat`
+│   └── nat-traversal.spec.ts
+├── support/           # helpers shared by the specs (sign-up, WebRTC stats, video checks)
+└── global-setup.ts    # truncates test-db before a local run
+```
 
 **One-time local setup:** add a hosts file entry pointing `voneo.test` at `127.0.0.1`:
 
@@ -417,9 +437,9 @@ Camera/microphone are faked via Chromium's `--use-fake-device-for-media-stream` 
 
 **In CI:** `pr-dev.yml` and `pr-main.yml` run all their jobs on every PR, whatever files it changes, to catch regressions (there's no path filtering).
 
-**Browser coverage:** only Chromium is configured — no Firefox or WebKit. This is deliberate, for dev speed/simplicity, and because the fake-media-stream flags above are Chromium-specific. There are two Playwright projects: `chromium` runs the specs at a desktop viewport, and `mobile-chromium` runs `e2e/web-mobile/` at a phone's (Pixel 7), where the app switches to its mobile layout.
+**Browser coverage:** only Chromium is configured — no Firefox or WebKit. This is deliberate, for dev speed/simplicity, and because the fake-media-stream flags above are Chromium-specific. There are two Playwright projects (see **Layout** above): `chromium` runs `e2e/chromium/` at a desktop viewport, and `mobile-chromium` runs `e2e/mobile-chromium/` at a phone's (Pixel 7), where the app switches to its mobile layout.
 
-**Media on the same network:** `e2e/media.spec.ts` checks that both participants actually receive each other's video. It also checks, from the peer connections' ICE stats, that media flows directly and not through a relay.
+**Media on the same network:** `e2e/chromium/media.spec.ts` checks that both participants actually receive each other's video. It also checks, from the peer connections' ICE stats, that media flows directly and not through a relay.
 
 ### NAT traversal suite (STUN/TURN)
 
