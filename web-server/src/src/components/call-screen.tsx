@@ -1,5 +1,5 @@
 import React, {useEffect, useRef, useState} from 'react';
-import {LogOut, Mic, MicOff, PhoneOff, Video, VideoOff} from 'lucide-react';
+import {LogOut, Video} from 'lucide-react';
 import {Button} from '@/components/ui/button.tsx';
 import {Badge} from '@/components/ui/badge.tsx';
 import {useTokenWorker} from '@/lib/use-token-worker.ts';
@@ -14,8 +14,10 @@ import {
 } from '@/lib/rtc-utils.ts';
 import {useIsMobile} from '@/lib/use-is-mobile.ts';
 import {cn} from '@/lib/utils.ts';
+import {useUnreadCount} from '@/lib/use-unread-count.ts';
 import VideoGrid, {type RemoteStream} from '@/components/video-grid.tsx';
 import ChatPanel from '@/components/chat-panel.tsx';
+import CallControlBar from '@/components/call-control-bar.tsx';
 import DesktopCallSetup from '@/components/desktop-call-setup.tsx';
 import MobileCallSetup from '@/components/mobile-call-setup.tsx';
 import MobileInCallView from '@/components/mobile-in-call-view.tsx';
@@ -54,6 +56,8 @@ export default function CallScreen({
 	const [error, setError] = useState('');
 	const [micOn, setMicOn] = useState(true);
 	const [cameraOn, setCameraOn] = useState(true);
+	const [chatOpen, setChatOpen] = useState(true);
+	const unread = useUnreadCount(messages, chatOpen, email);
 	// Mirrors micOn/cameraOn for async callbacks, which would otherwise see
 	// the values from the render that started them.
 	const mediaChoices = useRef({micOn: true, cameraOn: true});
@@ -248,6 +252,7 @@ export default function CallScreen({
 			setMessages([]);
 			setMicOn(true);
 			setCameraOn(true);
+			setChatOpen(true);
 			mediaChoices.current = {micOn: true, cameraOn: true};
 			// Phones have no lobby preview, so release the camera; the desktop
 			// lobby keeps showing it.
@@ -322,7 +327,7 @@ export default function CallScreen({
 							variant="outline"
 							className="border-line-control text-ink-soft font-mono text-xs"
 						>
-							{callId}
+							<span data-testid="call-id">{callId}</span>
 						</Badge>
 					)}
 					<span
@@ -395,66 +400,37 @@ export default function CallScreen({
 								{error}
 							</p>
 						)}
-						<div className="flex items-center justify-between">
-							<Badge
-								variant="outline"
-								className="border-line-control text-ink-soft font-mono text-xs"
-							>
-								Call ID: <span data-testid="call-id">{callId}</span>
-							</Badge>
-							<div className="flex items-center gap-2">
-								<Button
-									variant="outline"
-									size="icon-sm"
-									role="switch"
-									aria-checked={micOn}
-									aria-label="Microphone"
-									onClick={toggleMic}
-									className="border-line-control bg-surface text-ink hover:bg-surface-raised hover:text-ink"
-									data-testid="mic-toggle"
-								>
-									{micOn ? <Mic /> : <MicOff />}
-								</Button>
-								<Button
-									variant="outline"
-									size="icon-sm"
-									role="switch"
-									aria-checked={cameraOn}
-									aria-label="Camera"
-									onClick={toggleCamera}
-									className="border-line-control bg-surface text-ink hover:bg-surface-raised hover:text-ink"
-									data-testid="camera-toggle"
-								>
-									{cameraOn ? <Video /> : <VideoOff />}
-								</Button>
-								<Button
-									variant="destructive"
-									size="sm"
-									onClick={() => {
-										void handleLeave();
-									}}
-									data-testid="hang-up-button"
-								>
-									<PhoneOff className="h-4 w-4 mr-1.5" />
-									Hang up
-								</Button>
-							</div>
-						</div>
 						<VideoGrid
 							localVideoRef={localVideoRef}
 							remoteStreams={remoteStreams}
 							cameraOn={cameraOn}
 						/>
+						<CallControlBar
+							micOn={micOn}
+							cameraOn={cameraOn}
+							chatOpen={chatOpen}
+							unread={unread}
+							onToggleMic={toggleMic}
+							onToggleCamera={toggleCamera}
+							onToggleChat={() => {
+								setChatOpen(!chatOpen);
+							}}
+							onHangUp={() => {
+								void handleLeave();
+							}}
+						/>
 					</div>
 
 					{/* Chat sidebar */}
-					<div className="w-80 shrink-0 border-l border-line flex flex-col">
-						<ChatPanel
-							messages={messages}
-							participants={participants}
-							onSend={sendChat}
-						/>
-					</div>
+					{chatOpen && (
+						<div className="w-80 shrink-0 border-l border-line flex flex-col">
+							<ChatPanel
+								messages={messages}
+								participants={participants}
+								onSend={sendChat}
+							/>
+						</div>
+					)}
 				</div>
 			)}
 		</div>
