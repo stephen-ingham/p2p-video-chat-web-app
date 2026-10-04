@@ -40,6 +40,12 @@ vi.mock('@/lib/rtc-utils.ts', () => ({
 	async getLocalStream(): Promise<undefined> {
 		return undefined;
 	},
+	async startLocalMedia(): Promise<undefined> {
+		return undefined;
+	},
+	async stopLocalMedia(): Promise<void> {
+		// No local media to release
+	},
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- jsdom has no MediaStream; only object identity matters to these tests
@@ -141,12 +147,13 @@ describe('CallScreen on mobile — before a call', () => {
 		expect(screen.queryByTestId('local-video')).not.toBeInTheDocument();
 	});
 
-	it('keeps the desktop controls bar and chat sidebar on wider screens', () => {
+	it('shows the desktop lobby, with a camera preview, on wider screens', () => {
 		setViewportMobile(false);
 		renderCallScreen();
 
-		expect(screen.queryByText('Start a call')).not.toBeInTheDocument();
-		expect(screen.getByTestId('chat-message-input')).toBeInTheDocument();
+		expect(screen.getByTestId('lobby-mic-toggle')).toBeInTheDocument();
+		expect(screen.getByTestId('local-video')).toBeInTheDocument();
+		expect(screen.queryByTestId('chat-message-input')).not.toBeInTheDocument();
 	});
 });
 

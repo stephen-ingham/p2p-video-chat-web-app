@@ -25,6 +25,9 @@ const sendChatMessageToCall = vi.fn();
 const closeConns = vi.fn();
 const closeWebSocketServerConn = vi.fn();
 const setLocalTrackEnabled = vi.fn();
+const startLocalMedia = vi.fn();
+const stopLocalMedia = vi.fn();
+const getLocalStream = vi.fn();
 
 // Rtc-utils.ts drives real WebRTC/getUserMedia/WebSocket — none of which
 // jsdom implements. Mocked entirely; these tests assert CallScreen wires
@@ -46,13 +49,21 @@ vi.mock('@/lib/rtc-utils.ts', () => ({
 	async setLocalTrackEnabled(...arguments_: unknown[]): Promise<void> {
 		await setLocalTrackEnabled(...arguments_);
 	},
-	async getLocalStream(): Promise<undefined> {
-		return undefined;
+	async getLocalStream(): Promise<unknown> {
+		return getLocalStream();
+	},
+	async startLocalMedia(): Promise<unknown> {
+		return startLocalMedia();
+	},
+	async stopLocalMedia(): Promise<void> {
+		await stopLocalMedia();
 	},
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- jsdom has no MediaStream; only object identity matters to these tests
 const fakeLocalStream = {id: 'local'} as unknown as MediaStream;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- see above
+const fakePreviewStream = {id: 'preview'} as unknown as MediaStream;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- see above
 const fakeRemoteStream = {id: 'remote'} as unknown as MediaStream;
 
@@ -75,23 +86,78 @@ beforeEach(() => {
 	closeConns.mockReset();
 	closeWebSocketServerConn.mockReset();
 	setLocalTrackEnabled.mockReset();
+	startLocalMedia.mockReset();
+	startLocalMedia.mockResolvedValue(fakePreviewStream);
+	stopLocalMedia.mockReset();
+	getLocalStream.mockReset();
+});
+
+describe('CallScreen — lobby', () => {
+	it('previews the camera, with no chat before a call', async () => {
+		renderCallScreen();
+
+		await waitFor(() => {
+			expect(screen.getByTestId('local-video').srcObject).toBe(
+				fakePreviewStream,
+			);
+		});
+		expect(
+			screen.getByText('Check your camera and mic before you join'),
+		).toBeInTheDocument();
+		expect(screen.queryByTestId('chat-message-input')).not.toBeInTheDocument();
+		expect(screen.queryByTestId('participants')).not.toBeInTheDocument();
+	});
+
+	it('carries mic and camera choices made in the lobby into the call', async () => {
+		createCall.mockResolvedValueOnce({callID: 'call-1'});
+		const user = userEvent.setup();
+		renderCallScreen();
+
+		await user.click(screen.getByTestId('lobby-mic-toggle'));
+		await user.click(screen.getByTestId('lobby-camera-toggle'));
+		setLocalTrackEnabled.mockClear();
+		await user.click(screen.getByTestId('create-call-button'));
+
+		expect(await screen.findByTestId('mic-toggle')).toHaveAttribute(
+			'aria-checked',
+			'false',
+		);
+		expect(screen.getByTestId('camera-toggle')).toHaveAttribute(
+			'aria-checked',
+			'false',
+		);
+		// Re-applied once the call's stream exists.
+		expect(setLocalTrackEnabled).toHaveBeenCalledWith('audio', false);
+		expect(setLocalTrackEnabled).toHaveBeenCalledWith('video', false);
+	});
+
+	it("says so when the camera or mic can't be opened", async () => {
+		startLocalMedia.mockRejectedValue(new Error('NotAllowedError'));
+		renderCallScreen();
+
+		expect(
+			await screen.findByText(
+				"Couldn't access your camera or mic. Check your browser's permissions.",
+			),
+		).toBeInTheDocument();
+		expect(screen.getByTestId('create-call-button')).toBeEnabled();
+	});
+
+	it('releases the camera and mic on unmount (log out)', () => {
+		const {unmount} = renderCallScreen();
+
+		unmount();
+
+		expect(stopLocalMedia).toHaveBeenCalledTimes(1);
+	});
 });
 
 describe('CallScreen — create call', () => {
-	it('attaches local media to the local video element', async () => {
+	it('shows the local stream in the in-call tile', async () => {
 		createCall.mockResolvedValueOnce({callID: 'call-1'});
-		connectToCall.mockImplementationOnce(
-			async (
-				_callId: string,
-				_email: string,
-				_username: string,
-				// eslint-disable-next-line @typescript-eslint/no-restricted-types -- matches connectToCall's real signature (React DOM refs are null-based)
-				localVideoRef: React.RefObject<HTMLVideoElement | null>,
-			) => {
-				if (localVideoRef.current)
-					localVideoRef.current.srcObject = fakeLocalStream;
-			},
-		);
+		// The in-call tile is a new <video>; it picks up the stream the lobby
+		// (or connectToCall) already captured.
+		getLocalStream.mockResolvedValue(fakeLocalStream);
 		const user = userEvent.setup();
 		renderCallScreen();
 
@@ -247,7 +313,8 @@ describe('CallScreen — mic and camera', () => {
 		renderCallScreen();
 
 		await user.click(screen.getByTestId('create-call-button'));
-		const mic = await screen.findByRole('switch', {name: 'Microphone'});
+		await screen.findByTestId('hang-up-button');
+		const mic = screen.getByRole('switch', {name: 'Microphone'});
 		const camera = screen.getByRole('switch', {name: 'Camera'});
 		expect(mic).toHaveAttribute('aria-checked', 'true');
 		expect(camera).toHaveAttribute('aria-checked', 'true');
@@ -292,7 +359,7 @@ describe('CallScreen — mic and camera', () => {
 });
 
 describe('CallScreen — leave call', () => {
-	it('clears call state and shows the controls bar again on hang up', async () => {
+	it('clears call state and shows the lobby again on hang up', async () => {
 		const validCallId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 		joinCall.mockResolvedValueOnce(validCallId);
 		leaveCall.mockResolvedValueOnce('User left call succesfully');

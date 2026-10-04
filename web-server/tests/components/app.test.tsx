@@ -33,6 +33,8 @@ vi.mock('@/lib/rtc-utils.ts', () => ({
 	closeWebSocketServerConn: vi.fn(),
 	setLocalTrackEnabled: vi.fn(),
 	getLocalStream: vi.fn(async () => undefined),
+	startLocalMedia: vi.fn(async () => undefined),
+	stopLocalMedia: vi.fn(),
 }));
 
 beforeEach(() => {
