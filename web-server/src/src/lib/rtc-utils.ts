@@ -285,13 +285,29 @@ export async function getLocalMedia(
 	// eslint-disable-next-line @typescript-eslint/no-restricted-types -- React DOM refs are null-based, not undefined-based
 	localVideoRef: React.RefObject<HTMLVideoElement | null>,
 ) {
-	if (localMedia) throw new Error('Already capturing local media');
-	localMedia = navigator.mediaDevices
+	const localStream = await startLocalMedia();
+	if (localVideoRef.current) localVideoRef.current.srcObject = localStream;
+}
+
+// Captures the camera and mic once and reuses them: the lobby's preview
+// starts the capture, and calls made from it send the same tracks. A failed
+// capture isn't cached, so the next attempt asks again.
+export async function startLocalMedia(): Promise<MediaStream> {
+	localMedia ??= navigator.mediaDevices
 		.getUserMedia(mediaConstraints)
-		.then((localStream) => {
-			if (localVideoRef.current) localVideoRef.current.srcObject = localStream;
-			return localStream;
+		.catch((error: unknown) => {
+			localMedia = undefined;
+			throw error;
 		});
+	return localMedia;
+}
+
+// Releases the camera and mic (turning the camera light off).
+export async function stopLocalMedia() {
+	const stopping = localMedia;
+	localMedia = undefined;
+	const localStream = await stopping?.catch(() => undefined);
+	for (const track of localStream?.getTracks() ?? []) track.stop();
 }
 
 export async function getLocalStream(): Promise<MediaStream | undefined> {
