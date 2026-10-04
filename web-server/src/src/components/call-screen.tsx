@@ -64,7 +64,9 @@ export default function CallScreen({
 	}
 
 	function addParticipant(name: string) {
-		setParticipants((previous) => [...previous, name]);
+		setParticipants((previous) =>
+			previous.includes(name) ? previous : [...previous, name],
+		);
 	}
 
 	function removeParticipant(name: string) {

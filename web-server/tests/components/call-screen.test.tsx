@@ -202,6 +202,38 @@ describe('CallScreen — join call', () => {
 	});
 });
 
+describe('CallScreen — participants', () => {
+	it('lists a participant once when they are announced twice', async () => {
+		// A joiner reaches existing participants through both the join notice
+		// and, on reconnects, the current-participants list.
+		createCall.mockResolvedValueOnce({callID: 'call-1'});
+		connectToCall.mockImplementationOnce(
+			async (
+				_callId: string,
+				_email: string,
+				_username: string,
+				_localVideoRef: unknown,
+				_remoteVideoRefs: unknown,
+				_addChatMessage: unknown,
+				addParticipant: (name: string) => void,
+			) => {
+				addParticipant('bob@example.com');
+				addParticipant('bob@example.com');
+			},
+		);
+		const user = userEvent.setup();
+		renderCallScreen();
+
+		await user.click(screen.getByTestId('create-call-button'));
+
+		await waitFor(() => {
+			expect(screen.getByTestId('participants')).toHaveTextContent(
+				/^bob@example\.com$/v,
+			);
+		});
+	});
+});
+
 describe('CallScreen — leave call', () => {
 	it('clears call state and shows the controls bar again on hang up', async () => {
 		const validCallId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';

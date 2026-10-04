@@ -335,7 +335,15 @@ export async function attachWsConnListeners(
 		const message = parsed;
 
 		switch (message.type) {
-			case 'receivedNewParticipantNotif':
+			case 'receivedNewParticipantNotif': {
+				// Broadcast to everyone on the call, the joiner included. The
+				// joiner sends us the offer, so there's nothing to negotiate here.
+				const {data} = message;
+				if (data.email !== callerEmail) addParticipant(data.email);
+				addChatMessage(`${data.email}: ${data.message}`);
+				break;
+			}
+
 			case 'chatMessage': {
 				const {data} = message;
 				addChatMessage(`${data.email}: ${data.message}`);
