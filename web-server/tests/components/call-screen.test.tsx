@@ -242,6 +242,57 @@ describe('CallScreen — participants', () => {
 	});
 });
 
+describe('CallScreen — mic and camera', () => {
+	it('turns the local mic and camera tracks off and on', async () => {
+		createCall.mockResolvedValueOnce({callID: 'call-1'});
+		const user = userEvent.setup();
+		renderCallScreen();
+
+		await user.click(screen.getByTestId('create-call-button'));
+		const mic = await screen.findByRole('switch', {name: 'Microphone'});
+		const camera = screen.getByRole('switch', {name: 'Camera'});
+		expect(mic).toHaveAttribute('aria-checked', 'true');
+		expect(camera).toHaveAttribute('aria-checked', 'true');
+
+		await user.click(mic);
+		expect(mic).toHaveAttribute('aria-checked', 'false');
+		expect(setLocalTrackEnabled).toHaveBeenLastCalledWith('audio', false);
+
+		await user.click(camera);
+		expect(camera).toHaveAttribute('aria-checked', 'false');
+		expect(setLocalTrackEnabled).toHaveBeenLastCalledWith('video', false);
+		expect(screen.getByTestId('local-camera-off')).toBeInTheDocument();
+
+		await user.click(camera);
+		expect(setLocalTrackEnabled).toHaveBeenLastCalledWith('video', true);
+		expect(screen.queryByTestId('local-camera-off')).not.toBeInTheDocument();
+	});
+
+	it('turns both back on for the next call after hanging up', async () => {
+		createCall.mockResolvedValueOnce({callID: 'call-1'});
+		leaveCall.mockResolvedValueOnce('User left call succesfully');
+		const user = userEvent.setup();
+		renderCallScreen();
+
+		await user.click(screen.getByTestId('create-call-button'));
+		await user.click(await screen.findByTestId('mic-toggle'));
+		await user.click(screen.getByTestId('camera-toggle'));
+		await user.click(screen.getByTestId('hang-up-button'));
+
+		createCall.mockResolvedValueOnce({callID: 'call-2'});
+		await user.click(await screen.findByTestId('create-call-button'));
+
+		expect(await screen.findByTestId('mic-toggle')).toHaveAttribute(
+			'aria-checked',
+			'true',
+		);
+		expect(screen.getByTestId('camera-toggle')).toHaveAttribute(
+			'aria-checked',
+			'true',
+		);
+	});
+});
+
 describe('CallScreen — leave call', () => {
 	it('clears call state and shows the controls bar again on hang up', async () => {
 		const validCallId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
