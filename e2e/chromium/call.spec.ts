@@ -1,10 +1,10 @@
 import {randomUUID} from 'node:crypto';
 import {test, expect, type Page} from '@playwright/test';
-import {openApp} from './support/app.ts';
+import {openApp} from '../support/app.ts';
 import {
 	expectLocalVideoPlaying,
 	expectRemoteVideoPlaying,
-} from './support/webrtc.ts';
+} from '../support/webrtc.ts';
 
 function uniqueUser(label: string) {
 	const suffix = randomUUID();

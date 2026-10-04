@@ -1,6 +1,6 @@
 import {randomUUID} from 'node:crypto';
 import {test, expect, type Page} from '@playwright/test';
-import {openApp} from './support/app.ts';
+import {openApp} from '../support/app.ts';
 
 function uniqueUser(label: string) {
 	const suffix = randomUUID();
