@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/naming-convention -- callID mirrors the real HTTP response shape, not variable names */
-import {render, screen, waitFor} from '@testing-library/react';
+import {act, render, screen, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 import CallScreen from '@/components/call-screen.tsx';
@@ -377,5 +377,58 @@ describe('CallScreen — leave call', () => {
 		expect(closeWebSocketServerConn).toHaveBeenCalledWith(validCallId);
 		expect(await screen.findByTestId('create-call-button')).toBeInTheDocument();
 		expect(screen.queryByTestId('call-id')).not.toBeInTheDocument();
+	});
+});
+
+describe('CallScreen — control bar', () => {
+	it('toggles the chat sidebar and badges messages that arrive while it is closed', async () => {
+		createCall.mockResolvedValueOnce({callID: 'call-1'});
+		let addChatMessage: ((message: string) => void) | undefined;
+		connectToCall.mockImplementationOnce(
+			async (
+				_callId: string,
+				_email: string,
+				_username: string,
+				_localVideoRef: unknown,
+				_remoteVideoRefs: unknown,
+				add: (message: string) => void,
+			) => {
+				addChatMessage = add;
+			},
+		);
+		const user = userEvent.setup();
+		renderCallScreen();
+
+		await user.click(screen.getByTestId('create-call-button'));
+		const chat = await screen.findByTestId('chat-toggle');
+		expect(chat).toHaveAttribute('aria-expanded', 'true');
+		expect(screen.getByTestId('chat-message-input')).toBeInTheDocument();
+
+		await user.click(chat);
+		expect(chat).toHaveAttribute('aria-expanded', 'false');
+		expect(screen.queryByTestId('chat-message-input')).not.toBeInTheDocument();
+
+		act(() => {
+			addChatMessage?.('bob@example.com: hi');
+			addChatMessage?.('alice@example.com: my own message');
+		});
+		expect(await screen.findByTestId('chat-toggle-badge')).toHaveTextContent(
+			'1',
+		);
+
+		await user.click(chat);
+		expect(screen.queryByTestId('chat-toggle-badge')).not.toBeInTheDocument();
+		expect(screen.getByTestId('chat-message-input')).toBeInTheDocument();
+	});
+
+	it('names each control in a tooltip', async () => {
+		createCall.mockResolvedValueOnce({callID: 'call-1'});
+		const user = userEvent.setup();
+		renderCallScreen();
+
+		await user.click(screen.getByTestId('create-call-button'));
+		await user.hover(await screen.findByTestId('mic-toggle'));
+
+		expect(await screen.findByText('Mute')).toBeInTheDocument();
 	});
 });
