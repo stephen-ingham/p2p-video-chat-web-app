@@ -1,6 +1,7 @@
 import {randomUUID} from 'node:crypto';
 import {test, expect, type Page} from '@playwright/test';
 import {openApp} from './support/app.ts';
+import {expectRemoteVideoPlaying} from './support/webrtc.ts';
 
 function uniqueUser(label: string) {
 	const suffix = randomUUID();
@@ -21,7 +22,7 @@ async function signUp(page: Page, user: ReturnType<typeof uniqueUser>) {
 	await expect(page.getByTestId('username')).toHaveText(user.username);
 }
 
-test('create call, join call, and see each other as participants @happy-path', async ({
+test('create call, join call, see and message each other, then hang up @happy-path', async ({
 	browser,
 }) => {
 	const alice = await browser.newContext();
@@ -46,12 +47,28 @@ test('create call, join call, and see each other as participants @happy-path', a
 		await bobPage.getByTestId('join-call-button').click();
 		await expect(bobPage.getByTestId('hang-up-button')).toBeVisible();
 
-		// Bob receives Alice in `responseCurrentCallParticipants` (participant
-		// list); Alice receives Bob via a `receivedNewParticipantNotif` chat
-		// line, which also shows up as a chat-log line containing the same
-		// email, hence .first() rather than a single unique match.
+		// Each email shows in both the participant list and the chat log's
+		// join line, hence .first().
 		await expect(alicePage.getByText(bobUser.email).first()).toBeVisible();
 		await expect(bobPage.getByText(aliceUser.email).first()).toBeVisible();
+
+		await expectRemoteVideoPlaying(alicePage, bobUser);
+		await expectRemoteVideoPlaying(bobPage, aliceUser);
+
+		const message = `hello from alice ${Date.now()}`;
+		await alicePage.getByTestId('chat-message-input').fill(message);
+		await alicePage.getByTestId('chat-send-button').click();
+		await expect(
+			bobPage.getByTestId('chat-message').filter({hasText: message}),
+		).toBeVisible();
+
+		await alicePage.getByTestId('hang-up-button').click();
+		await expect(alicePage.getByTestId('create-call-button')).toBeVisible();
+		await expect(alicePage.getByTestId('call-id')).toHaveCount(0);
+
+		await bobPage.getByTestId('hang-up-button').click();
+		await expect(bobPage.getByTestId('create-call-button')).toBeVisible();
+		await expect(bobPage.getByTestId('call-id')).toHaveCount(0);
 	} finally {
 		await alice.close();
 		await bob.close();
