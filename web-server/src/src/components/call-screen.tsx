@@ -1,7 +1,6 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {LogOut, Video} from 'lucide-react';
 import {Button} from '@/components/ui/button.tsx';
-import {Badge} from '@/components/ui/badge.tsx';
 import {useTokenWorker} from '@/lib/use-token-worker.ts';
 import {
 	connectToCall,
@@ -18,6 +17,7 @@ import {useUnreadCount} from '@/lib/use-unread-count.ts';
 import VideoGrid, {type RemoteStream} from '@/components/video-grid.tsx';
 import ChatPanel from '@/components/chat-panel.tsx';
 import CallControlBar from '@/components/call-control-bar.tsx';
+import CallIdChip from '@/components/call-id-chip.tsx';
 import DesktopCallSetup from '@/components/desktop-call-setup.tsx';
 import MobileCallSetup from '@/components/mobile-call-setup.tsx';
 import MobileInCallView from '@/components/mobile-in-call-view.tsx';
@@ -316,20 +316,13 @@ export default function CallScreen({
 			)}
 		>
 			{/* Header */}
-			<header className="flex items-center justify-between gap-3 px-4 py-2 md:px-6 md:py-3 border-b border-line shrink-0">
+			<header className="relative flex items-center justify-between gap-3 px-4 py-2 md:px-6 md:py-3 border-b border-line shrink-0">
 				<div className="flex items-center gap-2">
 					<Video className="h-5 w-5 text-ink-soft" />
 					<span className="font-semibold text-ink">Voneo</span>
 				</div>
 				<div className="flex items-center gap-3">
-					{callId && (
-						<Badge
-							variant="outline"
-							className="border-line-control text-ink-soft font-mono text-xs"
-						>
-							<span data-testid="call-id">{callId}</span>
-						</Badge>
-					)}
+					{callId && <CallIdChip callId={callId} />}
 					<span
 						className="min-w-0 truncate text-[13px] md:text-sm text-ink-muted"
 						data-testid="username"
