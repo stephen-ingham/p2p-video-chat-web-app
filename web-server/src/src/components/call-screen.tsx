@@ -13,6 +13,7 @@ import {
 	stopLocalMedia,
 } from '@/lib/rtc-utils.ts';
 import {useIsMobile} from '@/lib/use-is-mobile.ts';
+import {cn} from '@/lib/utils.ts';
 import VideoGrid, {type RemoteStream} from '@/components/video-grid.tsx';
 import ChatPanel from '@/components/chat-panel.tsx';
 import DesktopCallSetup from '@/components/desktop-call-setup.tsx';
@@ -302,7 +303,13 @@ export default function CallScreen({
 	}
 
 	return (
-		<div className="min-h-dvh bg-canvas text-ink flex flex-col">
+		<div
+			className={cn(
+				'min-h-dvh bg-canvas text-ink flex flex-col',
+				// In a call the video stage fills the viewport, never scrolls it.
+				inCall && 'h-dvh',
+			)}
+		>
 			{/* Header */}
 			<header className="flex items-center justify-between gap-3 px-4 py-2 md:px-6 md:py-3 border-b border-line shrink-0">
 				<div className="flex items-center gap-2">
@@ -381,8 +388,8 @@ export default function CallScreen({
 
 			{/* Main area — the chat sidebar only exists during a call */}
 			{inCall && !isMobile && (
-				<div className="flex flex-1 overflow-hidden">
-					<div className="flex-1 flex flex-col gap-4 p-6 overflow-y-auto">
+				<div className="flex min-h-0 flex-1 overflow-hidden">
+					<div className="flex min-w-0 flex-1 flex-col gap-4 p-6">
 						{error && (
 							<p role="alert" className="text-sm text-danger">
 								{error}

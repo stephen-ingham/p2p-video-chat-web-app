@@ -1,6 +1,5 @@
 import React, {useId} from 'react';
 import {Mic, MicOff, Video, VideoOff} from 'lucide-react';
-import {Badge} from '@/components/ui/badge.tsx';
 import {Button} from '@/components/ui/button.tsx';
 import {Input} from '@/components/ui/input.tsx';
 import {
@@ -10,7 +9,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from '@/components/ui/card.tsx';
-import {LocalVideo} from '@/components/video-grid.tsx';
+import {LocalVideo, ParticipantTile} from '@/components/video-grid.tsx';
 import CallControlButton from '@/components/call-control-button.tsx';
 
 type DesktopCallSetupProps = {
@@ -59,12 +58,9 @@ export default function DesktopCallSetup({
 		<main className="flex flex-1 items-center justify-center p-6">
 			<div className="grid w-full max-w-[1048px] items-center gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-12">
 				<section aria-label="Camera preview" className="flex flex-col gap-4">
-					<div className="relative aspect-video overflow-hidden rounded-xl bg-surface-raised">
-						<LocalVideo videoRef={localVideoRef} cameraOn={cameraOn} mirror />
-						<Badge className="absolute bottom-3 left-3 h-7 rounded-md border-0 bg-scrim px-3 text-sm text-ink">
-							You
-						</Badge>
-					</div>
+					<ParticipantTile label="You">
+						<LocalVideo mirror videoRef={localVideoRef} cameraOn={cameraOn} />
+					</ParticipantTile>
 					<div className="flex items-center justify-center gap-3">
 						<CallControlButton
 							icon={micOn ? Mic : MicOff}
