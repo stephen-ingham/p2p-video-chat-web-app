@@ -294,6 +294,22 @@ export async function getLocalMedia(
 		});
 }
 
+export async function getLocalStream(): Promise<MediaStream | undefined> {
+	return localMedia;
+}
+
+// Mutes the mic or turns the camera off without renegotiating: a disabled
+// track keeps its slot in every peer connection but sends silence/black.
+export async function setLocalTrackEnabled(
+	kind: 'audio' | 'video',
+	enabled: boolean,
+) {
+	if (!localMedia) return;
+	const localStream = await localMedia;
+	for (const track of localStream.getTracks())
+		if (track.kind === kind) track.enabled = enabled;
+}
+
 export async function establishWebSocketServerConn(callUrl: string) {
 	websocket = new WebSocket(callUrl);
 }
@@ -335,7 +351,13 @@ export async function attachWsConnListeners(
 		const message = parsed;
 
 		switch (message.type) {
-			case 'receivedNewParticipantNotif':
+			case 'receivedNewParticipantNotif': {
+				const {data} = message;
+				if (data.email !== callerEmail) addParticipant(data.email);
+				addChatMessage(`${data.email}: ${data.message}`);
+				break;
+			}
+
 			case 'chatMessage': {
 				const {data} = message;
 				addChatMessage(`${data.email}: ${data.message}`);

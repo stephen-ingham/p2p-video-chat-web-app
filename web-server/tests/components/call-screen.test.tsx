@@ -24,11 +24,12 @@ const connectToCall = vi.fn();
 const sendChatMessageToCall = vi.fn();
 const closeConns = vi.fn();
 const closeWebSocketServerConn = vi.fn();
+const setLocalTrackEnabled = vi.fn();
 
 // Rtc-utils.ts drives real WebRTC/getUserMedia/WebSocket — none of which
 // jsdom implements. Mocked entirely; these tests assert CallScreen wires
 // its callbacks/refs correctly, not that WebRTC itself works (that's
-// e2e/call.spec.ts and chat.spec.ts, against real browsers).
+// e2e/chromium/call.spec.ts and chat.spec.ts, against real browsers).
 vi.mock('@/lib/rtc-utils.ts', () => ({
 	async connectToCall(...arguments_: unknown[]): Promise<void> {
 		await connectToCall(...arguments_);
@@ -41,6 +42,12 @@ vi.mock('@/lib/rtc-utils.ts', () => ({
 	},
 	async closeWebSocketServerConn(...arguments_: unknown[]): Promise<void> {
 		await closeWebSocketServerConn(...arguments_);
+	},
+	async setLocalTrackEnabled(...arguments_: unknown[]): Promise<void> {
+		await setLocalTrackEnabled(...arguments_);
+	},
+	async getLocalStream(): Promise<undefined> {
+		return undefined;
 	},
 }));
 
@@ -67,6 +74,7 @@ beforeEach(() => {
 	getIceServers.mockReset();
 	closeConns.mockReset();
 	closeWebSocketServerConn.mockReset();
+	setLocalTrackEnabled.mockReset();
 });
 
 describe('CallScreen — create call', () => {
@@ -199,6 +207,87 @@ describe('CallScreen — join call', () => {
 				fakeRemoteStream,
 			);
 		});
+	});
+});
+
+describe('CallScreen — participants', () => {
+	it('lists a participant once when they are announced twice', async () => {
+		createCall.mockResolvedValueOnce({callID: 'call-1'});
+		connectToCall.mockImplementationOnce(
+			async (
+				_callId: string,
+				_email: string,
+				_username: string,
+				_localVideoRef: unknown,
+				_remoteVideoRefs: unknown,
+				_addChatMessage: unknown,
+				addParticipant: (name: string) => void,
+			) => {
+				addParticipant('bob@example.com');
+				addParticipant('bob@example.com');
+			},
+		);
+		const user = userEvent.setup();
+		renderCallScreen();
+
+		await user.click(screen.getByTestId('create-call-button'));
+
+		await waitFor(() => {
+			expect(screen.getByTestId('participants')).toHaveTextContent(
+				/^bob@example\.com$/v,
+			);
+		});
+	});
+});
+
+describe('CallScreen — mic and camera', () => {
+	it('turns the local mic and camera tracks off and on', async () => {
+		createCall.mockResolvedValueOnce({callID: 'call-1'});
+		const user = userEvent.setup();
+		renderCallScreen();
+
+		await user.click(screen.getByTestId('create-call-button'));
+		const mic = await screen.findByRole('switch', {name: 'Microphone'});
+		const camera = screen.getByRole('switch', {name: 'Camera'});
+		expect(mic).toHaveAttribute('aria-checked', 'true');
+		expect(camera).toHaveAttribute('aria-checked', 'true');
+
+		await user.click(mic);
+		expect(mic).toHaveAttribute('aria-checked', 'false');
+		expect(setLocalTrackEnabled).toHaveBeenLastCalledWith('audio', false);
+
+		await user.click(camera);
+		expect(camera).toHaveAttribute('aria-checked', 'false');
+		expect(setLocalTrackEnabled).toHaveBeenLastCalledWith('video', false);
+		expect(screen.getByTestId('local-camera-off')).toBeInTheDocument();
+
+		await user.click(camera);
+		expect(setLocalTrackEnabled).toHaveBeenLastCalledWith('video', true);
+		expect(screen.queryByTestId('local-camera-off')).not.toBeInTheDocument();
+	});
+
+	it('turns both back on for the next call after hanging up', async () => {
+		createCall.mockResolvedValueOnce({callID: 'call-1'});
+		leaveCall.mockResolvedValueOnce('User left call succesfully');
+		const user = userEvent.setup();
+		renderCallScreen();
+
+		await user.click(screen.getByTestId('create-call-button'));
+		await user.click(await screen.findByTestId('mic-toggle'));
+		await user.click(screen.getByTestId('camera-toggle'));
+		await user.click(screen.getByTestId('hang-up-button'));
+
+		createCall.mockResolvedValueOnce({callID: 'call-2'});
+		await user.click(await screen.findByTestId('create-call-button'));
+
+		expect(await screen.findByTestId('mic-toggle')).toHaveAttribute(
+			'aria-checked',
+			'true',
+		);
+		expect(screen.getByTestId('camera-toggle')).toHaveAttribute(
+			'aria-checked',
+			'true',
+		);
 	});
 });
 

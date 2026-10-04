@@ -7,7 +7,7 @@ import {
 	uniqueUser,
 	usesTurnRelay,
 	waitForMediaFlow,
-} from './support/webrtc.ts';
+} from '../support/webrtc.ts';
 
 // Both browser contexts run on the same machine here — the "same network"
 // case. No TURN server exists in this stack (the API falls back to public

@@ -57,8 +57,13 @@ export default defineConfig({
 		: [
 				{
 					name: 'chromium',
-					testIgnore: 'nat/**',
+					testMatch: 'chromium/**/*.spec.ts',
 					use: {...devices['Desktop Chrome']},
+				},
+				{
+					name: 'mobile-chromium',
+					testMatch: 'mobile-chromium/**/*.spec.ts',
+					use: {...devices['Pixel 7']},
 				},
 			],
 });

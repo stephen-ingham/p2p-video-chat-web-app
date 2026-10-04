@@ -1,6 +1,6 @@
 import {randomUUID} from 'node:crypto';
 import {test, expect, type Page} from '@playwright/test';
-import {openApp} from './support/app.ts';
+import {openApp} from '../support/app.ts';
 
 function uniqueUser(label: string) {
 	const suffix = randomUUID();
@@ -21,7 +21,7 @@ async function signUp(page: Page, user: ReturnType<typeof uniqueUser>) {
 	await expect(page.getByTestId('username')).toHaveText(user.username);
 }
 
-test('create call, join call, and see each other as participants @happy-path', async ({
+test('a chat message sent by one participant appears for the other', async ({
 	browser,
 }) => {
 	const alice = await browser.newContext();
@@ -32,26 +32,28 @@ test('create call, join call, and see each other as participants @happy-path', a
 		const bobPage = await bob.newPage();
 
 		const aliceUser = uniqueUser('alice');
-		const bobUser = uniqueUser('bob');
 		await signUp(alicePage, aliceUser);
-		await signUp(bobPage, bobUser);
+		await signUp(bobPage, uniqueUser('bob'));
 
 		await alicePage.getByTestId('create-call-button').click();
 		await expect(alicePage.getByTestId('hang-up-button')).toBeVisible();
 
 		const callId = (await alicePage.getByTestId('call-id').textContent()) ?? '';
-		expect(callId).toMatch(/^[\w\-]+$/v);
 
 		await bobPage.getByTestId('join-call-input').fill(callId);
 		await bobPage.getByTestId('join-call-button').click();
 		await expect(bobPage.getByTestId('hang-up-button')).toBeVisible();
-
-		// Bob receives Alice in `responseCurrentCallParticipants` (participant
-		// list); Alice receives Bob via a `receivedNewParticipantNotif` chat
-		// line, which also shows up as a chat-log line containing the same
-		// email, hence .first() rather than a single unique match.
-		await expect(alicePage.getByText(bobUser.email).first()).toBeVisible();
+		// The hang-up button appears before Bob's WebSocket join is processed;
+		// until then the server still has him as a pending participant and
+		// drops his chat. Seeing Alice in his participant list means the
+		// join has gone through.
 		await expect(bobPage.getByText(aliceUser.email).first()).toBeVisible();
+
+		const message = `hello from bob ${Date.now()}`;
+		await bobPage.getByTestId('chat-message-input').fill(message);
+		await bobPage.getByTestId('chat-message-input').press('Enter');
+
+		await expect(alicePage.getByText(message)).toBeVisible();
 	} finally {
 		await alice.close();
 		await bob.close();

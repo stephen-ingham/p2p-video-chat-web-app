@@ -117,12 +117,17 @@ video-chat-application/
 │           │   ├── auth-screen.tsx # Login + register tabs (shown when logged out)
 │           │   ├── call-screen.tsx # Create/join call controls, video grid, chat sidebar
 │           │   ├── video-grid.tsx  # Local + remote video tiles
-│           │   ├── chat-panel.tsx  # Chat message list + send input
+│           │   ├── chat-panel.tsx  # Chat message list + send input (sidebar, or the mobile chat sheet)
+│           │   ├── mobile-call-setup.tsx   # Phones: stacked "Start a call" / "Join a call" cards
+│           │   ├── mobile-in-call-view.tsx # Phones: full-screen call with a bottom control bar
+│           │   ├── chat-sheet.tsx          # Phones: chat as a bottom sheet
+│           │   ├── call-control-button.tsx # Phones: round in-call control button
 │           │   └── ui/          # shadcn/ui primitives
 │           ├── lib/
 │           │   ├── rtc-utils.ts # WebRTC helpers (media, peer connections, WS messaging)
 │           │   ├── call-url.ts  # Builds a call's WebSocket URL from its callID + the page origin
 │           │   ├── use-token-worker.ts # Hook — module-level singleton Worker
+│           │   ├── use-is-mobile.ts # Hook — true below the md breakpoint (768px)
 │           │   └── utils.ts     # shadcn cn() class utility
 │           ├── styles/
 │           │   ├── global.css   # Tailwind v4 + shadcn CSS variable theme
@@ -149,9 +154,12 @@ video-chat-application/
 │   ├── mobile.sh / mobile.ps1
 │   ├── gcp-e2e.mjs              # Deploys, e2e-tests and destroys an ephemeral GCP stack (dev, prod-preview)
 │   └── buildx-cleanup.mjs       # Removes the buildx builder container Pulumi's image build leaves running
-├── e2e/                         # End-to-end tests (Playwright)
-│   ├── compose.nat.yaml         # NAT-traversal overlay: coturn + browsers on isolated Docker networks
-│   └── nat/                     # Same-network vs cross-network (TURN relay) call tests
+├── e2e/                         # End-to-end tests (Playwright), one folder per Playwright project
+│   ├── chromium/                # Desktop-viewport specs
+│   ├── mobile-chromium/         # Phone-viewport specs (the web app's mobile layout)
+│   ├── nat/                     # Same-network vs cross-network (TURN relay) call tests
+│   ├── support/                 # Helpers shared by the specs
+│   └── compose.nat.yaml         # NAT-traversal overlay: coturn + browsers on isolated Docker networks
 ├── .github/workflows/           # CI/CD workflows
 ├── .husky/                      # Git hooks
 ├── colors.json                  # Shared colour palette for the web and mobile apps (see Colours)
@@ -168,17 +176,18 @@ video-chat-application/
 
 Commands that cover the whole repo run from the root:
 
-| Command                       | What it does                                                                                                         |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `npm run setup`               | Installs every folder's npm dependencies and builds the dev Docker images                                            |
-| `npm run setup:nuke`          | Deletes all of that (dependencies, images, volumes, containers, generated output) and sets it up again               |
-| `npm run dev`                 | Starts the dev stack: frontend, signalling API and MySQL, rebuilding on changes                                      |
-| `npm run dev:halt`            | Stops the dev stack                                                                                                  |
-| `npm run dev:tunnel`          | Starts the ngrok tunnel to the dev stack                                                                             |
-| `npm run lint` / `lint:fix`   | Lints the repo with XO and Prettier (except `mobile-app/`) / applies the fixes it can                                |
-| `npm run test:e2e`            | Runs the Playwright e2e suite against a local prod-mode stack (see [End-to-end tests](#end-to-end-tests-playwright)) |
-| `npm run test:e2e:happy-path` | The same, only the `@happy-path` specs                                                                               |
-| `npm run test:e2e:nat`        | The NAT traversal suite (see [NAT traversal suite](#nat-traversal-suite-stunturn))                                   |
+| Command                        | What it does                                                                                                         |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `npm run setup`                | Installs every folder's npm dependencies and builds the dev Docker images                                            |
+| `npm run setup:nuke`           | Deletes all of that (dependencies, images, volumes, containers, generated output) and sets it up again               |
+| `npm run dev`                  | Starts the dev stack: frontend, signalling API and MySQL, rebuilding on changes                                      |
+| `npm run dev:halt`             | Stops the dev stack                                                                                                  |
+| `npm run dev:tunnel`           | Starts the ngrok tunnel to the dev stack                                                                             |
+| `npm run lint` / `lint:fix`    | Lints the repo with XO and Prettier (except `mobile-app/`) / applies the fixes it can                                |
+| `npm run test:e2e`             | Runs the Playwright e2e suite against a local prod-mode stack (see [End-to-end tests](#end-to-end-tests-playwright)) |
+| `npm run test:e2e:happy-path`  | The same, only the `@happy-path` specs                                                                               |
+| `npm run test:e2e:interactive` | The same, in Playwright's UI mode, to watch or step through the specs locally                                        |
+| `npm run test:e2e:nat`         | The NAT traversal suite (see [NAT traversal suite](#nat-traversal-suite-stunturn))                                   |
 
 Commands for one part of the project run from that part's folder. Some key ones:
 
@@ -369,6 +378,7 @@ The frontend in `web-server/src/` is an Astro app, server-rendered through `@ast
 - **Access token:** a Web Worker (`public/token-worker.js`) holds the JWT access token and makes every API call, so the token never touches the main thread.
 - **Colours:** the web and mobile apps share one palette, `colors.json` in the repo root, which a Tailwind plugin turns into classes like `bg-surface`.
 - **CSP:** in production, every response carries a nonce-based `Content-Security-Policy` header.
+- **Phones:** below 768px wide, the layout follows the Android app's: labelled fields, stacked setup cards, a full-screen call with mic, camera, chat and hang-up buttons along the bottom, and chat in a bottom sheet.
 - **Production:** `server.mjs` serves the built app and forwards `/auth/`, `/call/` and `/wss/` to the signalling API, so browsers only talk to the frontend's origin.
 
 See [`web-server/src/README.md`](web-server/src/README.md) for how the frontend is put together, its colour setup and its Dockerfiles.
@@ -389,7 +399,24 @@ See [`mobile-app/README.md`](mobile-app/README.md) for how the app is put togeth
 
 ## End-to-end tests (Playwright)
 
-E2e tests (`e2e/*.spec.ts`) run against a **prod-mode simulation** of the app rather than the local dev containers or a real deployed environment: the existing `signalling-server-prod`/`web-server-prod`/`mysql-db` compose services, run with `NODE_ENV=production` and an isolated `test-db`, behind a local [Caddy](https://caddyserver.com/) reverse proxy that terminates TLS at `https://voneo.test`. Caddy forwards everything to the frontend, which proxies the API and WebSocket routes itself (`web-server/src/server.mjs`), as it does on Cloud Run. This lets the suite exercise real production-only behavior (`Secure` cookies, the `ALLOWED_ORIGIN` CORS/WS-origin allowlist) without needing a deployed GCP environment or incurring any cloud cost — see `e2e/compose.e2e.yaml` and `e2e/Caddyfile`.
+E2e tests (`e2e/**/*.spec.ts`) run against a **prod-mode simulation** of the app rather than the local dev containers or a real deployed environment: the existing `signalling-server-prod`/`web-server-prod`/`mysql-db` compose services, run with `NODE_ENV=production` and an isolated `test-db`, behind a local [Caddy](https://caddyserver.com/) reverse proxy that terminates TLS at `https://voneo.test`. Caddy forwards everything to the frontend, which proxies the API and WebSocket routes itself (`web-server/src/server.mjs`), as it does on Cloud Run. This lets the suite exercise real production-only behavior (`Secure` cookies, the `ALLOWED_ORIGIN` CORS/WS-origin allowlist) without needing a deployed GCP environment or incurring any cloud cost — see `e2e/compose.e2e.yaml` and `e2e/Caddyfile`.
+
+**Layout:** each Playwright project (see `playwright.config.ts`) runs the specs in the `e2e/` folder named after it:
+
+```
+e2e/
+├── chromium/          # `chromium` project: desktop viewport
+│   ├── auth.spec.ts   #   sign up, log in, log out
+│   ├── call.spec.ts   #   create/join, both videos, chat, hang up (@happy-path)
+│   ├── chat.spec.ts   #   a chat message reaches the other participant
+│   └── media.spec.ts  #   video flows directly between peers on one network
+├── mobile-chromium/   # `mobile-chromium` project: Pixel 7 viewport, the web app's mobile layout
+│   └── mobile-call.spec.ts  # a full call through the phone layout (@happy-path)
+├── nat/               # `nat-traversal` project, only with `npm run test:e2e:nat`
+│   └── nat-traversal.spec.ts
+├── support/           # helpers shared by the specs (sign-up, WebRTC stats, video checks)
+└── global-setup.ts    # truncates test-db before a local run
+```
 
 **One-time local setup:** add a hosts file entry pointing `voneo.test` at `127.0.0.1`:
 
@@ -404,13 +431,15 @@ npm run test:e2e
 
 This brings up the e2e compose stack (building fresh images), runs Playwright, and tears the stack down afterwards regardless of outcome. Stop `npm run dev` first — the e2e stack publishes the same fixed host ports (`3000`, `8080`, `3306`, plus `443` for the Caddy proxy) and the two will collide.
 
+To watch the specs run or step through them, use `npm run test:e2e:interactive`, which opens Playwright's UI mode. The stack stays up until you close the UI window. Extra Playwright arguments go after `--` (quoted as `'--'` in PowerShell), e.g. `npm run test:e2e:interactive '--' --project=mobile-chromium`.
+
 Camera/microphone are faked via Chromium's `--use-fake-device-for-media-stream` flag (see `playwright.config.ts`), so no real hardware or OS permission prompts are needed. Test data is isolated per run: `e2e/global-setup.ts` truncates the `test-db` tables before the suite starts, and specs create their own users with unique emails rather than relying on any pre-seeded data.
 
 **In CI:** `pr-dev.yml` and `pr-main.yml` run all their jobs on every PR, whatever files it changes, to catch regressions (there's no path filtering).
 
-**Browser coverage:** only the `chromium` Playwright project is configured — no Firefox or WebKit. This is deliberate, for dev speed/simplicity, and because the fake-media-stream flags above are Chromium-specific.
+**Browser coverage:** only Chromium is configured — no Firefox or WebKit. This is deliberate, for dev speed/simplicity, and because the fake-media-stream flags above are Chromium-specific. There are two Playwright projects (see **Layout** above): `chromium` runs `e2e/chromium/` at a desktop viewport, and `mobile-chromium` runs `e2e/mobile-chromium/` at a phone's (Pixel 7), where the app switches to its mobile layout.
 
-**Media on the same network:** `e2e/media.spec.ts` checks that both participants actually receive each other's video. It also checks, from the peer connections' ICE stats, that media flows directly and not through a relay.
+**Media on the same network:** `e2e/chromium/media.spec.ts` checks that both participants actually receive each other's video. It also checks, from the peer connections' ICE stats, that media flows directly and not through a relay.
 
 ### NAT traversal suite (STUN/TURN)
 
@@ -441,7 +470,7 @@ This suite needs no `voneo.test` hosts entry and no local Playwright browsers, b
 
 PRs also run e2e tests against a real, short-lived GCP deployment of the PR. The deployment is created, tested, then always destroyed:
 
-- **PRs into `dev`:** the `e2e-gcp-dev` job in `pr-dev.yml` uses the `dev` stack. It runs only the happy paths: the web one (`@happy-path` Playwright specs), and the mobile one (the Maestro `happy-path` flow, on an emulator with an APK built against the stack's `appUrl`). Both run on every PR, whatever it changes. The stack runs with `NODE_ENV=production`, so there are no seeded users: the job signs up the one the Maestro flow logs in as first.
+- **PRs into `dev`:** the `e2e-gcp-dev` job in `pr-dev.yml` uses the `dev` stack. It runs only the happy paths: the web ones (`@happy-path` Playwright specs, at desktop and phone viewports), and the mobile one (the Maestro `happy-path` flow, on an emulator with an APK built against the stack's `appUrl`). Both run on every PR, whatever it changes. The stack runs with `NODE_ENV=production`, so there are no seeded users: the job signs up the one the Maestro flow logs in as first.
 - **PRs into `main`:** the `e2e-gcp-prod-preview` job in `pr-main.yml` uses `prod-preview`, which has prod's settings (TURN VM included) and deploys into prod's GCP project. It runs the full web e2e suite and then every Maestro flow (after signing up the user the flows log in as, as on `dev`). Real prod isn't touched until the PR merges.
 
 The app is served from the frontend Cloud Run service's own `run.app` URL (the stack's `appUrl` output), which has real DNS and a Google-managed certificate, so no domain, hosts entry or certificate workaround is needed. You can open it on any device, including a phone. `scripts/gcp-e2e.mjs` passes it to Playwright as `E2E_BASE_URL`. To do the same from your machine, run these in `infra/`:

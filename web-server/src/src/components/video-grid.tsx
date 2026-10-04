@@ -1,49 +1,79 @@
 import React from 'react';
+import {VideoOff} from 'lucide-react';
 import {Badge} from '@/components/ui/badge.tsx';
 import {Card} from '@/components/ui/card.tsx';
+import {getLocalStream} from '@/lib/rtc-utils.ts';
+import {cn} from '@/lib/utils.ts';
 
-type RemoteStream = {
+export type RemoteStream = {
 	peerUser: string;
 	stream: MediaStream;
 };
 
+// eslint-disable-next-line @typescript-eslint/no-restricted-types -- React DOM refs are null-based, not undefined-based
+type VideoRef = React.RefObject<HTMLVideoElement | null>;
+
 type VideoGridProps = {
-	// eslint-disable-next-line @typescript-eslint/no-restricted-types -- React DOM refs are null-based, not undefined-based
-	localVideoRef: React.RefObject<HTMLVideoElement | null>;
+	localVideoRef: VideoRef;
 	remoteStreams: RemoteStream[];
+	cameraOn: boolean;
 };
 
-function VideoTile({
-	label,
+export function LocalVideo({
 	videoRef,
-	muted = false,
-	testId,
+	cameraOn,
+	mirror = false,
 }: {
-	label: string;
-	// eslint-disable-next-line @typescript-eslint/no-restricted-types -- React DOM refs are null-based, not undefined-based
-	videoRef?: React.RefObject<HTMLVideoElement | null>;
-	muted?: boolean;
-	stream?: MediaStream;
-	testId: string;
+	videoRef: VideoRef;
+	cameraOn: boolean;
+	mirror?: boolean;
 }) {
+	React.useEffect(() => {
+		if (!videoRef.current || videoRef.current.srcObject) return;
+		getLocalStream()
+			.then((stream) => {
+				if (stream && videoRef.current && !videoRef.current.srcObject)
+					videoRef.current.srcObject = stream;
+			})
+			.catch(() => undefined);
+	}, [videoRef]);
+
 	return (
-		<Card className="relative overflow-hidden bg-surface aspect-video flex items-center justify-center min-w-[280px]">
+		<>
 			<video
 				ref={videoRef}
 				autoPlay
-				muted={muted}
+				muted
 				playsInline
-				className="w-full h-full object-cover"
-				data-testid={testId}
+				className={cn(
+					'w-full h-full object-cover',
+					!cameraOn && 'invisible',
+					mirror && '-scale-x-100',
+				)}
+				data-testid="local-video"
 			/>
-			<Badge className="absolute bottom-2 left-2 bg-scrim text-ink border-0">
-				{label}
-			</Badge>
-		</Card>
+			{!cameraOn && (
+				<div
+					className="absolute inset-0 flex items-center justify-center"
+					data-testid="local-camera-off"
+				>
+					<VideoOff aria-hidden className="size-6 text-ink-muted" />
+					<span className="sr-only">Your camera is off</span>
+				</div>
+			)}
+		</>
 	);
 }
 
-function RemoteTile({peerUser, stream}: RemoteStream) {
+export function StreamVideo({
+	stream,
+	testId,
+	className,
+}: {
+	stream: MediaStream;
+	testId: string;
+	className?: string;
+}) {
 	// eslint-disable-next-line @typescript-eslint/no-restricted-types -- React DOM refs are null-based, not undefined-based
 	const ref = React.useRef<HTMLVideoElement | null>(null);
 
@@ -52,28 +82,47 @@ function RemoteTile({peerUser, stream}: RemoteStream) {
 	}, [stream]);
 
 	return (
-		<VideoTile
-			label={peerUser}
-			videoRef={ref}
-			testId={`remote-video-${peerUser}`}
+		<video
+			ref={ref}
+			autoPlay
+			playsInline
+			className={cn('w-full h-full object-cover', className)}
+			data-testid={testId}
 		/>
+	);
+}
+
+function VideoTile({
+	label,
+	children,
+}: {
+	label: string;
+	children: React.ReactNode;
+}) {
+	return (
+		<Card className="relative overflow-hidden bg-surface aspect-video flex items-center justify-center min-w-[280px]">
+			{children}
+			<Badge className="absolute bottom-2 left-2 bg-scrim text-ink border-0">
+				{label}
+			</Badge>
+		</Card>
 	);
 }
 
 export default function VideoGrid({
 	localVideoRef,
 	remoteStreams,
+	cameraOn,
 }: VideoGridProps) {
 	return (
 		<div className="flex flex-wrap gap-3 w-full">
-			<VideoTile
-				label="You"
-				videoRef={localVideoRef}
-				muted
-				testId="local-video"
-			/>
-			{remoteStreams.map((rs) => (
-				<RemoteTile key={rs.peerUser} {...rs} />
+			<VideoTile label="You">
+				<LocalVideo videoRef={localVideoRef} cameraOn={cameraOn} />
+			</VideoTile>
+			{remoteStreams.map(({peerUser, stream}) => (
+				<VideoTile key={peerUser} label={peerUser}>
+					<StreamVideo stream={stream} testId={`remote-video-${peerUser}`} />
+				</VideoTile>
 			))}
 		</div>
 	);

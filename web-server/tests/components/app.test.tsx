@@ -31,6 +31,8 @@ vi.mock('@/lib/rtc-utils.ts', () => ({
 	sendChatMessageToCall: vi.fn(),
 	closeConns: vi.fn(),
 	closeWebSocketServerConn: vi.fn(),
+	setLocalTrackEnabled: vi.fn(),
+	getLocalStream: vi.fn(async () => undefined),
 }));
 
 beforeEach(() => {

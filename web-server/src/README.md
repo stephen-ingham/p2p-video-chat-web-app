@@ -22,6 +22,16 @@ See `CLAUDE.md` in this folder for running `astro dev` in the background.
 
 **Entry:** `src/pages/index.astro` imports global CSS and renders `<App client:load />`.
 
+### Mobile layout
+
+Below Tailwind's `md` breakpoint (768px) the app follows the Android app's layout (`mobile-app/src/screens/`), so the two look and read the same on a phone:
+
+- **Auth:** labels above each field, the app's placeholders, and 48px fields and buttons. `md:` classes restore the desktop look.
+- **Before a call:** `mobile-call-setup.tsx`, stacked "Start a call" and "Join a call" cards, with no chat panel.
+- **In a call:** `mobile-in-call-view.tsx`. Other people's video fills the screen, yours sits in a corner, and round mic, camera, chat and hang-up buttons (`call-control-button.tsx`) run along the bottom. Chat opens as a bottom sheet (`chat-sheet.tsx`, wrapping `chat-panel.tsx`), and the chat button counts unread lines while it's closed.
+
+CSS can't swap one component tree for another, so `src/lib/use-is-mobile.ts` (a `matchMedia` hook) picks the layout in `CallScreen`. Only one layout renders at a time, so they share test IDs. The server renders the desktop layout, and jsdom has no `matchMedia`, so tests get the desktop layout unless they stub it (see `tests/components/mobile-call-screen.test.tsx`).
+
 ### `use-token-worker.ts`
 
 Hook that wraps the `token-worker.js` Web Worker. The Worker instance is a **module-level singleton** so all components share the same instance and the token stored after login is available to subsequent calls. Exposes: `login`, `register`, `logout`, `createCall`, `joinCall`.

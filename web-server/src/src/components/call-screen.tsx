@@ -1,5 +1,5 @@
 import React, {useRef, useState} from 'react';
-import {PhoneOff, Video, LogOut} from 'lucide-react';
+import {LogOut, Mic, MicOff, PhoneOff, Video, VideoOff} from 'lucide-react';
 import {Button} from '@/components/ui/button.tsx';
 import {Input} from '@/components/ui/input.tsx';
 import {Badge} from '@/components/ui/badge.tsx';
@@ -10,14 +10,13 @@ import {
 	sendChatMessageToCall,
 	closeConns,
 	closeWebSocketServerConn,
+	setLocalTrackEnabled,
 } from '@/lib/rtc-utils.ts';
-import VideoGrid from '@/components/video-grid.tsx';
+import {useIsMobile} from '@/lib/use-is-mobile.ts';
+import VideoGrid, {type RemoteStream} from '@/components/video-grid.tsx';
 import ChatPanel from '@/components/chat-panel.tsx';
-
-type RemoteStream = {
-	peerUser: string;
-	stream: MediaStream;
-};
+import MobileCallSetup from '@/components/mobile-call-setup.tsx';
+import MobileInCallView from '@/components/mobile-in-call-view.tsx';
 
 type CallScreenProps = {
 	email: string;
@@ -51,6 +50,9 @@ export default function CallScreen({
 		undefined,
 	);
 	const [error, setError] = useState('');
+	const [micOn, setMicOn] = useState(true);
+	const [cameraOn, setCameraOn] = useState(true);
+	const isMobile = useIsMobile();
 
 	const trimmedJoinInput = joinInput.trim();
 	const joinInputError =
@@ -64,7 +66,9 @@ export default function CallScreen({
 	}
 
 	function addParticipant(name: string) {
-		setParticipants((previous) => [...previous, name]);
+		setParticipants((previous) =>
+			previous.includes(name) ? previous : [...previous, name],
+		);
 	}
 
 	function removeParticipant(name: string) {
@@ -134,7 +138,7 @@ export default function CallScreen({
 				await fetchIceServers(),
 			);
 		} catch {
-			setError('Failed to create call.');
+			setError('Failed to create a call.');
 		} finally {
 			setLoading(undefined);
 		}
@@ -164,7 +168,7 @@ export default function CallScreen({
 				await fetchIceServers(),
 			);
 		} catch {
-			setError('Failed to join call. Check the call ID.');
+			setError('Failed to join the call. Check the call ID.');
 		} finally {
 			setLoading(undefined);
 		}
@@ -193,12 +197,24 @@ export default function CallScreen({
 			setRemoteStreams([]);
 			setParticipants([]);
 			setMessages([]);
+			setMicOn(true);
+			setCameraOn(true);
 		} catch (error_) {
-			setError('Failed to leave call. Please try again:');
+			setError('Failed to leave the call. Please try again.');
 			console.error(error_);
 		} finally {
 			setLoading(undefined);
 		}
+	}
+
+	function toggleMic() {
+		setMicOn(!micOn);
+		void setLocalTrackEnabled('audio', !micOn);
+	}
+
+	function toggleCamera() {
+		setCameraOn(!cameraOn);
+		void setLocalTrackEnabled('video', !cameraOn);
 	}
 
 	async function handleLogout() {
@@ -206,12 +222,37 @@ export default function CallScreen({
 		onLogout();
 	}
 
+	function sendChat(message: string) {
+		if (callId) sendChatMessageToCall(message, callId, email);
+	}
+
+	if (isMobile && callId) {
+		return (
+			<MobileInCallView
+				callId={callId}
+				email={email}
+				localVideoRef={localVideoRef}
+				remoteStreams={remoteStreams}
+				participants={participants}
+				messages={messages}
+				micOn={micOn}
+				cameraOn={cameraOn}
+				onToggleMic={toggleMic}
+				onToggleCamera={toggleCamera}
+				onSendChat={sendChat}
+				onHangUp={() => {
+					void handleLeave();
+				}}
+			/>
+		);
+	}
+
 	const inCall = Boolean(callId);
 
 	return (
-		<div className="min-h-screen bg-canvas text-ink flex flex-col">
+		<div className="min-h-dvh bg-canvas text-ink flex flex-col">
 			{/* Header */}
-			<header className="flex items-center justify-between px-6 py-3 border-b border-line shrink-0">
+			<header className="flex items-center justify-between gap-3 px-4 py-2 md:px-6 md:py-3 border-b border-line shrink-0">
 				<div className="flex items-center gap-2">
 					<Video className="h-5 w-5 text-ink-soft" />
 					<span className="font-semibold text-ink">Voneo</span>
@@ -225,7 +266,10 @@ export default function CallScreen({
 							{callId}
 						</Badge>
 					)}
-					<span className="text-sm text-ink-muted" data-testid="username">
+					<span
+						className="min-w-0 truncate text-[13px] md:text-sm text-ink-muted"
+						data-testid="username"
+					>
 						{username}
 					</span>
 					<Button
@@ -234,17 +278,34 @@ export default function CallScreen({
 						onClick={() => {
 							void handleLogout();
 						}}
-						className="text-ink-muted hover:text-ink hover:bg-surface-raised"
+						className="h-12 gap-2 px-3 text-base md:h-7 md:gap-1 md:px-2.5 md:text-[0.8rem] text-ink-muted hover:text-ink hover:bg-surface-raised"
 						data-testid="logout-button"
 					>
-						<LogOut className="h-4 w-4 mr-1.5" />
-						Logout
+						<LogOut className="size-5 md:size-4" />
+						Log out
 					</Button>
 				</div>
 			</header>
 
+			{isMobile && (
+				<MobileCallSetup
+					joinInput={joinInput}
+					joinInputError={joinInputError}
+					isJoinInputValid={isJoinInputValid}
+					loading={loading}
+					error={error}
+					onJoinInputChange={setJoinInput}
+					onCreate={() => {
+						void handleCreate();
+					}}
+					onJoin={() => {
+						void handleJoin();
+					}}
+				/>
+			)}
+
 			{/* Controls bar — hidden once in a call */}
-			{!inCall && (
+			{!inCall && !isMobile && (
 				<div className="flex flex-wrap items-center gap-3 px-6 py-4 border-b border-line">
 					<Button
 						onClick={() => {
@@ -254,7 +315,7 @@ export default function CallScreen({
 						className="bg-action text-on-action hover:bg-action-hover"
 						data-testid="create-call-button"
 					>
-						{loading === 'create' ? 'Creating…' : 'Create Call'}
+						{loading === 'create' ? 'Creating…' : 'Create call'}
 					</Button>
 
 					<Separator orientation="vertical" className="h-6 bg-line-strong" />
@@ -280,7 +341,7 @@ export default function CallScreen({
 							className="border-line-control bg-surface text-ink hover:bg-surface-raised hover:text-ink"
 							data-testid="join-call-button"
 						>
-							{loading === 'join' ? 'Joining…' : 'Join Call'}
+							{loading === 'join' ? 'Joining…' : 'Join call'}
 						</Button>
 					</div>
 
@@ -301,46 +362,73 @@ export default function CallScreen({
 			)}
 
 			{/* Main area */}
-			<div className="flex flex-1 overflow-hidden">
-				<div className="flex-1 flex flex-col gap-4 p-6 overflow-y-auto">
-					{inCall && (
-						<div className="flex items-center justify-between">
-							<Badge
-								variant="outline"
-								className="border-line-control text-ink-soft font-mono text-xs"
-							>
-								Call ID: <span data-testid="call-id">{callId}</span>
-							</Badge>
-							<Button
-								variant="destructive"
-								size="sm"
-								onClick={() => {
-									void handleLeave();
-								}}
-								data-testid="hang-up-button"
-							>
-								<PhoneOff className="h-4 w-4 mr-1.5" />
-								Hang Up
-							</Button>
-						</div>
-					)}
-					<VideoGrid
-						localVideoRef={localVideoRef}
-						remoteStreams={remoteStreams}
-					/>
-				</div>
+			{!isMobile && (
+				<div className="flex flex-1 overflow-hidden">
+					<div className="flex-1 flex flex-col gap-4 p-6 overflow-y-auto">
+						{inCall && (
+							<div className="flex items-center justify-between">
+								<Badge
+									variant="outline"
+									className="border-line-control text-ink-soft font-mono text-xs"
+								>
+									Call ID: <span data-testid="call-id">{callId}</span>
+								</Badge>
+								<div className="flex items-center gap-2">
+									<Button
+										variant="outline"
+										size="icon-sm"
+										role="switch"
+										aria-checked={micOn}
+										aria-label="Microphone"
+										onClick={toggleMic}
+										className="border-line-control bg-surface text-ink hover:bg-surface-raised hover:text-ink"
+										data-testid="mic-toggle"
+									>
+										{micOn ? <Mic /> : <MicOff />}
+									</Button>
+									<Button
+										variant="outline"
+										size="icon-sm"
+										role="switch"
+										aria-checked={cameraOn}
+										aria-label="Camera"
+										onClick={toggleCamera}
+										className="border-line-control bg-surface text-ink hover:bg-surface-raised hover:text-ink"
+										data-testid="camera-toggle"
+									>
+										{cameraOn ? <Video /> : <VideoOff />}
+									</Button>
+									<Button
+										variant="destructive"
+										size="sm"
+										onClick={() => {
+											void handleLeave();
+										}}
+										data-testid="hang-up-button"
+									>
+										<PhoneOff className="h-4 w-4 mr-1.5" />
+										Hang up
+									</Button>
+								</div>
+							</div>
+						)}
+						<VideoGrid
+							localVideoRef={localVideoRef}
+							remoteStreams={remoteStreams}
+							cameraOn={cameraOn}
+						/>
+					</div>
 
-				{/* Chat sidebar */}
-				<div className="w-80 shrink-0 border-l border-line flex flex-col">
-					<ChatPanel
-						messages={messages}
-						participants={participants}
-						onSend={(message) => {
-							if (callId) sendChatMessageToCall(message, callId, email);
-						}}
-					/>
+					{/* Chat sidebar */}
+					<div className="w-80 shrink-0 border-l border-line flex flex-col">
+						<ChatPanel
+							messages={messages}
+							participants={participants}
+							onSend={sendChat}
+						/>
+					</div>
 				</div>
-			</div>
+			)}
 		</div>
 	);
 }
