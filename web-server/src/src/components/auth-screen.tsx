@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useId, useState} from 'react';
 import {Video} from 'lucide-react';
 import {
 	Card,
@@ -16,10 +16,41 @@ import {
 import {Input} from '@/components/ui/input.tsx';
 import {Button} from '@/components/ui/button.tsx';
 import {useTokenWorker} from '@/lib/use-token-worker.ts';
+import {useIsMobile} from '@/lib/use-is-mobile.ts';
 
 type AuthScreenProps = {
 	onAuthenticated: (email: string, username: string) => void;
 };
+
+// Inputs grow to a 48px touch target below the md breakpoint, like the mobile
+// app's TextField.
+const inputClass =
+	'h-12 px-3 text-base md:h-8 md:px-2.5 md:text-sm bg-surface-raised border-line-control text-ink placeholder:text-ink-muted focus-visible:ring-focus';
+
+// A visible label above its input below the md breakpoint, as in the mobile
+// app; on desktop the placeholder shows the field's name and the label is
+// screen-reader only.
+function Field({
+	label,
+	id,
+	children,
+}: {
+	label: string;
+	id: string;
+	children: React.ReactNode;
+}) {
+	return (
+		<div className="space-y-1">
+			<label
+				htmlFor={id}
+				className="text-sm font-medium text-ink-soft md:sr-only"
+			>
+				{label}
+			</label>
+			{children}
+		</div>
+	);
+}
 
 function isValidEmail(email: string) {
 	return /^[^\s@]+@[^\s@]+\.[^\s@]+$/v.test(email);
@@ -136,6 +167,9 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 		}
 	}
 
+	const isMobile = useIsMobile();
+	const id = useId();
+
 	return (
 		<div className="min-h-screen bg-canvas flex items-center justify-center p-4">
 			<div className="w-full max-w-md space-y-6">
@@ -143,9 +177,9 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 					<div className="bg-surface-raised p-3 rounded-full">
 						<Video className="h-7 w-7 text-ink" />
 					</div>
-					<h1 className="text-2xl font-bold text-ink">Voneo</h1>
+					<h1 className="text-[28px] md:text-2xl font-bold text-ink">Voneo</h1>
 					<p className="text-sm text-ink-muted">
-						Peer-to-peer video calls, right in your browser
+						Peer-to-peer video calls, wherever you are
 					</p>
 				</div>
 
@@ -158,16 +192,16 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 					</CardHeader>
 					<CardContent>
 						<Tabs defaultValue="login">
-							<TabsList className="w-full bg-surface-raised mb-4">
+							<TabsList className="w-full bg-surface-raised mb-4 group-data-horizontal/tabs:h-12 md:group-data-horizontal/tabs:h-8">
 								<TabsTrigger
 									value="login"
-									className="flex-1 data-active:bg-surface-active data-active:text-ink text-ink-muted"
+									className="flex-1 text-base md:text-sm data-active:bg-surface-active data-active:text-ink text-ink-muted"
 								>
 									Login
 								</TabsTrigger>
 								<TabsTrigger
 									value="register"
-									className="flex-1 data-active:bg-surface-active data-active:text-ink text-ink-muted"
+									className="flex-1 text-base md:text-sm data-active:bg-surface-active data-active:text-ink text-ink-muted"
 								>
 									Register
 								</TabsTrigger>
@@ -181,43 +215,50 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 									className="space-y-3"
 									suppressHydrationWarning={true}
 								>
-									<Input
-										type="email"
-										placeholder="Email"
-										aria-label="Email"
-										value={loginForm.email}
-										onChange={(event) => {
-											setLoginForm((f) => ({...f, email: event.target.value}));
-										}}
-										required
-										className="bg-surface-raised border-line-control text-ink placeholder:text-ink-muted focus-visible:ring-focus"
-										suppressHydrationWarning={true}
-										data-testid="login-email"
-									/>
-									{loginEmailError && (
-										<p
-											className="text-xs text-danger"
-											data-testid="login-email-error"
-										>
-											{loginEmailError}
-										</p>
-									)}
-									<Input
-										type="password"
-										placeholder="Password"
-										aria-label="Password"
-										value={loginForm.password}
-										onChange={(event) => {
-											setLoginForm((f) => ({
-												...f,
-												password: event.target.value,
-											}));
-										}}
-										required
-										className="bg-surface-raised border-line-control text-ink placeholder:text-ink-muted focus-visible:ring-focus"
-										suppressHydrationWarning={true}
-										data-testid="login-password"
-									/>
+									<Field label="Email" id={`${id}-login-email`}>
+										<Input
+											id={`${id}-login-email`}
+											type="email"
+											placeholder={isMobile ? 'you@example.com' : 'Email'}
+											value={loginForm.email}
+											onChange={(event) => {
+												setLoginForm((f) => ({
+													...f,
+													email: event.target.value,
+												}));
+											}}
+											required
+											className={inputClass}
+											suppressHydrationWarning={true}
+											data-testid="login-email"
+										/>
+										{loginEmailError && (
+											<p
+												className="text-xs text-danger"
+												data-testid="login-email-error"
+											>
+												{loginEmailError}
+											</p>
+										)}
+									</Field>
+									<Field label="Password" id={`${id}-login-password`}>
+										<Input
+											id={`${id}-login-password`}
+											type="password"
+											placeholder={isMobile ? undefined : 'Password'}
+											value={loginForm.password}
+											onChange={(event) => {
+												setLoginForm((f) => ({
+													...f,
+													password: event.target.value,
+												}));
+											}}
+											required
+											className={inputClass}
+											suppressHydrationWarning={true}
+											data-testid="login-password"
+										/>
+									</Field>
 									{error && (
 										<p role="alert" className="text-sm text-danger">
 											{error}
@@ -226,7 +267,7 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 									<Button
 										type="submit"
 										disabled={loading || !isLoginValid}
-										className="w-full bg-action text-on-action hover:bg-action-hover"
+										className="h-12 w-full bg-action text-base text-on-action hover:bg-action-hover md:h-8 md:text-sm"
 										data-testid="login-submit"
 									>
 										{loading ? 'Signing in…' : 'Sign in'}
@@ -242,80 +283,90 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 									className="space-y-3"
 									suppressHydrationWarning={true}
 								>
-									<Input
-										type="text"
-										placeholder="Username"
-										aria-label="Username"
-										value={registerForm.username}
-										onChange={(event) => {
-											setRegisterForm((f) => ({
-												...f,
-												username: event.target.value,
-											}));
-										}}
-										required
-										minLength={3}
-										className="bg-surface-raised border-line-control text-ink placeholder:text-ink-muted focus-visible:ring-focus"
-										suppressHydrationWarning={true}
-										data-testid="register-username"
-									/>
-									{registerUsernameError && (
-										<p
-											className="text-xs text-danger"
-											data-testid="register-username-error"
-										>
-											{registerUsernameError}
-										</p>
-									)}
-									<Input
-										type="email"
-										placeholder="Email"
-										aria-label="Email"
-										value={registerForm.email}
-										onChange={(event) => {
-											setRegisterForm((f) => ({
-												...f,
-												email: event.target.value,
-											}));
-										}}
-										required
-										className="bg-surface-raised border-line-control text-ink placeholder:text-ink-muted focus-visible:ring-focus"
-										suppressHydrationWarning={true}
-										data-testid="register-email"
-									/>
-									{registerEmailError && (
-										<p
-											className="text-xs text-danger"
-											data-testid="register-email-error"
-										>
-											{registerEmailError}
-										</p>
-									)}
-									<Input
-										type="password"
-										placeholder="Password"
-										aria-label="Password"
-										value={registerForm.password}
-										onChange={(event) => {
-											setRegisterForm((f) => ({
-												...f,
-												password: event.target.value,
-											}));
-										}}
-										required
-										minLength={6}
-										className="bg-surface-raised border-line-control text-ink placeholder:text-ink-muted focus-visible:ring-focus"
-										suppressHydrationWarning={true}
-										data-testid="register-password"
-									/>
-									{registerPasswordError && (
-										<p
-											className="text-xs text-danger"
-											data-testid="register-password-error"
-										>
-											{registerPasswordError}
-										</p>
-									)}
+									<Field label="Username" id={`${id}-register-username`}>
+										<Input
+											id={`${id}-register-username`}
+											type="text"
+											placeholder={
+												isMobile ? 'At least 3 characters' : 'Username'
+											}
+											value={registerForm.username}
+											onChange={(event) => {
+												setRegisterForm((f) => ({
+													...f,
+													username: event.target.value,
+												}));
+											}}
+											required
+											minLength={3}
+											className={inputClass}
+											suppressHydrationWarning={true}
+											data-testid="register-username"
+										/>
+										{registerUsernameError && (
+											<p
+												className="text-xs text-danger"
+												data-testid="register-username-error"
+											>
+												{registerUsernameError}
+											</p>
+										)}
+									</Field>
+									<Field label="Email" id={`${id}-register-email`}>
+										<Input
+											id={`${id}-register-email`}
+											type="email"
+											placeholder={isMobile ? 'you@example.com' : 'Email'}
+											value={registerForm.email}
+											onChange={(event) => {
+												setRegisterForm((f) => ({
+													...f,
+													email: event.target.value,
+												}));
+											}}
+											required
+											className={inputClass}
+											suppressHydrationWarning={true}
+											data-testid="register-email"
+										/>
+										{registerEmailError && (
+											<p
+												className="text-xs text-danger"
+												data-testid="register-email-error"
+											>
+												{registerEmailError}
+											</p>
+										)}
+									</Field>
+									<Field label="Password" id={`${id}-register-password`}>
+										<Input
+											id={`${id}-register-password`}
+											type="password"
+											placeholder={
+												isMobile ? 'At least 6 characters' : 'Password'
+											}
+											value={registerForm.password}
+											onChange={(event) => {
+												setRegisterForm((f) => ({
+													...f,
+													password: event.target.value,
+												}));
+											}}
+											required
+											minLength={6}
+											className={inputClass}
+											suppressHydrationWarning={true}
+											data-testid="register-password"
+										/>
+										{registerPasswordError && (
+											<p
+												className="text-xs text-danger"
+												data-testid="register-password-error"
+											>
+												{registerPasswordError}
+											</p>
+										)}
+									</Field>
 									{error && (
 										<p role="alert" className="text-sm text-danger">
 											{error}
@@ -324,7 +375,7 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 									<Button
 										type="submit"
 										disabled={loading || !isRegisterValid}
-										className="w-full bg-action text-on-action hover:bg-action-hover"
+										className="h-12 w-full bg-action text-base text-on-action hover:bg-action-hover md:h-8 md:text-sm"
 										data-testid="register-submit"
 									>
 										{loading ? 'Creating account…' : 'Create account'}
