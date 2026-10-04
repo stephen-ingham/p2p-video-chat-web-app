@@ -55,6 +55,7 @@ Users authenticate then create or join calls through an Express.js API, which pr
 - [End-to-end tests (Playwright)](#end-to-end-tests-playwright)
   - [NAT traversal suite (STUN/TURN)](#nat-traversal-suite-stunturn)
   - [Against a GCP deployment](#against-a-gcp-deployment)
+- [Design (Figma)](#design-figma)
 - [Gotchas & Experimentation](#gotchas--experimentation)
 
 ## Overview
@@ -483,6 +484,15 @@ npm run destroy:dev
 ```
 
 The `prod-preview` equivalents end in `:prod-preview` instead.
+
+---
+
+## Design (Figma)
+
+The [Voneo design system](https://www.figma.com/design/QaDCcXHTZN7ZGxQ098CvZi) Figma file has a rough design system for both apps. 
+It contains the shared colours, spacing and Geist type scales as variables and styles, plus components matching the mobile app's and the web app's. It also has rough screens: sign-in, call setup and in-call on a phone, and in-call on desktop web. 
+
+The code is the source of truth where the two differ.
 
 ---
 

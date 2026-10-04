@@ -59,6 +59,19 @@ Pre-commit hook (Husky) runs `lint-staged` (`xo --prettier` on staged `.js`/`.cs
 
 Tickets covering development tasks for this project are recorded under a [Trello board called 'Video Chat Web App'](https://trello.com/b/PnfDFRNd/video-chat-web-app). This board should be used whenever you are asked to check on the status of or record work/tickets for this project.
 
+## Design (Figma)
+
+A rough design system and screen mockups for both clients live in the [Voneo design system](https://www.figma.com/design/QaDCcXHTZN7ZGxQ098CvZi) Figma file (file key `QaDCcXHTZN7ZGxQ098CvZi`). It was generated from the code, so the code stays the source of truth: if the two disagree, follow the code and flag the drift. The file has two pages:
+
+- **Design system:**
+  - Variables: the `Voneo colours` collection (one `Dark` mode) mirrors the repo-root `colors.json` (same names, usage notes as descriptions, `var(--color-<name>)` as web code syntax). `Voneo dimensions` holds `space/xs`–`xl` (4–24), `radius/sm`/`md`/`lg` (7/10/14), `size/touch-min` (48) and `size/call-control` (56), matching `mobile-app/src/theme/theme.ts`.
+  - Text styles: Geist, `Voneo/Android/*` (theme.ts scale, body 16) and `Voneo/Web/*` (the Tailwind sizes the web app uses, body 14). Each scale has Title, Heading, Body, Label, Caption and Mono.
+  - Lucide icons as `Icon/*` components.
+  - Component sets mirroring `mobile-app/src/components/` and the web's shadcn/ui primitives: `Button` (Variant × Platform Android/Web × State), `Call control` (the round in-call `IconButton`/`call-control-button`, with an icon swap and an unread badge), `Text field`, `Tabs`, `Card`, `Video tile`, `Chat message`, and the web-only `Badge` and `Avatar`.
+- **Screens:** rough frames built from those components: phone auth, phone call setup, phone in-call (the Android app and the web app's below-`md` layout share it), and desktop web in-call with the chat sidebar. They're approximations, not pixel specs.
+
+The owner's Figma account is on the free Starter plan, so Figma MCP calls are scarce. Read the code instead of the file where possible. Draft `use_figma` scripts locally and batch each page's work into one retry-safe script. Take screenshots inside the script (`node.screenshot()`) rather than with separate `get_screenshot`/`get_metadata` calls.
+
 ## Git Conventions
 
 Before a git commit is created, staged and pushed to the remote branch, it is essential that the changeset meets the following requirements with occasional exceptions (detailed below):
