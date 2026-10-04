@@ -24,6 +24,7 @@ const connectToCall = vi.fn();
 const sendChatMessageToCall = vi.fn();
 const closeConns = vi.fn();
 const closeWebSocketServerConn = vi.fn();
+const setLocalTrackEnabled = vi.fn();
 
 // Rtc-utils.ts drives real WebRTC/getUserMedia/WebSocket — none of which
 // jsdom implements. Mocked entirely; these tests assert CallScreen wires
@@ -41,6 +42,12 @@ vi.mock('@/lib/rtc-utils.ts', () => ({
 	},
 	async closeWebSocketServerConn(...arguments_: unknown[]): Promise<void> {
 		await closeWebSocketServerConn(...arguments_);
+	},
+	async setLocalTrackEnabled(...arguments_: unknown[]): Promise<void> {
+		await setLocalTrackEnabled(...arguments_);
+	},
+	async getLocalStream(): Promise<undefined> {
+		return undefined;
 	},
 }));
 
@@ -67,6 +74,7 @@ beforeEach(() => {
 	getIceServers.mockReset();
 	closeConns.mockReset();
 	closeWebSocketServerConn.mockReset();
+	setLocalTrackEnabled.mockReset();
 });
 
 describe('CallScreen — create call', () => {

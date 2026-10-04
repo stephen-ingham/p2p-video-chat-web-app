@@ -1,5 +1,5 @@
 import React, {useRef, useState} from 'react';
-import {PhoneOff, Video, LogOut} from 'lucide-react';
+import {LogOut, Mic, MicOff, PhoneOff, Video, VideoOff} from 'lucide-react';
 import {Button} from '@/components/ui/button.tsx';
 import {Input} from '@/components/ui/input.tsx';
 import {Badge} from '@/components/ui/badge.tsx';
@@ -10,14 +10,10 @@ import {
 	sendChatMessageToCall,
 	closeConns,
 	closeWebSocketServerConn,
+	setLocalTrackEnabled,
 } from '@/lib/rtc-utils.ts';
-import VideoGrid from '@/components/video-grid.tsx';
+import VideoGrid, {type RemoteStream} from '@/components/video-grid.tsx';
 import ChatPanel from '@/components/chat-panel.tsx';
-
-type RemoteStream = {
-	peerUser: string;
-	stream: MediaStream;
-};
 
 type CallScreenProps = {
 	email: string;
@@ -51,6 +47,8 @@ export default function CallScreen({
 		undefined,
 	);
 	const [error, setError] = useState('');
+	const [micOn, setMicOn] = useState(true);
+	const [cameraOn, setCameraOn] = useState(true);
 
 	const trimmedJoinInput = joinInput.trim();
 	const joinInputError =
@@ -195,12 +193,24 @@ export default function CallScreen({
 			setRemoteStreams([]);
 			setParticipants([]);
 			setMessages([]);
+			setMicOn(true);
+			setCameraOn(true);
 		} catch (error_) {
 			setError('Failed to leave call. Please try again:');
 			console.error(error_);
 		} finally {
 			setLoading(undefined);
 		}
+	}
+
+	function toggleMic() {
+		setMicOn(!micOn);
+		void setLocalTrackEnabled('audio', !micOn);
+	}
+
+	function toggleCamera() {
+		setCameraOn(!cameraOn);
+		void setLocalTrackEnabled('video', !cameraOn);
 	}
 
 	async function handleLogout() {
@@ -313,22 +323,49 @@ export default function CallScreen({
 							>
 								Call ID: <span data-testid="call-id">{callId}</span>
 							</Badge>
-							<Button
-								variant="destructive"
-								size="sm"
-								onClick={() => {
-									void handleLeave();
-								}}
-								data-testid="hang-up-button"
-							>
-								<PhoneOff className="h-4 w-4 mr-1.5" />
-								Hang Up
-							</Button>
+							<div className="flex items-center gap-2">
+								<Button
+									variant="outline"
+									size="icon-sm"
+									role="switch"
+									aria-checked={micOn}
+									aria-label="Microphone"
+									onClick={toggleMic}
+									className="border-line-control bg-surface text-ink hover:bg-surface-raised hover:text-ink"
+									data-testid="mic-toggle"
+								>
+									{micOn ? <Mic /> : <MicOff />}
+								</Button>
+								<Button
+									variant="outline"
+									size="icon-sm"
+									role="switch"
+									aria-checked={cameraOn}
+									aria-label="Camera"
+									onClick={toggleCamera}
+									className="border-line-control bg-surface text-ink hover:bg-surface-raised hover:text-ink"
+									data-testid="camera-toggle"
+								>
+									{cameraOn ? <Video /> : <VideoOff />}
+								</Button>
+								<Button
+									variant="destructive"
+									size="sm"
+									onClick={() => {
+										void handleLeave();
+									}}
+									data-testid="hang-up-button"
+								>
+									<PhoneOff className="h-4 w-4 mr-1.5" />
+									Hang Up
+								</Button>
+							</div>
 						</div>
 					)}
 					<VideoGrid
 						localVideoRef={localVideoRef}
 						remoteStreams={remoteStreams}
+						cameraOn={cameraOn}
 					/>
 				</div>
 

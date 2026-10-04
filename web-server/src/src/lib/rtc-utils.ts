@@ -294,6 +294,25 @@ export async function getLocalMedia(
 		});
 }
 
+// For a video element mounted after capture started (e.g. the layout changed
+// between desktop and mobile mid-call), which getLocalMedia's own ref
+// assignment missed.
+export async function getLocalStream(): Promise<MediaStream | undefined> {
+	return localMedia;
+}
+
+// Mutes the mic or turns the camera off without renegotiating: a disabled
+// track keeps its slot in every peer connection but sends silence/black.
+export async function setLocalTrackEnabled(
+	kind: 'audio' | 'video',
+	enabled: boolean,
+) {
+	if (!localMedia) return;
+	const localStream = await localMedia;
+	for (const track of localStream.getTracks())
+		if (track.kind === kind) track.enabled = enabled;
+}
+
 export async function establishWebSocketServerConn(callUrl: string) {
 	websocket = new WebSocket(callUrl);
 }
