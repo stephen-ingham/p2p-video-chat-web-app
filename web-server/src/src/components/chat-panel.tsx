@@ -12,8 +12,6 @@ type ChatPanelProps = {
 	messages: string[];
 	participants: string[];
 	onSend: (message: string) => void;
-	// The desktop sidebar, or the mobile layout's bottom sheet (ChatSheet),
-	// which adds a close button and the mobile app's larger type and targets.
 	variant?: 'sidebar' | 'sheet';
 	titleId?: string;
 	onClose?: () => void;

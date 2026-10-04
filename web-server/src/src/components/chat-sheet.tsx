@@ -8,10 +8,6 @@ type ChatSheetProps = {
 	onClose: () => void;
 };
 
-// The call's chat as a bottom sheet over the video, below the md breakpoint,
-// matching the mobile app's ChatSheet (mobile-app/src/screens/chat-sheet.tsx).
-// The sidebar doesn't fit beside video on a phone. Escape or tapping the
-// backdrop closes it, and focus returns to whatever opened it.
 export default function ChatSheet({
 	messages,
 	participants,
@@ -27,16 +23,12 @@ export default function ChatSheet({
 			document.activeElement instanceof HTMLElement
 				? document.activeElement
 				: undefined;
-		// Focus the sheet rather than the message field, so opening chat
-		// doesn't pop the on-screen keyboard over it.
 		sheetRef.current?.focus();
 		return () => {
 			opener?.focus();
 		};
 	}, []);
 
-	// The sheet is modal: Tab cycles through its own controls rather than
-	// reaching the call controls behind the backdrop.
 	function keepFocusInSheet(event: React.KeyboardEvent) {
 		const focusable = [
 			...(sheetRef.current?.querySelectorAll<HTMLElement>(

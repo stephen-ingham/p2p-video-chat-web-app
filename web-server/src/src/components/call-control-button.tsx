@@ -2,9 +2,6 @@ import React from 'react';
 import type {LucideIcon} from 'lucide-react';
 import {cn} from '@/lib/utils.ts';
 
-// A round, icon-only button for the mobile in-call controls, matching the
-// mobile app's IconButton (mobile-app/src/components/icon-button.tsx). It has
-// no visible text, so `label` is its accessible name.
 export default function CallControlButton({
 	icon: Icon,
 	label,
@@ -20,9 +17,7 @@ export default function CallControlButton({
 	onClick: () => void;
 	danger?: boolean;
 	disabled?: boolean;
-	// For on/off controls (mic, camera). Undefined for plain buttons.
 	checked?: boolean;
-	// A small count on the corner, e.g. unread chat messages.
 	badge?: number;
 	testId?: string;
 }) {

@@ -32,10 +32,6 @@ type MobileInCallViewProps = {
 	onHangUp: () => void;
 };
 
-// The in-call UI below the md breakpoint, matching the mobile app's
-// InCallView (mobile-app/src/screens/in-call-view.tsx): everyone else's video
-// fills the screen, yours sits in a corner, the controls run along the bottom
-// within thumb reach, and chat opens as a sheet.
 export default function MobileInCallView({
 	callId,
 	email,
@@ -53,11 +49,9 @@ export default function MobileInCallView({
 	const [chatOpen, setChatOpen] = useState(false);
 	const [seenMessages, setSeenMessages] = useState(0);
 
-	// Messages count as read while the sheet is open.
 	useEffect(() => {
 		if (chatOpen) setSeenMessages(messages.length);
 	}, [chatOpen, messages.length]);
-	// Your own lines (including the server's echo of your join) aren't news.
 	const unread = chatOpen
 		? 0
 		: messages
@@ -78,8 +72,6 @@ export default function MobileInCallView({
 								stream={stream}
 								testId={`remote-video-${peerUser}`}
 							/>
-							{/* The bottom tile's label sits above the controls, beside your
-							    own tile, rather than under them. */}
 							<span
 								className={cn(
 									'absolute left-2 truncate rounded-[5px] bg-scrim px-2 py-0.5 text-[13px] text-ink',

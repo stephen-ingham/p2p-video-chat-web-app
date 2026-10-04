@@ -24,9 +24,6 @@ type MobileCallSetupProps = {
 const cardClass = 'bg-surface border-line ring-0 border';
 const titleClass = 'text-ink text-lg font-semibold';
 
-// Create or join a call below the md breakpoint, matching the mobile app's
-// CallScreen (mobile-app/src/screens/call-screen.tsx): the desktop's one-row
-// controls bar becomes two stacked, full-width cards, for thumbs.
 export default function MobileCallSetup({
 	joinInput,
 	joinInputError,
