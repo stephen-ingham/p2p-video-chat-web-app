@@ -212,8 +212,6 @@ describe('CallScreen — join call', () => {
 
 describe('CallScreen — participants', () => {
 	it('lists a participant once when they are announced twice', async () => {
-		// A joiner reaches existing participants through both the join notice
-		// and, on reconnects, the current-participants list.
 		createCall.mockResolvedValueOnce({callID: 'call-1'});
 		connectToCall.mockImplementationOnce(
 			async (

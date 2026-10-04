@@ -21,8 +21,6 @@ const connectToCall = vi.fn();
 const sendChatMessageToCall = vi.fn();
 const setLocalTrackEnabled = vi.fn();
 
-// As in call-screen.test.tsx: jsdom has no WebRTC, so rtc-utils.ts is mocked
-// and these tests drive CallScreen through the callbacks it hands over.
 vi.mock('@/lib/rtc-utils.ts', () => ({
 	async connectToCall(...arguments_: unknown[]): Promise<void> {
 		await connectToCall(...arguments_);
@@ -53,7 +51,6 @@ type CallCallbacks = {
 	addRemoteVideo: (peerUser: string, stream: MediaStream) => void;
 };
 
-// Narrows the viewport below the md breakpoint, as useIsMobile reads it.
 function setViewportMobile(matches: boolean) {
 	vi.stubGlobal(
 		'matchMedia',
@@ -66,8 +63,6 @@ function setViewportMobile(matches: boolean) {
 	);
 }
 
-// Creates a call and returns the callbacks rtc-utils would call with
-// participants, chat and remote video.
 async function startCall(user: ReturnType<typeof userEvent.setup>) {
 	let callbacks: CallCallbacks | undefined;
 	createCall.mockResolvedValueOnce({callID: 'call-1'});
@@ -91,7 +86,6 @@ async function startCall(user: ReturnType<typeof userEvent.setup>) {
 		expect(callbacks).toBeDefined();
 	});
 	const {addChatMessage, addParticipant, addRemoteVideo} = callbacks!;
-	// They update CallScreen's state from outside React, as rtc-utils does.
 	return {
 		addChatMessage(message: string) {
 			act(() => {
