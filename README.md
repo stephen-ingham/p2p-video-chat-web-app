@@ -117,12 +117,17 @@ video-chat-application/
 │           │   ├── auth-screen.tsx # Login + register tabs (shown when logged out)
 │           │   ├── call-screen.tsx # Create/join call controls, video grid, chat sidebar
 │           │   ├── video-grid.tsx  # Local + remote video tiles
-│           │   ├── chat-panel.tsx  # Chat message list + send input
+│           │   ├── chat-panel.tsx  # Chat message list + send input (sidebar, or the mobile chat sheet)
+│           │   ├── mobile-call-setup.tsx   # Phones: stacked "Start a call" / "Join a call" cards
+│           │   ├── mobile-in-call-view.tsx # Phones: full-screen call with a bottom control bar
+│           │   ├── chat-sheet.tsx          # Phones: chat as a bottom sheet
+│           │   ├── call-control-button.tsx # Phones: round in-call control button
 │           │   └── ui/          # shadcn/ui primitives
 │           ├── lib/
 │           │   ├── rtc-utils.ts # WebRTC helpers (media, peer connections, WS messaging)
 │           │   ├── call-url.ts  # Builds a call's WebSocket URL from its callID + the page origin
 │           │   ├── use-token-worker.ts # Hook — module-level singleton Worker
+│           │   ├── use-is-mobile.ts # Hook — true below the md breakpoint (768px)
 │           │   └── utils.ts     # shadcn cn() class utility
 │           ├── styles/
 │           │   ├── global.css   # Tailwind v4 + shadcn CSS variable theme
@@ -369,6 +374,7 @@ The frontend in `web-server/src/` is an Astro app, server-rendered through `@ast
 - **Access token:** a Web Worker (`public/token-worker.js`) holds the JWT access token and makes every API call, so the token never touches the main thread.
 - **Colours:** the web and mobile apps share one palette, `colors.json` in the repo root, which a Tailwind plugin turns into classes like `bg-surface`.
 - **CSP:** in production, every response carries a nonce-based `Content-Security-Policy` header.
+- **Phones:** below 768px wide, the layout follows the Android app's: labelled fields, stacked setup cards, a full-screen call with mic, camera, chat and hang-up buttons along the bottom, and chat in a bottom sheet.
 - **Production:** `server.mjs` serves the built app and forwards `/auth/`, `/call/` and `/wss/` to the signalling API, so browsers only talk to the frontend's origin.
 
 See [`web-server/src/README.md`](web-server/src/README.md) for how the frontend is put together, its colour setup and its Dockerfiles.
@@ -408,7 +414,7 @@ Camera/microphone are faked via Chromium's `--use-fake-device-for-media-stream` 
 
 **In CI:** `pr-dev.yml` and `pr-main.yml` run all their jobs on every PR, whatever files it changes, to catch regressions (there's no path filtering).
 
-**Browser coverage:** only the `chromium` Playwright project is configured — no Firefox or WebKit. This is deliberate, for dev speed/simplicity, and because the fake-media-stream flags above are Chromium-specific.
+**Browser coverage:** only Chromium is configured — no Firefox or WebKit. This is deliberate, for dev speed/simplicity, and because the fake-media-stream flags above are Chromium-specific. There are two Playwright projects: `chromium` runs the specs at a desktop viewport, and `mobile-chromium` runs `e2e/mobile/` at a phone's (Pixel 7), where the app switches to its mobile layout.
 
 **Media on the same network:** `e2e/media.spec.ts` checks that both participants actually receive each other's video. It also checks, from the peer connections' ICE stats, that media flows directly and not through a relay.
 
