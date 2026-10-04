@@ -123,6 +123,20 @@ export async function expectRemoteVideoPlaying(page: Page, peer: TestUser) {
 		.toBeGreaterThan(0);
 }
 
+export async function expectLocalVideoPlaying(page: Page) {
+	const video = page.getByTestId('local-video');
+	await expect
+		.poll(
+			async () =>
+				video.evaluate((element: HTMLVideoElement) => element.videoWidth),
+			{
+				message: 'expected your own video to be rendering frames',
+				timeout: 30_000,
+			},
+		)
+		.toBeGreaterThan(0);
+}
+
 export function usesTurnRelay(pair: SelectedCandidatePair) {
 	return pair.localType === 'relay' || pair.remoteType === 'relay';
 }

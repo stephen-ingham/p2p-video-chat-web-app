@@ -1,7 +1,10 @@
 import {randomUUID} from 'node:crypto';
 import {test, expect, type Page} from '@playwright/test';
 import {openApp} from './support/app.ts';
-import {expectRemoteVideoPlaying} from './support/webrtc.ts';
+import {
+	expectLocalVideoPlaying,
+	expectRemoteVideoPlaying,
+} from './support/webrtc.ts';
 
 function uniqueUser(label: string) {
 	const suffix = randomUUID();
@@ -39,6 +42,7 @@ test('create call, join call, see and message each other, then hang up @happy-pa
 
 		await alicePage.getByTestId('create-call-button').click();
 		await expect(alicePage.getByTestId('hang-up-button')).toBeVisible();
+		await expectLocalVideoPlaying(alicePage);
 
 		const callId = (await alicePage.getByTestId('call-id').textContent()) ?? '';
 		expect(callId).toMatch(/^[\w\-]+$/v);
@@ -46,6 +50,7 @@ test('create call, join call, see and message each other, then hang up @happy-pa
 		await bobPage.getByTestId('join-call-input').fill(callId);
 		await bobPage.getByTestId('join-call-button').click();
 		await expect(bobPage.getByTestId('hang-up-button')).toBeVisible();
+		await expectLocalVideoPlaying(bobPage);
 
 		// Each email shows in both the participant list and the chat log's
 		// join line, hence .first().
