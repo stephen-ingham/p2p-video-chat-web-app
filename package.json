@@ -11,6 +11,7 @@
     "lint": "xo --prettier --ignore \"mobile-app/**\"",
     "lint:fix": "xo --prettier --fix --ignore \"mobile-app/**\"",
     "test:e2e": "node scripts/dispatch.mjs test-e2e",
+    "test:e2e:interactive": "node scripts/dispatch.mjs test-e2e --ui",
     "test:e2e:happy-path": "node scripts/dispatch.mjs test-e2e --grep @happy-path",
     "test:e2e:nat": "node scripts/dispatch.mjs test-e2e-nat",
     "prepare": "husky install"

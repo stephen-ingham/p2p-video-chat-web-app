@@ -13,7 +13,7 @@ async function expectNoHorizontalScroll(page: Page) {
 	).toBe(true);
 }
 
-test('a call on a phone: create, join, chat through the sheet, toggle media and hang up', async ({
+test('a call on a phone: create, join, chat through the sheet, toggle media and hang up @happy-path', async ({
 	browser,
 }) => {
 	const alice = await browser.newContext();
