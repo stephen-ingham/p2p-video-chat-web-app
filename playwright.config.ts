@@ -48,6 +48,9 @@ export default defineConfig({
 	},
 
 	/* Fake media device flags are Chromium-only, so that's the only browser.
+	 * `mobile-chromium` runs the e2e/mobile/ specs at a phone's viewport (still
+	 * Chromium), where the web app switches to the mobile app's layout; the
+	 * desktop specs don't run there, since that layout hides the chat sidebar.
 	 * E2E_NAT=1 (set by `npm run test:e2e:nat`) swaps in the NAT-traversal
 	 * specs instead: they drive containerised browsers on separate Docker
 	 * networks (e2e/compose.nat.yaml), so they can't run against the plain
@@ -57,8 +60,13 @@ export default defineConfig({
 		: [
 				{
 					name: 'chromium',
-					testIgnore: 'nat/**',
+					testIgnore: ['nat/**', 'mobile/**'],
 					use: {...devices['Desktop Chrome']},
+				},
+				{
+					name: 'mobile-chromium',
+					testMatch: 'mobile/**/*.spec.ts',
+					use: {...devices['Pixel 7']},
 				},
 			],
 });
