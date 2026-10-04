@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useState} from 'react';
 import {
 	MessageSquare,
 	Mic,
@@ -15,6 +15,7 @@ import {
 	type RemoteStream,
 } from '@/components/video-grid.tsx';
 import {cn} from '@/lib/utils.ts';
+import {useUnreadCount} from '@/lib/use-unread-count.ts';
 
 type MobileInCallViewProps = {
 	callId: string;
@@ -47,16 +48,7 @@ export default function MobileInCallView({
 	onHangUp,
 }: MobileInCallViewProps) {
 	const [chatOpen, setChatOpen] = useState(false);
-	const [seenMessages, setSeenMessages] = useState(0);
-
-	useEffect(() => {
-		if (chatOpen) setSeenMessages(messages.length);
-	}, [chatOpen, messages.length]);
-	const unread = chatOpen
-		? 0
-		: messages
-				.slice(seenMessages)
-				.filter((message) => !message.startsWith(`${email}: `)).length;
+	const unread = useUnreadCount(messages, chatOpen, email);
 
 	return (
 		<div className="fixed inset-0 overflow-hidden bg-canvas text-ink">
