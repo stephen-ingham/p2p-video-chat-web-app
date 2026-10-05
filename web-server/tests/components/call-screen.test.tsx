@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/naming-convention -- callID mirrors the real HTTP response shape, not variable names */
-import {act, render, screen, waitFor} from '@testing-library/react';
+import {act, render, screen, waitFor, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 import CallScreen from '@/components/call-screen.tsx';
@@ -299,10 +299,13 @@ describe('CallScreen — participants', () => {
 		await user.click(screen.getByTestId('create-call-button'));
 
 		await waitFor(() => {
-			expect(screen.getByTestId('participants')).toHaveTextContent(
-				/^bob@example\.com$/v,
-			);
+			expect(
+				within(screen.getByTestId('participants'))
+					.getAllByRole('listitem')
+					.map((item) => item.textContent),
+			).toEqual(['bob@example.com', 'alice@example.com (you)']);
 		});
+		expect(screen.getByText('In this call (2)')).toBeInTheDocument();
 	});
 });
 
@@ -419,6 +422,23 @@ describe('CallScreen — control bar', () => {
 		await user.click(chat);
 		expect(screen.queryByTestId('chat-toggle-badge')).not.toBeInTheDocument();
 		expect(screen.getByTestId('chat-message-input')).toBeInTheDocument();
+
+		await user.click(screen.getByRole('button', {name: 'Close chat'}));
+		expect(screen.queryByTestId('chat-message-input')).not.toBeInTheDocument();
+		expect(chat).toHaveAttribute('aria-expanded', 'false');
+	});
+
+	it('lists only you before anyone joins', async () => {
+		createCall.mockResolvedValueOnce({callID: 'call-1'});
+		const user = userEvent.setup();
+		renderCallScreen();
+
+		await user.click(screen.getByTestId('create-call-button'));
+
+		expect(await screen.findByText('In this call (1)')).toBeInTheDocument();
+		expect(screen.getByTestId('participants')).toHaveTextContent(
+			'alice@example.com (you)',
+		);
 	});
 
 	it('names each control in a tooltip', async () => {
