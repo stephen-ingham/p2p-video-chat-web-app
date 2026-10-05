@@ -416,11 +416,15 @@ export default function CallScreen({
 
 					{/* Chat sidebar */}
 					{chatOpen && (
-						<div className="w-80 shrink-0 border-l border-line flex flex-col">
+						<div className="w-[340px] shrink-0 border-l border-line flex flex-col">
 							<ChatPanel
 								messages={messages}
 								participants={participants}
+								currentUser={email}
 								onSend={sendChat}
+								onClose={() => {
+									setChatOpen(false);
+								}}
 							/>
 						</div>
 					)}

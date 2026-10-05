@@ -15,7 +15,70 @@ type ChatPanelProps = {
 	variant?: 'sidebar' | 'sheet';
 	titleId?: string;
 	onClose?: () => void;
+	// The sidebar lists everyone, with this user last as "(you)".
+	currentUser?: string;
 };
+
+// Everyone on the call, one per line, with this user last as "(you)".
+function ParticipantList({
+	participants,
+	currentUser,
+}: {
+	participants: string[];
+	currentUser?: string;
+}) {
+	const everyone = currentUser
+		? [...participants.filter((p) => p !== currentUser), currentUser]
+		: participants;
+
+	return (
+		<div className="mt-1">
+			<p className="text-xs text-ink-muted">In this call ({everyone.length})</p>
+			<ul
+				className="mt-1 flex flex-col text-[13px] leading-[18px] text-ink-soft"
+				data-testid="participants"
+			>
+				{everyone.map((person) => (
+					<li key={person} className="break-all">
+						{person}
+						{person === currentUser && (
+							<span className="text-ink-muted"> (you)</span>
+						)}
+					</li>
+				))}
+			</ul>
+		</div>
+	);
+}
+
+// The sheet keeps the round phone control; the sidebar has a small X.
+function CloseChatButton({
+	sheet,
+	onClose,
+}: {
+	sheet: boolean;
+	onClose: () => void;
+}) {
+	return sheet ? (
+		<CallControlButton
+			icon={X}
+			label="Close chat"
+			testId="chat-close"
+			onClick={onClose}
+		/>
+	) : (
+		<Button
+			variant="ghost"
+			size="icon-sm"
+			aria-label="Close chat"
+			className="shrink-0 text-ink-muted hover:bg-surface-raised hover:text-ink"
+			data-testid="chat-close"
+			onClick={onClose}
+		>
+			<X />
+		</Button>
+	);
+}
 
 export default function ChatPanel({
 	messages,
@@ -24,6 +87,7 @@ export default function ChatPanel({
 	variant = 'sidebar',
 	titleId,
 	onClose,
+	currentUser,
 }: ChatPanelProps) {
 	const [input, setInput] = useState('');
 	const sheet = variant === 'sheet';
@@ -37,17 +101,18 @@ export default function ChatPanel({
 	return (
 		<div
 			className={cn(
-				'flex flex-col overflow-hidden border border-line',
+				'flex flex-col overflow-hidden',
+				// The sidebar sits flat in its column (no outline, no rounded corners).
 				sheet
-					? 'min-h-0 gap-3 rounded-t-2xl bg-surface px-4 pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)]'
-					: 'h-full rounded-xl bg-canvas',
+					? 'min-h-0 gap-3 rounded-t-2xl border border-line bg-surface px-4 pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)]'
+					: 'h-full bg-canvas',
 			)}
 		>
 			<div
 				className={cn(
 					sheet
 						? 'flex items-center justify-between gap-3'
-						: 'px-4 py-3 border-b border-line',
+						: 'flex items-start justify-between gap-3 px-4 py-3 border-b border-line',
 				)}
 			>
 				<div className="min-w-0">
@@ -55,12 +120,18 @@ export default function ChatPanel({
 						id={titleId}
 						className={cn(
 							'font-semibold text-ink',
-							sheet ? 'text-lg' : 'text-sm',
+							sheet ? 'text-lg' : 'text-base',
 						)}
 					>
 						Chat
 					</p>
-					{participants.length > 0 && (
+					{!sheet && (
+						<ParticipantList
+							participants={participants}
+							currentUser={currentUser}
+						/>
+					)}
+					{sheet && participants.length > 0 && (
 						<p
 							className={cn(
 								'text-ink-muted mt-0.5',
@@ -72,14 +143,7 @@ export default function ChatPanel({
 						</p>
 					)}
 				</div>
-				{onClose && (
-					<CallControlButton
-						icon={X}
-						label="Close chat"
-						testId="chat-close"
-						onClick={onClose}
-					/>
-				)}
+				{onClose && <CloseChatButton sheet={sheet} onClose={onClose} />}
 			</div>
 
 			<ScrollArea className={sheet ? 'min-h-0 shrink' : 'flex-1 px-4 py-3'}>
