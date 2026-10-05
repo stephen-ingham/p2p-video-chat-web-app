@@ -105,7 +105,7 @@ export default function ChatPanel({
 				// The sidebar sits flat in its column (no outline, no rounded corners).
 				sheet
 					? 'min-h-0 gap-3 rounded-t-2xl border border-line bg-surface px-4 pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)]'
-					: 'h-full bg-canvas',
+					: 'h-full',
 			)}
 		>
 			<div

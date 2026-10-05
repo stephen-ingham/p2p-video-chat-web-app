@@ -82,7 +82,7 @@ export default function DesktopCallSetup({
 					</p>
 				</section>
 
-				<div className="flex flex-col gap-4">
+				<div className="grid gap-4 md:grid-cols-2 lg:flex lg:flex-col">
 					<Card className={cardClass}>
 						<CardHeader>
 							<CardTitle className={titleClass}>Start a call</CardTitle>
@@ -161,7 +161,7 @@ export default function DesktopCallSetup({
 					</Card>
 
 					{error && (
-						<p role="alert" className="text-sm text-danger">
+						<p role="alert" className="text-sm text-danger md:col-span-2">
 							{error}
 						</p>
 					)}

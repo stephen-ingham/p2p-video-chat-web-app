@@ -6,6 +6,13 @@ import {useCopyToClipboard} from '@/lib/use-copy-to-clipboard.ts';
 // Figma "Call ID chip": caption, the ID in mono and a copy button. The
 // toast sits under the header's right edge, so the header must be
 // `relative`.
+// "7be50146-a0d6-…-e17107a00d02" -> "7be50146…7a00d02".
+export function shortenMiddle(id: string, head = 8, tail = 7) {
+	return id.length <= head + tail + 1
+		? id
+		: `${id.slice(0, head)}…${id.slice(-tail)}`;
+}
+
 export default function CallIdChip({callId}: {callId: string}) {
 	const {status, copy} = useCopyToClipboard();
 
@@ -13,11 +20,16 @@ export default function CallIdChip({callId}: {callId: string}) {
 		<>
 			<div className="flex h-9 min-w-0 items-center gap-2 rounded-full border border-line-control bg-surface pr-1.5 pl-3.5">
 				<span className="shrink-0 text-xs text-ink-muted">Call ID</span>
+				{/* Below lg the ID is shortened in the middle to fit the header.
+				    The full ID stays in the DOM (screen readers, e2e, copying). */}
 				<span
-					className="min-w-0 truncate font-mono text-xs text-ink-soft"
+					className="sr-only font-mono text-xs text-ink-soft lg:not-sr-only"
 					data-testid="call-id"
 				>
 					{callId}
+				</span>
+				<span aria-hidden className="font-mono text-xs text-ink-soft lg:hidden">
+					{shortenMiddle(callId)}
 				</span>
 				<button
 					type="button"

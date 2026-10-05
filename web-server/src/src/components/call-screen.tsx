@@ -12,6 +12,7 @@ import {
 	stopLocalMedia,
 } from '@/lib/rtc-utils.ts';
 import {useIsMobile} from '@/lib/use-is-mobile.ts';
+import {useIsDesktop} from '@/lib/use-is-desktop.ts';
 import {cn} from '@/lib/utils.ts';
 import {useUnreadCount} from '@/lib/use-unread-count.ts';
 import VideoGrid, {type RemoteStream} from '@/components/video-grid.tsx';
@@ -63,6 +64,7 @@ export default function CallScreen({
 	const mediaChoices = useRef({micOn: true, cameraOn: true});
 	const [previewError, setPreviewError] = useState('');
 	const isMobile = useIsMobile();
+	const isDesktop = useIsDesktop();
 	const inCall = Boolean(callId);
 
 	// Desktop lobby: preview the camera before a call. The same stream is sent
@@ -172,6 +174,9 @@ export default function CallScreen({
 			console.log('result of createCall:', result);
 			if (typeof result === 'string') throw new Error(result);
 			const {callID: newCallId} = result;
+			// Chat starts open beside the grid on desktop; on tablets it would
+			// cover the video, so it starts closed there.
+			setChatOpen(isDesktop);
 			setCallId(newCallId);
 
 			await connectToCall(
@@ -204,6 +209,7 @@ export default function CallScreen({
 			const joinResult = await joinCall(trimmedJoinInput);
 			if (joinResult === 'Join new call failed')
 				throw new Error('Join new call failed');
+			setChatOpen(isDesktop);
 			setCallId(trimmedJoinInput);
 			await connectToCall(
 				trimmedJoinInput,
@@ -252,7 +258,6 @@ export default function CallScreen({
 			setMessages([]);
 			setMicOn(true);
 			setCameraOn(true);
-			setChatOpen(true);
 			mediaChoices.current = {micOn: true, cameraOn: true};
 			// Phones have no lobby preview, so release the camera; the desktop
 			// lobby keeps showing it.
@@ -317,11 +322,11 @@ export default function CallScreen({
 		>
 			{/* Header */}
 			<header className="relative flex items-center justify-between gap-3 px-4 py-2 md:px-6 md:py-3 border-b border-line shrink-0">
-				<div className="flex items-center gap-2">
+				<div className="flex shrink-0 items-center gap-2">
 					<Video className="h-5 w-5 text-ink-soft" />
 					<span className="font-semibold text-ink">Voneo</span>
 				</div>
-				<div className="flex items-center gap-3">
+				<div className="flex min-w-0 items-center gap-3">
 					{callId && <CallIdChip callId={callId} />}
 					<span
 						className="min-w-0 truncate text-[13px] md:text-sm text-ink-muted"
@@ -386,7 +391,7 @@ export default function CallScreen({
 
 			{/* Main area — the chat sidebar only exists during a call */}
 			{inCall && !isMobile && (
-				<div className="flex min-h-0 flex-1 overflow-hidden">
+				<div className="relative flex min-h-0 flex-1 overflow-hidden">
 					<div className="flex min-w-0 flex-1 flex-col gap-4 p-6">
 						{error && (
 							<p role="alert" className="text-sm text-danger">
@@ -416,7 +421,17 @@ export default function CallScreen({
 
 					{/* Chat sidebar */}
 					{chatOpen && (
-						<div className="w-[340px] shrink-0 border-l border-line flex flex-col">
+						<div
+							className={cn(
+								'flex w-[340px] flex-col',
+								// Tablet (md–lg): a card floating over the video, stopping
+								// above the control bar so Hang up stays reachable.
+								'absolute top-4 right-4 bottom-[114px] z-30 overflow-hidden rounded-xl border border-line bg-surface shadow-[0_12px_32px_rgb(0_0_0/0.5)]',
+								// Desktop (lg+): a sidebar the grid reflows around.
+								'lg:static lg:z-auto lg:shrink-0 lg:rounded-none lg:border-0 lg:border-l lg:bg-canvas lg:shadow-none',
+							)}
+							data-testid="chat-panel"
+						>
 							<ChatPanel
 								messages={messages}
 								participants={participants}
