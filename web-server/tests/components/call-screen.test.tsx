@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/naming-convention -- callID mirrors the real HTTP response shape, not variable names */
 import {act, render, screen, waitFor, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import {beforeEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import CallScreen from '@/components/call-screen.tsx';
 
 const createCall = vi.fn();
@@ -450,5 +450,35 @@ describe('CallScreen — control bar', () => {
 		await user.hover(await screen.findByTestId('mic-toggle'));
 
 		expect(await screen.findByText('Mute')).toBeInTheDocument();
+	});
+});
+
+describe('CallScreen — tablet', () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it('starts with the chat overlay closed, and opens it from the Chat control', async () => {
+		// Neither the phone (< md) nor the desktop (>= lg) query matches.
+		vi.stubGlobal(
+			'matchMedia',
+			vi.fn((query: string) => ({
+				matches: false,
+				media: query,
+				addEventListener: vi.fn(),
+				removeEventListener: vi.fn(),
+			})),
+		);
+		createCall.mockResolvedValueOnce({callID: 'call-1'});
+		const user = userEvent.setup();
+		renderCallScreen();
+
+		await user.click(screen.getByTestId('create-call-button'));
+		const chat = await screen.findByTestId('chat-toggle');
+		expect(chat).toHaveAttribute('aria-expanded', 'false');
+		expect(screen.queryByTestId('chat-panel')).not.toBeInTheDocument();
+
+		await user.click(chat);
+		expect(screen.getByTestId('chat-panel')).toBeInTheDocument();
 	});
 });

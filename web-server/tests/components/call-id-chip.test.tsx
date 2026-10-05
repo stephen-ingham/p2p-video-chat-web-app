@@ -1,7 +1,7 @@
 import {act, render, screen} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import CallIdChip from '@/components/call-id-chip.tsx';
+import CallIdChip, {shortenMiddle} from '@/components/call-id-chip.tsx';
 
 const callId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 
@@ -56,5 +56,15 @@ describe('CallIdChip', () => {
 		expect(
 			await screen.findByText("Couldn't copy. Select the ID instead."),
 		).toBeInTheDocument();
+	});
+});
+
+describe('shortenMiddle', () => {
+	it('keeps the start and end of a call ID', () => {
+		expect(shortenMiddle(callId)).toBe('a1b2c3d4…4567890');
+	});
+
+	it('leaves short strings alone', () => {
+		expect(shortenMiddle('abc')).toBe('abc');
 	});
 });
