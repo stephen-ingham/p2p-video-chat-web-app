@@ -13,39 +13,13 @@ import {
 	TabsList,
 	TabsTrigger,
 } from '@/components/ui/tabs.tsx';
-import {Input} from '@/components/ui/input.tsx';
 import {Button} from '@/components/ui/button.tsx';
 import {useTokenWorker} from '@/lib/use-token-worker.ts';
-import {useIsMobile} from '@/lib/use-is-mobile.ts';
+import {PasswordField, TextField} from '@/components/auth-field.tsx';
 
 type AuthScreenProps = {
 	onAuthenticated: (email: string, username: string) => void;
 };
-
-const inputClass =
-	'h-12 px-3 text-base md:h-8 md:px-2.5 md:text-sm bg-surface-raised border-line-control text-ink placeholder:text-ink-muted focus-visible:ring-focus';
-
-function Field({
-	label,
-	id,
-	children,
-}: {
-	label: string;
-	id: string;
-	children: React.ReactNode;
-}) {
-	return (
-		<div className="space-y-1">
-			<label
-				htmlFor={id}
-				className="text-sm font-medium text-ink-soft md:sr-only"
-			>
-				{label}
-			</label>
-			{children}
-		</div>
-	);
-}
 
 function isValidEmail(email: string) {
 	return /^[^\s@]+@[^\s@]+\.[^\s@]+$/v.test(email);
@@ -86,6 +60,8 @@ function validateRegisterForm(form: {
 	};
 }
 
+const genericError = 'Something went wrong. Please try again.';
+
 export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 	const {login, register} = useTokenWorker();
 
@@ -95,7 +71,10 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 		email: '',
 		password: '',
 	});
+	// Any failed request. Kept generic until the API's error cases are mapped
+	// to specific messages (Trello Awy72A9S).
 	const [error, setError] = useState('');
+	const [passwordVisible, setPasswordVisible] = useState(false);
 	const [loading, setLoading] = useState(false);
 
 	const {emailError: loginEmailError, isValid: isLoginValid} =
@@ -111,17 +90,18 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 		event.preventDefault();
 		if (!isLoginValid) return;
 		setError('');
+		setPasswordVisible(false);
 		setLoading(true);
 		try {
 			const result = await login(loginForm.email, loginForm.password);
 			if (result === 'Login failed') {
-				setError('Invalid email or password.');
+				setError(genericError);
 				return;
 			}
 
 			onAuthenticated(loginForm.email, loginForm.email.split('@')[0]);
 		} catch {
-			setError('Something went wrong. Please try again.');
+			setError(genericError);
 		} finally {
 			setLoading(false);
 		}
@@ -131,6 +111,7 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 		event.preventDefault();
 		if (!isRegisterValid) return;
 		setError('');
+		setPasswordVisible(false);
 		setLoading(true);
 		try {
 			const result = await register(
@@ -139,7 +120,7 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 				registerForm.password,
 			);
 			if (result === 'Signup failed') {
-				setError('Registration failed. Email may already be in use.');
+				setError(genericError);
 				return;
 			}
 
@@ -156,13 +137,12 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 
 			onAuthenticated(registerForm.email, registerForm.username);
 		} catch {
-			setError('Something went wrong. Please try again.');
+			setError(genericError);
 		} finally {
 			setLoading(false);
 		}
 	}
 
-	const isMobile = useIsMobile();
 	const id = useId();
 
 	return (
@@ -186,7 +166,13 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 						</CardDescription>
 					</CardHeader>
 					<CardContent>
-						<Tabs defaultValue="login">
+						<Tabs
+							defaultValue="login"
+							onValueChange={() => {
+								setError('');
+								setPasswordVisible(false);
+							}}
+						>
 							<TabsList className="w-full bg-surface-raised mb-4 group-data-horizontal/tabs:h-12 md:group-data-horizontal/tabs:h-8">
 								<TabsTrigger
 									value="login"
@@ -210,50 +196,41 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 									className="space-y-3"
 									suppressHydrationWarning={true}
 								>
-									<Field label="Email" id={`${id}-login-email`}>
-										<Input
-											id={`${id}-login-email`}
-											type="email"
-											placeholder={isMobile ? 'you@example.com' : 'Email'}
-											value={loginForm.email}
-											onChange={(event) => {
-												setLoginForm((f) => ({
-													...f,
-													email: event.target.value,
-												}));
-											}}
-											required
-											className={inputClass}
-											suppressHydrationWarning={true}
-											data-testid="login-email"
-										/>
-										{loginEmailError && (
-											<p
-												className="text-xs text-danger"
-												data-testid="login-email-error"
-											>
-												{loginEmailError}
-											</p>
-										)}
-									</Field>
-									<Field label="Password" id={`${id}-login-password`}>
-										<Input
-											id={`${id}-login-password`}
-											type="password"
-											placeholder={isMobile ? undefined : 'Password'}
-											value={loginForm.password}
-											onChange={(event) => {
-												setLoginForm((f) => ({
-													...f,
-													password: event.target.value,
-												}));
-											}}
-											required
-											className={inputClass}
-											suppressHydrationWarning={true}
-											data-testid="login-password"
-										/>
-									</Field>
+									<TextField
+										label="Email"
+										id={`${id}-login-email`}
+										type="email"
+										autoComplete="email"
+										placeholder="you@example.com"
+										value={loginForm.email}
+										error={loginEmailError}
+										errorTestId="login-email-error"
+										onChange={(event) => {
+											setLoginForm((f) => ({
+												...f,
+												email: event.target.value,
+											}));
+										}}
+										required
+										data-testid="login-email"
+									/>
+									<PasswordField
+										label="Password"
+										id={`${id}-login-password`}
+										autoComplete="current-password"
+										value={loginForm.password}
+										visible={passwordVisible}
+										toggleTestId="login-password-toggle"
+										onVisibleChange={setPasswordVisible}
+										onChange={(event) => {
+											setLoginForm((f) => ({
+												...f,
+												password: event.target.value,
+											}));
+										}}
+										required
+										data-testid="login-password"
+									/>
 									{error && (
 										<p role="alert" className="text-sm text-danger">
 											{error}
@@ -278,90 +255,64 @@ export default function AuthScreen({onAuthenticated}: AuthScreenProps) {
 									className="space-y-3"
 									suppressHydrationWarning={true}
 								>
-									<Field label="Username" id={`${id}-register-username`}>
-										<Input
-											id={`${id}-register-username`}
-											type="text"
-											placeholder={
-												isMobile ? 'At least 3 characters' : 'Username'
-											}
-											value={registerForm.username}
-											onChange={(event) => {
-												setRegisterForm((f) => ({
-													...f,
-													username: event.target.value,
-												}));
-											}}
-											required
-											minLength={3}
-											className={inputClass}
-											suppressHydrationWarning={true}
-											data-testid="register-username"
-										/>
-										{registerUsernameError && (
-											<p
-												className="text-xs text-danger"
-												data-testid="register-username-error"
-											>
-												{registerUsernameError}
-											</p>
-										)}
-									</Field>
-									<Field label="Email" id={`${id}-register-email`}>
-										<Input
-											id={`${id}-register-email`}
-											type="email"
-											placeholder={isMobile ? 'you@example.com' : 'Email'}
-											value={registerForm.email}
-											onChange={(event) => {
-												setRegisterForm((f) => ({
-													...f,
-													email: event.target.value,
-												}));
-											}}
-											required
-											className={inputClass}
-											suppressHydrationWarning={true}
-											data-testid="register-email"
-										/>
-										{registerEmailError && (
-											<p
-												className="text-xs text-danger"
-												data-testid="register-email-error"
-											>
-												{registerEmailError}
-											</p>
-										)}
-									</Field>
-									<Field label="Password" id={`${id}-register-password`}>
-										<Input
-											id={`${id}-register-password`}
-											type="password"
-											placeholder={
-												isMobile ? 'At least 6 characters' : 'Password'
-											}
-											value={registerForm.password}
-											onChange={(event) => {
-												setRegisterForm((f) => ({
-													...f,
-													password: event.target.value,
-												}));
-											}}
-											required
-											minLength={6}
-											className={inputClass}
-											suppressHydrationWarning={true}
-											data-testid="register-password"
-										/>
-										{registerPasswordError && (
-											<p
-												className="text-xs text-danger"
-												data-testid="register-password-error"
-											>
-												{registerPasswordError}
-											</p>
-										)}
-									</Field>
+									<TextField
+										label="Username"
+										id={`${id}-register-username`}
+										type="text"
+										autoComplete="username"
+										placeholder="At least 3 characters"
+										value={registerForm.username}
+										error={registerUsernameError}
+										errorTestId="register-username-error"
+										onChange={(event) => {
+											setRegisterForm((f) => ({
+												...f,
+												username: event.target.value,
+											}));
+										}}
+										required
+										minLength={3}
+										data-testid="register-username"
+									/>
+									<TextField
+										label="Email"
+										id={`${id}-register-email`}
+										type="email"
+										autoComplete="email"
+										placeholder="you@example.com"
+										value={registerForm.email}
+										error={registerEmailError}
+										errorTestId="register-email-error"
+										onChange={(event) => {
+											setRegisterForm((f) => ({
+												...f,
+												email: event.target.value,
+											}));
+										}}
+										required
+										data-testid="register-email"
+									/>
+									<PasswordField
+										label="Password"
+										id={`${id}-register-password`}
+										autoComplete="new-password"
+										placeholder="At least 6 characters"
+										value={registerForm.password}
+										error={registerPasswordError}
+										errorTestId="register-password-error"
+										visible={passwordVisible}
+										toggleTestId="register-password-toggle"
+										onVisibleChange={setPasswordVisible}
+										onChange={(event) => {
+											setRegisterForm((f) => ({
+												...f,
+												password: event.target.value,
+											}));
+										}}
+										required
+										minLength={6}
+										data-testid="register-password"
+									/>
 									{error && (
 										<p role="alert" className="text-sm text-danger">
 											{error}
