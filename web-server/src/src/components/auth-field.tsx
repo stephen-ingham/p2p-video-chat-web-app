@@ -70,6 +70,9 @@ export function PasswordField({
 		<TextField
 			{...props}
 			type={visible ? 'text' : 'password'}
+			spellCheck={false}
+			autoCorrect="off"
+			autoCapitalize="off"
 			className="pr-12 md:pr-8"
 		>
 			<button
