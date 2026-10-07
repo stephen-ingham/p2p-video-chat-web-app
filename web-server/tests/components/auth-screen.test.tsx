@@ -194,6 +194,19 @@ describe('AuthScreen — password visibility', () => {
 		expect(password).toHaveAttribute('type', 'password');
 	});
 
+	it('turns off spellcheck, autocorrect and autocapitalise', async () => {
+		const user = userEvent.setup();
+		render(<AuthScreen onAuthenticated={mockOnAuthenticated()} />);
+		const password = screen.getByLabelText('Password');
+
+		await user.click(screen.getByRole('button', {name: 'Show password'}));
+
+		expect(password).toHaveAttribute('type', 'text');
+		expect(password).toHaveAttribute('spellcheck', 'false');
+		expect(password).toHaveAttribute('autocorrect', 'off');
+		expect(password).toHaveAttribute('autocapitalize', 'off');
+	});
+
 	it('hides the password again when switching tabs', async () => {
 		const user = userEvent.setup();
 		render(<AuthScreen onAuthenticated={mockOnAuthenticated()} />);
