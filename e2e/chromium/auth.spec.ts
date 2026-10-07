@@ -50,7 +50,9 @@ test('login with invalid credentials shows an error', async ({page}) => {
 	await page.getByTestId('login-password').fill('wrong-password');
 	await page.getByTestId('login-submit').click();
 
-	await expect(page.getByText('Invalid email or password.')).toBeVisible();
+	await expect(page.getByRole('alert')).toHaveText(
+		'Something went wrong. Please try again.',
+	);
 });
 
 test('logout returns to the auth screen', async ({page}) => {
