@@ -15,6 +15,7 @@ import {useIsMobile} from '@/lib/use-is-mobile.ts';
 import {useIsDesktop} from '@/lib/use-is-desktop.ts';
 import {cn} from '@/lib/utils.ts';
 import {useUnreadCount} from '@/lib/use-unread-count.ts';
+import {useCallShortcuts} from '@/lib/use-call-shortcuts.ts';
 import VideoGrid, {type RemoteStream} from '@/components/video-grid.tsx';
 import ChatPanel from '@/components/chat-panel.tsx';
 import CallControlBar from '@/components/call-control-bar.tsx';
@@ -282,6 +283,17 @@ export default function CallScreen({
 		void setLocalTrackEnabled('video', !cameraOn);
 	}
 
+	function toggleChat() {
+		setChatOpen((open) => !open);
+	}
+
+	// Phones have no keyboard and no chat panel to toggle.
+	useCallShortcuts(inCall && !isMobile, {
+		onToggleMic: toggleMic,
+		onToggleCamera: toggleCamera,
+		onToggleChat: toggleChat,
+	});
+
 	async function handleLogout() {
 		await logout();
 		onLogout();
@@ -410,9 +422,7 @@ export default function CallScreen({
 							unread={unread}
 							onToggleMic={toggleMic}
 							onToggleCamera={toggleCamera}
-							onToggleChat={() => {
-								setChatOpen(!chatOpen);
-							}}
+							onToggleChat={toggleChat}
 							onHangUp={() => {
 								void handleLeave();
 							}}

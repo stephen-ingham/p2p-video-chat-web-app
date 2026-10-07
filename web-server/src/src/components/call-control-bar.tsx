@@ -14,6 +14,7 @@ import {
 	TooltipProvider,
 	TooltipTrigger,
 } from '@/components/ui/tooltip.tsx';
+import {shortcutLabel} from '@/lib/use-call-shortcuts.ts';
 
 type CallControlBarProps = {
 	micOn: boolean;
@@ -26,7 +27,7 @@ type CallControlBarProps = {
 	onHangUp: () => void;
 };
 
-// The shortcut slot is filled in by the keyboard shortcuts ticket.
+// The shortcuts themselves are handled by useCallShortcuts in CallScreen.
 function WithTooltip({
 	tip,
 	shortcut,
@@ -65,7 +66,10 @@ export default function CallControlBar({
 				aria-label="Call controls"
 				className="flex items-center gap-3 self-center rounded-full border border-line bg-surface px-3 py-2 shadow-[0_8px_24px_rgb(0_0_0/0.4)]"
 			>
-				<WithTooltip tip={micOn ? 'Mute' : 'Unmute'}>
+				<WithTooltip
+					tip={micOn ? 'Mute' : 'Unmute'}
+					shortcut={shortcutLabel('D')}
+				>
 					<CallControlButton
 						icon={micOn ? Mic : MicOff}
 						label="Microphone"
@@ -74,7 +78,10 @@ export default function CallControlBar({
 						onClick={onToggleMic}
 					/>
 				</WithTooltip>
-				<WithTooltip tip={cameraOn ? 'Turn camera off' : 'Turn camera on'}>
+				<WithTooltip
+					tip={cameraOn ? 'Turn camera off' : 'Turn camera on'}
+					shortcut={shortcutLabel('E')}
+				>
 					<CallControlButton
 						icon={cameraOn ? Video : VideoOff}
 						label="Camera"
@@ -83,7 +90,10 @@ export default function CallControlBar({
 						onClick={onToggleCamera}
 					/>
 				</WithTooltip>
-				<WithTooltip tip={chatOpen ? 'Close chat' : 'Open chat'}>
+				<WithTooltip
+					tip={chatOpen ? 'Close chat' : 'Open chat'}
+					shortcut={shortcutLabel('C', {alt: true})}
+				>
 					<CallControlButton
 						icon={MessageSquare}
 						label={unread > 0 ? `Chat, ${unread} unread` : 'Chat'}
