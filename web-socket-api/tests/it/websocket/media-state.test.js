@@ -162,4 +162,66 @@ describe('mediaState', () => {
 		bobWs.close();
 		carolWs.close();
 	});
+
+	it("forgets a participant's media state once they leave", async () => {
+		const {
+			callID,
+			alice,
+			others: [bob, carol],
+		} = await createCallWith(2);
+		const {ws: aliceWs} = await connectAndJoin(alice, callID);
+		const {ws: bobWs} = await connectAndJoin(bob, callID);
+
+		const aliceGetsBob = nextMessage(
+			aliceWs,
+			(message) => message.type === 'mediaState',
+		);
+		sendMediaState(bobWs, {
+			email: bob.email,
+			audio: false,
+			video: false,
+			callID,
+		});
+		await aliceGetsBob;
+
+		const bobLeft = nextMessage(
+			aliceWs,
+			(message) => message.type === 'participantLeftCall',
+		);
+		bobWs.close();
+		await bobLeft;
+
+		const {ws: carolWs, response} = await connectAndJoin(carol, callID);
+
+		assert.deepEqual(response.data.peerMediaStates, {});
+
+		aliceWs.close();
+		carolWs.close();
+	});
+
+	it("ignores a media state sent for someone else's email", async () => {
+		const {
+			callID,
+			alice,
+			others: [bob],
+		} = await createCallWith(1);
+		const {ws: aliceWs} = await connectAndJoin(alice, callID);
+		const {ws: bobWs} = await connectAndJoin(bob, callID);
+
+		const aliceReceives = maybeNextMessage(
+			aliceWs,
+			(message) => message.type === 'mediaState',
+		);
+		sendMediaState(bobWs, {
+			email: alice.email,
+			audio: false,
+			video: false,
+			callID,
+		});
+
+		assert.equal(await aliceReceives, undefined);
+
+		aliceWs.close();
+		bobWs.close();
+	});
 });
