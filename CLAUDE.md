@@ -153,8 +153,9 @@ If anything is noticed, whether due to the change itself or due to the change be
 
 WebSocket message protocol (client ↔ per-call WS server):
 
-- Client → server: `newParticipantOnCall`, `chatMessage`, `offer` (relayed to a named recipient).
-- Server → client: `receivedNewParticipantNotif`, `responseCurrentCallParticipants`, `offer`, `chatMessage` / `receivedNewChatMessage`.
+- Client → server: `newParticipantOnCall`, `chatMessage`, `offer` (relayed to a named recipient), `mediaState` (`{email, audio, video}`, sent after joining and on each mic/camera toggle; only accepted from the connection that joined as `email`).
+- Server → client: `receivedNewParticipantNotif`, `responseCurrentCallParticipants` (includes `peerMediaStates`, email → `{audio, video}`, for the others who have reported one), `offer`, `chatMessage` / `receivedNewChatMessage`, `mediaState` (forwarded to everyone but its sender).
+- `mediaState` exists because a disabled track only sends silence/black frames, which the other side can't reliably detect. The server keeps each participant's latest state on the call's `session-store.js` entry (`mediaStates`) and drops it on disconnect. Clients (web `rtc-utils.ts`, mobile `call-session.ts`) treat peers with no reported state as both on. The web desktop/tablet tiles show it (red mic-off in the name pill, initial avatar when the camera's off). The web phone layout and the Android UI don't yet: Trello `5Ydqi9xo`.
 
 ### Dev vs. production divergence (signalling API)
 

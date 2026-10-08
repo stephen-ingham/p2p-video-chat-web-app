@@ -472,9 +472,17 @@ components:
 #   - newParticipantOnCall
 #   - chatMessage
 #   - offer (relayed to a named recipient for WebRTC SDP exchange)
+#   - mediaState {email, audio, video, callID}: the sender's own mic/camera
+#     state, sent after newParticipantOnCall and on every toggle. Only
+#     accepted from the connection that joined as `email`.
 #
 # Server -> client messages:
 #   - receivedNewParticipantNotif
-#   - responseCurrentCallParticipants
+#   - responseCurrentCallParticipants {participants, peerMediaStates, callID,
+#     currentUserEmail}: peerMediaStates maps each other participant who has
+#     sent a mediaState to their latest {audio, video}. Participants missing
+#     from it are treated as having both on.
 #   - offer
 #   - chatMessage / receivedNewChatMessage
+#   - mediaState {email, audio, video, callID}: forwarded to everyone on the
+#     call except its sender

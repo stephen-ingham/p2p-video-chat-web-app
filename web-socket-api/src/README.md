@@ -113,18 +113,22 @@ Tokens are issued on successful **login** (`POST /auth/login`). Secrets for crea
 
 After `create` or `join`, clients build the call's WebSocket URL from the returned `callID` themselves and connect to it: `/wss/:callID`, or `/ws/:callID` when the API runs with `LOCAL=true`, on whichever host routes to the API for that client. The web app uses its own page origin (`web-server/src/src/lib/call-url.ts`: `https:` pages get `wss://<host>/wss/:callID`, `http:` pages get `ws://<host>/ws/:callID`). The API doesn't return a URL because the right host differs per client, e.g. the Android emulator reaches the dev API at `10.0.2.2:3000`. Once connected, clients send JSON messages, for example:
 
-| Client → server `type` | Purpose                                                         |
-| ---------------------- | --------------------------------------------------------------- |
-| `newParticipantOnCall` | Announce join; server replies with participants / notifications |
-| `chatMessage`          | Broadcast chat                                                  |
-| `offer`                | Relay WebRTC offer to a named recipient                         |
+| Client → server `type` | Purpose                                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------------------------ |
+| `newParticipantOnCall` | Announce join; server replies with participants / notifications                                        |
+| `chatMessage`          | Broadcast chat                                                                                         |
+| `offer`                | Relay WebRTC offer to a named recipient                                                                |
+| `mediaState`           | `{email, audio, video, callID}`: the sender's mic/camera state, sent after joining and on every toggle |
 
-| Server → client `type`                   | Purpose                     |
-| ---------------------------------------- | --------------------------- |
-| `receivedNewParticipantNotif`            | Someone joined              |
-| `responseCurrentCallParticipants`        | List of peers to connect to |
-| `offer`                                  | Forwarded SDP offer         |
-| `chatMessage` / `receivedNewChatMessage` | Chat payloads               |
+| Server → client `type`                   | Purpose                                                                                                        |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `receivedNewParticipantNotif`            | Someone joined                                                                                                 |
+| `responseCurrentCallParticipants`        | List of peers to connect to, plus `peerMediaStates` (email → `{audio, video}`) for those who have reported one |
+| `offer`                                  | Forwarded SDP offer                                                                                            |
+| `chatMessage` / `receivedNewChatMessage` | Chat payloads                                                                                                  |
+| `mediaState`                             | Another participant's mic/camera state (never echoed back to its sender)                                       |
+
+Toggling a track's `enabled` only sends silence or black frames, which the other side can't reliably detect, so clients report their mic/camera state with `mediaState` instead. The server keeps each participant's latest state in memory (`mediaStates` on the call's `session-store.js` entry), forgets it when they disconnect, and hands it to later joiners in `responseCurrentCallParticipants`. It only accepts a participant's state from the connection they joined on. Clients treat a participant with no reported state (e.g. an older client) as having both on.
 
 ## API examples
 
