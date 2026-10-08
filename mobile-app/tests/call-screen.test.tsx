@@ -50,6 +50,7 @@ beforeEach(() => {
 	mockedSignalling.connectToCall.mockResolvedValue({
 		socket: socket as unknown as WebSocket,
 		participants: [],
+		peerMediaStates: {},
 	});
 	mockedWebrtc.createPeerFactory.mockReturnValue(() => ({
 		createOffer: async () => ({type: 'offer', sdp: 'offer-sdp'}),
@@ -104,6 +105,7 @@ describe('CallScreen', () => {
 		mockedSignalling.connectToCall.mockResolvedValueOnce({
 			socket: socket as unknown as WebSocket,
 			participants: ['sam.clarence@gmail.com'],
+			peerMediaStates: {},
 		});
 		await renderScreen();
 

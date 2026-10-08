@@ -64,6 +64,7 @@ beforeEach(() => {
 	fakePeers = createFakePeers();
 	events = {
 		onParticipantJoined: jest.fn(),
+		onPeerMediaState: jest.fn(),
 		onParticipantLeft: jest.fn(),
 		onRemoteStream: jest.fn(),
 		onChat: jest.fn(),
@@ -198,5 +199,46 @@ describe('createCallSession', () => {
 		session.leave();
 		expect(fakePeers.peers[1].close).toHaveBeenCalled();
 		expect(fake.socket.close).toHaveBeenCalled();
+	});
+
+	it("reports the others' media states from joining and from mediaState messages, but not our own", async () => {
+		await startSession().start(['a@example.com'], {
+			'a@example.com': {audio: false, video: true},
+		});
+		expect(events.onPeerMediaState).toHaveBeenCalledWith('a@example.com', {
+			audio: false,
+			video: true,
+		});
+
+		await fake.receive('mediaState', {
+			email: 'a@example.com',
+			audio: true,
+			video: false,
+		});
+		await fake.receive('mediaState', {
+			email: 'me@example.com',
+			audio: false,
+			video: false,
+		});
+		await fake.receive('mediaState', {email: 'b@example.com', audio: 'no'});
+
+		expect(events.onPeerMediaState.mock.calls).toEqual([
+			['a@example.com', {audio: false, video: true}],
+			['a@example.com', {audio: true, video: false}],
+		]);
+	});
+
+	it('sends our own media state to the call', () => {
+		startSession().sendMediaState({audio: false, video: true});
+
+		expect(fake.sent).toContainEqual({
+			type: 'mediaState',
+			data: {
+				email: 'me@example.com',
+				audio: false,
+				video: true,
+				callID: 'call-1',
+			},
+		});
 	});
 });
