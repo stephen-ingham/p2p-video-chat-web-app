@@ -1,4 +1,5 @@
 import {buildCallUrl} from './call-url.ts';
+import type {MediaState} from './call-types.ts';
 
 // Connects to a call's WebSocket server and announces this user, per the
 // protocol in CLAUDE.md: send `newParticipantOnCall`, and the server replies
@@ -18,7 +19,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export type CallConnection = {
 	socket: WebSocket;
 	participants: string[];
+	// The others' mic/camera state when we joined, by email.
+	peerMediaStates: Record<string, MediaState>;
 };
+
+export function readMediaStates(value: unknown): Record<string, MediaState> {
+	if (!isRecord(value)) return {};
+	const states: Record<string, MediaState> = {};
+	for (const [peer, state] of Object.entries(value)) {
+		if (
+			isRecord(state) &&
+			typeof state.audio === 'boolean' &&
+			typeof state.video === 'boolean'
+		) {
+			states[peer] = {audio: state.audio, video: state.video};
+		}
+	}
+
+	return states;
+}
 
 export async function connectToCall(
 	{callId, email, username}: {callId: string; email: string; username: string},
@@ -85,7 +104,11 @@ export async function connectToCall(
 							typeof participant === 'string',
 					)
 				: [];
-			resolve({socket, participants});
+			resolve({
+				socket,
+				participants,
+				peerMediaStates: readMediaStates(data.peerMediaStates),
+			});
 		});
 	});
 }

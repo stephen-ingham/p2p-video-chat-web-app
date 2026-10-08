@@ -34,8 +34,13 @@ export type SocketLike = {
 	): void;
 };
 
+export type MediaState = {audio: boolean; video: boolean};
+
 export type CallEvents = {
 	onParticipantJoined(email: string): void;
+	// A peer's mic/camera state, from `mediaState` messages and the join
+	// handshake. Peers never reported are on.
+	onPeerMediaState(email: string, state: MediaState): void;
 	onParticipantLeft(email: string): void;
 	onRemoteStream(email: string, streamUrl: string): void;
 	onChat(email: string, message: string): void;

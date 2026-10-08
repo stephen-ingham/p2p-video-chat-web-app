@@ -8,6 +8,7 @@ import type {
 	CallEvents,
 	CreatePeer,
 	IceCandidate,
+	MediaState,
 	Peer,
 	SessionDescription,
 	SocketLike,
@@ -36,6 +37,13 @@ function readDescription(value: unknown): SessionDescription | undefined {
 		type: value.type,
 		sdp: typeof value.sdp === 'string' ? value.sdp : undefined,
 	};
+}
+
+function readMediaState(data: Record<string, unknown>): MediaState | undefined {
+	const {audio, video} = data;
+	if (typeof audio !== 'boolean' || typeof video !== 'boolean')
+		return undefined;
+	return {audio, video};
 }
 
 export function createCallSession(options: {
@@ -97,6 +105,14 @@ export function createCallSession(options: {
 		peers.delete(peerEmail);
 	}
 
+	// Ours isn't echoed back by the server, but don't rely on it.
+	function reportPeerMediaState(data: Record<string, unknown>) {
+		const sender = readString(data, 'email');
+		const state = readMediaState(data);
+		if (sender && sender !== email && state)
+			events.onPeerMediaState(sender, state);
+	}
+
 	async function handleMessage(type: string, data: Record<string, unknown>) {
 		switch (type) {
 			case 'receivedNewParticipantNotif': {
@@ -151,6 +167,11 @@ export function createCallSession(options: {
 				break;
 			}
 
+			case 'mediaState': {
+				reportPeerMediaState(data);
+				break;
+			}
+
 			case 'participantLeftCall': {
 				const left = readString(data, 'email');
 				closePeer(left);
@@ -179,16 +200,27 @@ export function createCallSession(options: {
 
 	return {
 		// Offers to everyone already on the call (from the join handshake's
-		// `responseCurrentCallParticipants`).
-		async start(existingParticipants: string[]) {
+		// `responseCurrentCallParticipants`), whose media states came with it.
+		async start(
+			existingParticipants: string[],
+			peerMediaStates: Record<string, MediaState> = {},
+		) {
 			for (const participant of existingParticipants) {
 				events.onParticipantJoined(participant);
+			}
+
+			for (const [peer, state] of Object.entries(peerMediaStates)) {
+				events.onPeerMediaState(peer, state);
 			}
 
 			await Promise.all(existingParticipants.map(async (p) => callPeer(p)));
 		},
 		sendChat(message: string) {
 			send('chatMessage', {email, message});
+		},
+		// Tells the others our mic/camera state: on joining, and on each toggle.
+		sendMediaState({audio, video}: MediaState) {
+			send('mediaState', {email, audio, video});
 		},
 		leave() {
 			for (const peerEmail of peers.keys()) closePeer(peerEmail);
