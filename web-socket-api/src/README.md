@@ -132,7 +132,7 @@ Toggling a track's `enabled` only sends silence or black frames, which the other
 
 ## API examples
 
-For development (when `NODE_ENV` is `dev`in `.env`) the following test users are seeded via sequelize for testing when the `signalling_server_prod` service container starts:
+For development (when `NODE_ENV` is `dev` in `.env`), the following test users are seeded via Sequelize when the API starts, which in practice means the `signalling-server-dev` container started by `npm run dev`. Stacks running with `NODE_ENV=production` (the e2e stack, GCP deployments) don't seed them:
 
 ```json
 {
