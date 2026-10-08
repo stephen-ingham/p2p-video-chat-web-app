@@ -15,6 +15,7 @@ import CallControlButton from '@/components/call-control-button.tsx';
 type DesktopCallSetupProps = {
 	// eslint-disable-next-line @typescript-eslint/no-restricted-types -- React DOM refs are null-based, not undefined-based
 	localVideoRef: React.RefObject<HTMLVideoElement | null>;
+	username: string;
 	previewError: string;
 	micOn: boolean;
 	cameraOn: boolean;
@@ -38,6 +39,7 @@ const titleClass = 'text-ink text-lg font-semibold';
 
 export default function DesktopCallSetup({
 	localVideoRef,
+	username,
 	previewError,
 	micOn,
 	cameraOn,
@@ -58,8 +60,13 @@ export default function DesktopCallSetup({
 		<main className="flex flex-1 items-center justify-center p-6">
 			<div className="grid w-full max-w-[1048px] items-center gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-12">
 				<section aria-label="Camera preview" className="flex flex-col gap-4">
-					<ParticipantTile label="You">
-						<LocalVideo mirror videoRef={localVideoRef} cameraOn={cameraOn} />
+					<ParticipantTile label="You" micOn={micOn}>
+						<LocalVideo
+							mirror
+							videoRef={localVideoRef}
+							cameraOn={cameraOn}
+							name={username}
+						/>
 					</ParticipantTile>
 					<div className="flex items-center justify-center gap-3">
 						<CallControlButton
