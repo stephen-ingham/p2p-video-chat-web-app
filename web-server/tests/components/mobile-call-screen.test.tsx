@@ -19,6 +19,7 @@ vi.mock('@/lib/use-token-worker.ts', () => ({
 
 const connectToCall = vi.fn();
 const sendChatMessageToCall = vi.fn();
+const sendMediaStateToCall = vi.fn();
 const setLocalTrackEnabled = vi.fn();
 
 vi.mock('@/lib/rtc-utils.ts', () => ({
@@ -27,6 +28,9 @@ vi.mock('@/lib/rtc-utils.ts', () => ({
 	},
 	sendChatMessageToCall(...arguments_: unknown[]): void {
 		sendChatMessageToCall(...arguments_);
+	},
+	sendMediaStateToCall(...arguments_: unknown[]): void {
+		sendMediaStateToCall(...arguments_);
 	},
 	async closeConns(): Promise<void> {
 		// Nothing to close.

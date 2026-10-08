@@ -22,6 +22,7 @@ vi.mock('@/lib/use-token-worker.ts', () => ({
 
 const connectToCall = vi.fn();
 const sendChatMessageToCall = vi.fn();
+const sendMediaStateToCall = vi.fn();
 const closeConns = vi.fn();
 const closeWebSocketServerConn = vi.fn();
 const setLocalTrackEnabled = vi.fn();
@@ -39,6 +40,9 @@ vi.mock('@/lib/rtc-utils.ts', () => ({
 	},
 	sendChatMessageToCall(...arguments_: unknown[]): void {
 		sendChatMessageToCall(...arguments_);
+	},
+	sendMediaStateToCall(...arguments_: unknown[]): void {
+		sendMediaStateToCall(...arguments_);
 	},
 	async closeConns(...arguments_: unknown[]): Promise<void> {
 		await closeConns(...arguments_);
@@ -82,6 +86,7 @@ beforeEach(() => {
 	joinCall.mockReset();
 	leaveCall.mockReset();
 	connectToCall.mockReset();
+	sendMediaStateToCall.mockReset();
 	getIceServers.mockReset();
 	closeConns.mockReset();
 	closeWebSocketServerConn.mockReset();
@@ -171,9 +176,9 @@ describe('CallScreen — create call', () => {
 });
 
 describe('CallScreen — ICE servers', () => {
-	// ConnectToCall's 12th parameter — the STUN/TURN config the peer
+	// ConnectToCall's 14th parameter — the STUN/TURN config the peer
 	// connections are created with.
-	const iceServersArgumentIndex = 11;
+	const iceServersArgumentIndex = 13;
 
 	it('passes the ICE servers fetched from the API through to connectToCall', async () => {
 		const iceServers = [
@@ -480,5 +485,108 @@ describe('CallScreen — tablet', () => {
 
 		await user.click(chat);
 		expect(screen.getByTestId('chat-panel')).toBeInTheDocument();
+	});
+});
+
+describe('CallScreen — media state', () => {
+	type MediaCallbacks = {
+		addRemoteVideo: (peerUser: string, stream: MediaStream) => void;
+		updatePeerMediaState: (
+			peerUser: string,
+			audio: boolean,
+			video: boolean,
+		) => void;
+		getMediaState: () => {audio: boolean; video: boolean};
+	};
+
+	async function startCall(user: ReturnType<typeof userEvent.setup>) {
+		let callbacks: MediaCallbacks | undefined;
+		createCall.mockResolvedValueOnce({callID: 'call-1'});
+		connectToCall.mockImplementationOnce(
+			async (
+				_callId: string,
+				_email: string,
+				_username: string,
+				_localVideoRef: unknown,
+				_remoteVideoRefs: unknown,
+				_addChatMessage: unknown,
+				_addParticipant: unknown,
+				_removeParticipant: unknown,
+				addRemoteVideo: MediaCallbacks['addRemoteVideo'],
+				updatePeerMediaState: MediaCallbacks['updatePeerMediaState'],
+				getMediaState: MediaCallbacks['getMediaState'],
+			) => {
+				callbacks = {addRemoteVideo, updatePeerMediaState, getMediaState};
+			},
+		);
+		await user.click(screen.getByTestId('create-call-button'));
+		await waitFor(() => {
+			expect(callbacks).toBeDefined();
+		});
+		return callbacks!;
+	}
+
+	it("shows a remote participant's mic and camera as off, then on again", async () => {
+		const user = userEvent.setup();
+		renderCallScreen();
+		const {addRemoteVideo, updatePeerMediaState} = await startCall(user);
+
+		act(() => {
+			addRemoteVideo('bob@example.com', fakeRemoteStream);
+		});
+		const tile = await screen.findByTestId('remote-tile-bob@example.com');
+		// No state received yet: assumed on.
+		expect(within(tile).queryByTestId('tile-mic-off')).not.toBeInTheDocument();
+		expect(
+			screen.queryByTestId('remote-camera-off-bob@example.com'),
+		).not.toBeInTheDocument();
+
+		act(() => {
+			updatePeerMediaState('bob@example.com', false, false);
+		});
+		expect(within(tile).getByTestId('tile-mic-off')).toBeInTheDocument();
+		expect(
+			screen.getByTestId('remote-camera-off-bob@example.com'),
+		).toBeInTheDocument();
+
+		act(() => {
+			updatePeerMediaState('bob@example.com', true, true);
+		});
+		expect(within(tile).queryByTestId('tile-mic-off')).not.toBeInTheDocument();
+		expect(
+			screen.queryByTestId('remote-camera-off-bob@example.com'),
+		).not.toBeInTheDocument();
+	});
+
+	it('announces the mic and camera choices made in the lobby when joining', async () => {
+		const user = userEvent.setup();
+		renderCallScreen();
+
+		await user.click(screen.getByTestId('lobby-mic-toggle'));
+		const {getMediaState} = await startCall(user);
+
+		expect(getMediaState()).toEqual({audio: false, video: true});
+	});
+
+	it('sends the new mic and camera state to the call when toggled', async () => {
+		const user = userEvent.setup();
+		renderCallScreen();
+		await startCall(user);
+
+		await user.click(await screen.findByTestId('mic-toggle'));
+		expect(sendMediaStateToCall).toHaveBeenLastCalledWith(
+			'alice@example.com',
+			false,
+			true,
+			'call-1',
+		);
+
+		await user.click(screen.getByTestId('camera-toggle'));
+		expect(sendMediaStateToCall).toHaveBeenLastCalledWith(
+			'alice@example.com',
+			false,
+			false,
+			'call-1',
+		);
 	});
 });
