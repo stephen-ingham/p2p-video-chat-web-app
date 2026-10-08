@@ -22,6 +22,14 @@ type ExtendedRtcPeerConnection = {
 
 type AddRemoteVideoFn = (peerUser: string, stream: MediaStream) => void;
 
+export type MediaState = {audio: boolean; video: boolean};
+
+type UpdatePeerMediaStateFn = (
+	peerUser: string,
+	audio: boolean,
+	video: boolean,
+) => void;
+
 type WsIncomingMessage =
 	| {
 			type: 'receivedNewParticipantNotif';
@@ -30,7 +38,13 @@ type WsIncomingMessage =
 	| {type: 'chatMessage'; data: {email: string; message: string}}
 	| {
 			type: 'responseCurrentCallParticipants';
-			data: {participants: string[]; callID: string; currentUserEmail: string};
+			data: {
+				participants: string[];
+				// Absent from APIs older than this field.
+				peerMediaStates?: Record<string, MediaState>;
+				callID: string;
+				currentUserEmail: string;
+			};
 	  }
 	| {
 			type: 'offer';
@@ -60,7 +74,22 @@ type WsIncomingMessage =
 				callID: string;
 			};
 	  }
-	| {type: 'participantLeftCall'; data: {message: string; email: string}};
+	| {
+			type: 'participantLeftCall';
+			data: {
+				message: string;
+				email: string;
+			};
+	  }
+	| {
+			type: 'mediaState';
+			data: {
+				email: string;
+				audio: boolean;
+				video: boolean;
+				callID: string;
+			};
+	  };
 
 const wsIncomingMessageTypes = new Set<string>([
 	'receivedNewParticipantNotif',
@@ -70,6 +99,7 @@ const wsIncomingMessageTypes = new Set<string>([
 	'answer',
 	'candidate',
 	'participantLeftCall',
+	'mediaState',
 ]);
 
 function isWsIncomingMessage(value: unknown): value is WsIncomingMessage {
@@ -83,12 +113,13 @@ function isWsIncomingMessage(value: unknown): value is WsIncomingMessage {
 }
 
 function sendMessage(message: Record<string, unknown>) {
-	if (websocket) {
+	// WebSocket.send() throws while the socket is still connecting.
+	if (websocket?.readyState === WebSocket.OPEN) {
 		websocket.send(JSON.stringify(message));
 		return;
 	}
 
-	console.error('No active websocket connection to send message through');
+	console.error('No open websocket connection to send message through');
 }
 
 function createPeerConnection(
@@ -349,6 +380,7 @@ export async function attachWsConnListeners(
 	addParticipant: (name: string) => void,
 	removeParticipant: (name: string) => void,
 	addRemoteVideo: AddRemoteVideoFn,
+	updatePeerMediaState: UpdatePeerMediaStateFn,
 	isParticipant: (name: string) => boolean,
 	getCurrentUser: () => string,
 ) {
@@ -381,7 +413,13 @@ export async function attachWsConnListeners(
 			}
 
 			case 'responseCurrentCallParticipants': {
-				const {participants, callID: callId} = message.data;
+				const {participants, peerMediaStates, callID: callId} = message.data;
+				for (const [peerUser, {audio, video}] of Object.entries(
+					peerMediaStates ?? {},
+				)) {
+					updatePeerMediaState(peerUser, audio, video);
+				}
+
 				if (participants.length > 0) {
 					for (const p of participants) {
 						otherCallParticipants.push(p);
@@ -487,6 +525,13 @@ export async function attachWsConnListeners(
 				removeParticipant(email);
 				break;
 			}
+
+			case 'mediaState': {
+				const {email, audio, video} = message.data;
+				// The server doesn't echo our own state back, but don't trust it to.
+				if (email !== callerEmail) updatePeerMediaState(email, audio, video);
+				break;
+			}
 		}
 	}
 
@@ -497,10 +542,15 @@ export async function attachWsConnListeners(
 	});
 }
 
+// Joins, then tells the others our mic/camera state. The state is read when
+// the socket opens, so toggles made while it was connecting are included.
+// It must follow the join: the server only accepts a participant's media
+// state from the connection they joined on.
 export function sendJoiningMessage(
 	usernameInput: string,
 	emailInput: string,
 	callId: string,
+	getMediaState: () => MediaState,
 ) {
 	if (!websocket) return;
 	websocket.addEventListener('open', () => {
@@ -509,6 +559,8 @@ export function sendJoiningMessage(
 			// eslint-disable-next-line @typescript-eslint/naming-convention -- wire property name is fixed by the backend signalling protocol
 			data: {username: usernameInput, email: emailInput, callID: callId},
 		});
+		const {audio, video} = getMediaState();
+		sendMediaStateToCall(emailInput, audio, video, callId);
 	});
 }
 
@@ -525,6 +577,20 @@ export function sendChatMessageToCall(
 	});
 }
 
+export function sendMediaStateToCall(
+	email: string,
+	audio: boolean,
+	video: boolean,
+	callId: string,
+) {
+	if (!websocket) return;
+	sendMessage({
+		type: 'mediaState',
+		// eslint-disable-next-line @typescript-eslint/naming-convention -- wire property name is fixed by the backend signalling protocol
+		data: {email, audio, video, callID: callId},
+	});
+}
+
 export async function connectToCall(
 	callId: string,
 	email: string,
@@ -536,11 +602,14 @@ export async function connectToCall(
 	addParticipant: (name: string) => void,
 	removeParticipant: (name: string) => void,
 	addRemoteVideo: AddRemoteVideoFn,
+	updatePeerMediaState: UpdatePeerMediaStateFn,
+	getMediaState: () => MediaState,
 	isParticipant: (name: string) => boolean,
 	getCurrentUser: () => string,
 	callIceServers: RTCIceServer[] = defaultIceServers,
 ) {
 	iceServers = callIceServers;
+
 	await getLocalMedia(localVideoRef);
 	await establishWebSocketServerConn(buildCallUrl(callId));
 	await attachWsConnListeners(
@@ -550,10 +619,11 @@ export async function connectToCall(
 		addParticipant,
 		removeParticipant,
 		addRemoteVideo,
+		updatePeerMediaState,
 		isParticipant,
 		getCurrentUser,
 	);
-	sendJoiningMessage(username, email, callId);
+	sendJoiningMessage(username, email, callId, getMediaState);
 }
 
 export async function closeConns(

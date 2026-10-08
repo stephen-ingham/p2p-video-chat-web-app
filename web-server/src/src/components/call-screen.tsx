@@ -10,6 +10,8 @@ import {
 	setLocalTrackEnabled,
 	startLocalMedia,
 	stopLocalMedia,
+	sendMediaStateToCall,
+	type MediaState,
 } from '@/lib/rtc-utils.ts';
 import {useIsMobile} from '@/lib/use-is-mobile.ts';
 import {useIsDesktop} from '@/lib/use-is-desktop.ts';
@@ -52,6 +54,10 @@ export default function CallScreen({
 	const [messages, setMessages] = useState<string[]>([]);
 	const [participants, setParticipants] = useState<string[]>([]);
 	const [remoteStreams, setRemoteStreams] = useState<RemoteStream[]>([]);
+	// Remote participants' mic/camera state, by email. Missing means both on.
+	const [peerMediaStates, setPeerMediaStates] = useState<
+		Record<string, MediaState>
+	>({});
 	const [loading, setLoading] = useState<'create' | 'join' | undefined>(
 		undefined,
 	);
@@ -120,6 +126,7 @@ export default function CallScreen({
 
 	function removeParticipant(name: string) {
 		setParticipants((previous) => previous.filter((p) => p !== name));
+		setPeerMediaStates(({[name]: _removed, ...rest}) => rest);
 	}
 
 	function isParticipant(name: string) {
@@ -128,6 +135,24 @@ export default function CallScreen({
 
 	function getCurrentUser() {
 		return email;
+	}
+
+	function updatePeerMediaState(
+		peerUser: string,
+		audio: boolean,
+		video: boolean,
+	) {
+		setPeerMediaStates((previous) => ({
+			...previous,
+			[peerUser]: {audio, video},
+		}));
+	}
+
+	function getMediaState(): MediaState {
+		return {
+			audio: mediaChoices.current.micOn,
+			video: mediaChoices.current.cameraOn,
+		};
 	}
 
 	function addRemoteVideo(peerUser: string, stream: MediaStream) {
@@ -179,7 +204,6 @@ export default function CallScreen({
 			// cover the video, so it starts closed there.
 			setChatOpen(isDesktop);
 			setCallId(newCallId);
-
 			await connectToCall(
 				newCallId,
 				email,
@@ -190,6 +214,8 @@ export default function CallScreen({
 				addParticipant,
 				removeParticipant,
 				addRemoteVideo,
+				updatePeerMediaState,
+				getMediaState,
 				isParticipant,
 				getCurrentUser,
 				await fetchIceServers(),
@@ -222,6 +248,8 @@ export default function CallScreen({
 				addParticipant,
 				removeParticipant,
 				addRemoteVideo,
+				updatePeerMediaState,
+				getMediaState,
 				isParticipant,
 				getCurrentUser,
 				await fetchIceServers(),
@@ -255,6 +283,7 @@ export default function CallScreen({
 
 			setCallId(undefined);
 			setRemoteStreams([]);
+			setPeerMediaStates({});
 			setParticipants([]);
 			setMessages([]);
 			setMicOn(true);
@@ -271,16 +300,28 @@ export default function CallScreen({
 		}
 	}
 
+	// Read from mediaChoices rather than state, which can be a render behind
+	// when both are toggled quickly (e.g. with the keyboard shortcuts).
+	function sendMediaState() {
+		if (!callId) return;
+		const {audio, video} = getMediaState();
+		sendMediaStateToCall(email, audio, video, callId);
+	}
+
 	function toggleMic() {
-		mediaChoices.current.micOn = !micOn;
-		setMicOn(!micOn);
-		void setLocalTrackEnabled('audio', !micOn);
+		const newMicOn = !mediaChoices.current.micOn;
+		mediaChoices.current.micOn = newMicOn;
+		setMicOn(newMicOn);
+		void setLocalTrackEnabled('audio', newMicOn);
+		sendMediaState();
 	}
 
 	function toggleCamera() {
-		mediaChoices.current.cameraOn = !cameraOn;
-		setCameraOn(!cameraOn);
-		void setLocalTrackEnabled('video', !cameraOn);
+		const newCameraOn = !mediaChoices.current.cameraOn;
+		mediaChoices.current.cameraOn = newCameraOn;
+		setCameraOn(newCameraOn);
+		void setLocalTrackEnabled('video', newCameraOn);
+		sendMediaState();
 	}
 
 	function toggleChat() {
@@ -381,6 +422,7 @@ export default function CallScreen({
 			{!inCall && !isMobile && (
 				<DesktopCallSetup
 					localVideoRef={localVideoRef}
+					username={username}
 					previewError={previewError}
 					micOn={micOn}
 					cameraOn={cameraOn}
@@ -412,8 +454,11 @@ export default function CallScreen({
 						)}
 						<VideoGrid
 							localVideoRef={localVideoRef}
+							username={username}
 							remoteStreams={remoteStreams}
+							peerMediaStates={peerMediaStates}
 							cameraOn={cameraOn}
+							micOn={micOn}
 						/>
 						<CallControlBar
 							micOn={micOn}
