@@ -10,6 +10,7 @@ import {
 	getRelevantWSS,
 	verifyClient,
 	handleParticipantLeftCall,
+	handleMediaState,
 } from './misc.js';
 import {wss} from './session-store.js';
 
@@ -51,8 +52,18 @@ export async function createWebSocketsServer() {
 					}
 
 					if (parsedMessage) {
-						type = parsedMessage.type;
-						data = parsedMessage.data;
+						({type, data} = parsedMessage);
+
+						// Throwing here would be an unhandled rejection in this async
+						// listener, so log and drop the message instead.
+						if (
+							typeof type !== 'string' ||
+							typeof data !== 'object' ||
+							data === null
+						) {
+							console.error('Invalid message data:', parsedMessage);
+							return;
+						}
 					} else {
 						type = 'unnaccepted message type';
 					}
@@ -82,6 +93,11 @@ export async function createWebSocketsServer() {
 
 						case 'answer': {
 							handleAnswer(data);
+							break;
+						}
+
+						case 'mediaState': {
+							handleMediaState(data, connection);
 							break;
 						}
 
@@ -134,6 +150,9 @@ export async function createWebSocketsServer() {
 
 		wss.set(callID, {
 			server: new WebSocketServer(wsServerOptions),
+			// Email -> {audio, video}: each participant's latest mic/camera state,
+			// handed to anyone joining later (see handleNewCallParticipantMessage).
+			mediaStates: new Map(),
 		});
 
 		const activeWSS = await getRelevantWSS(callID);

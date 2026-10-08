@@ -73,7 +73,12 @@ export function verifyClient(info) {
 	}
 }
 
-export async function sendMessageToAllParticipants(message, callID) {
+// `excludedEmail` skips the sender, for messages only the others need.
+export async function sendMessageToAllParticipants(
+	message,
+	callID,
+	excludedEmail = undefined,
+) {
 	try {
 		console.log('broadcasting message');
 
@@ -82,6 +87,7 @@ export async function sendMessageToAllParticipants(message, callID) {
 
 		if (activeWSS.server.clients) {
 			for (const client of activeWSS.server.clients) {
+				if (excludedEmail && client.email === excludedEmail) continue;
 				// Check if the connection is fully open
 				// eslint-disable-next-line no-await-in-loop -- must send to each client in turn
 				if (client.readyState === 1) await client.send(JSON.stringify(message));
@@ -167,25 +173,25 @@ export async function handleNewCallParticipantMessage(data) {
 			raw: true,
 		});
 
-		if (activeUsers.length > 0) {
-			console.log('activeUsers are:', activeUsers[0]);
-			const otherCallParticipants = activeUsers.map((user) => user.userEmail);
+		const otherCallParticipants = activeUsers.map((user) => user.userEmail);
 
-			const currentCallParticipantsMessage = JSON.stringify({
-				type: 'responseCurrentCallParticipants',
-				data: {
-					participants: otherCallParticipants,
-					callID,
-					currentUserEmail: email,
-				},
-			});
-
-			return currentCallParticipantsMessage;
-		}
+		// The others' current mic/camera state, so the new participant's tiles
+		// show it straight away rather than only after someone next toggles.
+		// Participants who never sent a mediaState (e.g. the Android app) are
+		// missing, and clients treat them as having both on.
+		const mediaStates = wss.get(callID)?.mediaStates ?? new Map();
+		const peerMediaStates = Object.fromEntries(
+			[...mediaStates].filter(([peerEmail]) => peerEmail !== email),
+		);
 
 		return JSON.stringify({
 			type: 'responseCurrentCallParticipants',
-			data: {participants: [], callID, currentUserEmail: email},
+			data: {
+				participants: otherCallParticipants,
+				peerMediaStates,
+				callID,
+				currentUserEmail: email,
+			},
 		});
 	} catch (error) {
 		console.error(
@@ -348,10 +354,60 @@ export async function handleAnswer(data) {
 	}
 }
 
+export async function handleMediaState(data, connection) {
+	try {
+		const {email, audio, video, callID} = data;
+
+		if (
+			typeof audio !== 'boolean' ||
+			typeof video !== 'boolean' ||
+			typeof callID !== 'string' ||
+			typeof email !== 'string'
+		) {
+			throw new TypeError('Invalid media state data');
+		}
+
+		// Only for the sender's own state: the socket's email is set by its
+		// newParticipantOnCall, which the client always sends first.
+		if (email !== connection.email) {
+			throw new Error(
+				`Media state for ${email} sent from ${connection.email}'s connection`,
+			);
+		}
+
+		const participantNotOnCallResult = await participantNotOnCall(
+			callID,
+			email,
+		);
+
+		if (participantNotOnCallResult) {
+			return sendMessageToParticipant(
+				email,
+				participantNotOnCallResult,
+				callID,
+			);
+		}
+
+		wss.get(callID)?.mediaStates.set(email, {audio, video});
+
+		const mediaStateMessage = {
+			type: 'mediaState',
+			data: {email, audio, video, callID},
+		};
+
+		await sendMessageToAllParticipants(mediaStateMessage, callID, email);
+	} catch (error) {
+		console.error('Error occured handling forwarding of media state:', error);
+	}
+}
+
 export async function handleParticipantLeftCall(data) {
 	try {
 		const {leavingUser, callID} = data;
 		const message = `${leavingUser} left the call`;
+
+		// The call's entry is already gone if this was its last participant.
+		wss.get(callID)?.mediaStates.delete(leavingUser);
 
 		const participantNotOnCallResult = await participantNotOnCall(
 			callID,
